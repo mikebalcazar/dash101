@@ -1,0 +1,39 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // /usuarios/{uid} — solo el dueño puede leer/escribir
+    match /usuarios/{uid} {
+      allow read: if isAuth() && request.auth.uid == uid;
+      allow create: if isAuth() && request.auth.uid == uid;
+      allow update: if isAuth() && request.auth.uid == uid;
+      allow delete: if false;
+    }
+
+    // /negocios/{id} — miembros pueden leer; owner puede crear/editar/borrar
+    match /negocios/{negocioId} {
+      allow read: if isAuth()
+        && request.auth.uid in resource.data.miembros_uids;
+
+      allow create: if isAuth()
+        && request.auth.uid == request.resource.data.owner_uid
+        && request.auth.uid in request.resource.data.miembros_uids;
+
+      allow update: if isAuth()
+        && request.auth.uid == resource.data.owner_uid;
+
+      allow delete: if isAuth()
+        && request.auth.uid == resource.data.owner_uid;
+    }
+
+    // Bloqueo de todo lo demás (reglas para nuevas colecciones se agregan abajo)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -17,6 +17,7 @@ import {
   type User,
 } from "firebase/auth";
 import { auth } from "./firebase";
+import { ensureUserDoc } from "./users";
 
 type AuthContextValue = {
   user: User | null;
@@ -38,7 +39,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       return;
     }
-    const unsub = onAuthStateChanged(auth, (u) => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      if (u) {
+        try {
+          await ensureUserDoc(u);
+        } catch (e) {
+          console.error("Failed to ensure user doc:", e);
+        }
+      }
       setUser(u);
       setLoading(false);
     });
