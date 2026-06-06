@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "negocios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "miembros_uids", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "creado_at", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
