@@ -45,30 +45,33 @@ export async function ensureUserDoc(user: User): Promise<Usuario> {
 
   // Migración perezosa: buscar negocios donde soy owner y no tengo membership
   try {
+    // Query segura por rules: miembros_uids array-contains uid
+    // Luego filtro cliente-side por owner_uid == uid
     const negociosQ = query(
       collection(db, "negocios"),
-      where("owner_uid", "==", user.uid)
+      where("miembros_uids", "array-contains", user.uid)
     );
     const negociosSnap = await getDocs(negociosQ);
-    const misNegocios = negociosSnap.docs;
+    const misNegocios = negociosSnap.docs.filter(
+      (d) => (d.data().owner_uid as string) === user.uid
+    );
 
     const negociosSinMembership = misNegocios.filter(
       (d) => !userData.memberships?.[d.id]
     );
 
     if (negociosSinMembership.length > 0) {
-      const membershipsPatch: Record<string, MembershipInfo> = {};
+      const updates: Record<string, unknown> = {};
       const accesoNuevos: string[] = [];
       negociosSinMembership.forEach((d) => {
-        membershipsPatch[`memberships.${d.id}`] = {
+        updates[`memberships.${d.id}`] = {
           rol: "owner",
           scope: "all",
-        } as MembershipInfo;
+        };
         if (!userData.negocios_acceso?.includes(d.id)) {
           accesoNuevos.push(d.id);
         }
       });
-      const updates: Record<string, unknown> = { ...membershipsPatch };
       if (accesoNuevos.length > 0) {
         updates.negocios_acceso = arrayUnion(...accesoNuevos);
       }
