@@ -37,7 +37,7 @@ service cloud.firestore {
       allow delete: if isAuth() && request.auth.uid == resource.data.owner_uid;
     }
 
-    // /cuentas/{id} — miembros del negocio; borrado solo owner
+    // /cuentas/{id}
     match /cuentas/{cuentaId} {
       allow read: if isMember(resource.data.negocio_id);
       allow create: if isAuth() && isMember(request.resource.data.negocio_id);
@@ -45,7 +45,7 @@ service cloud.firestore {
       allow delete: if isOwnerOfNegocio(resource.data.negocio_id);
     }
 
-    // /clientes/{id} — miembros del negocio; borrado solo owner
+    // /clientes/{id}
     match /clientes/{clienteId} {
       allow read: if isMember(resource.data.negocio_id);
       allow create: if isAuth() && isMember(request.resource.data.negocio_id);
@@ -53,12 +53,28 @@ service cloud.firestore {
       allow delete: if isOwnerOfNegocio(resource.data.negocio_id);
     }
 
-    // /proveedores/{id} — catálogo global; cualquier user autenticado
+    // /proveedores/{id} — catálogo global
     match /proveedores/{proveedorId} {
       allow read: if isAuth();
       allow create: if isAuth();
       allow update: if isAuth();
       allow delete: if isAuth();
+    }
+
+    // /proyectos/{id} — miembros del negocio
+    match /proyectos/{proyectoId} {
+      allow read: if isMember(resource.data.negocio_id);
+      allow create: if isAuth() && isMember(request.resource.data.negocio_id);
+      allow update: if isMember(resource.data.negocio_id);
+      allow delete: if isOwnerOfNegocio(resource.data.negocio_id);
+    }
+
+    // /movimientos/{id} — miembros del negocio; solo owner puede borrar
+    match /movimientos/{movimientoId} {
+      allow read: if isMember(resource.data.negocio_id);
+      allow create: if isAuth() && isMember(request.resource.data.negocio_id);
+      allow update: if isMember(resource.data.negocio_id);
+      allow delete: if isOwnerOfNegocio(resource.data.negocio_id);
     }
 
     // Deny todo lo demás

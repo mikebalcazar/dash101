@@ -23,6 +23,38 @@
         { "fieldPath": "negocio_id", "order": "ASCENDING" },
         { "fieldPath": "creado_at", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "proyectos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "negocio_id", "order": "ASCENDING" },
+        { "fieldPath": "creado_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "movimientos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "negocio_id", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "movimientos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "proyecto_id", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "movimientos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "cuenta_destino_id", "order": "ASCENDING" },
+        { "fieldPath": "tipo", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

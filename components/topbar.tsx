@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useNegocioActivo } from "@/lib/negocio-activo-context";
 import { IconChevronDown, IconPlus, IconCheck, IconBuildingSkyscraper } from "@tabler/icons-react";
@@ -23,6 +24,7 @@ function formatDate() {
 }
 
 export function Topbar() {
+  const router = useRouter();
   const { user } = useAuth();
   const { negocios, activo, setActivo, loading } = useNegocioActivo();
   const [open, setOpen] = useState(false);
@@ -111,9 +113,9 @@ export function Topbar() {
           )}
         </div>
         <button
-          disabled
+          onClick={() => router.push("/movimientos/nuevo")}
+          disabled={!activo}
           className="flex items-center gap-1.5 bg-ink hover:bg-ink/90 text-cream rounded-xl px-3.5 py-2 text-sm font-medium transition disabled:opacity-50"
-          title="Próxima iteración"
         >
           <IconPlus size={14} />
           Movimiento
