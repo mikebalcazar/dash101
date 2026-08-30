@@ -2,6 +2,7 @@ import type { Timestamp, FieldValue } from "firebase/firestore";
 
 export type Moneda = "MXN" | "USD";
 export type RolUsuario = "owner" | "socio" | "viewer";
+export type TipoCuenta = "banco" | "caja" | "credito" | "otro";
 
 export interface Usuario {
   email: string;
@@ -23,6 +24,45 @@ export interface Negocio {
   creado_por: string;
 }
 
+export interface Cuenta {
+  id?: string;
+  nombre: string;
+  tipo: TipoCuenta;
+  banco?: string;
+  numero?: string;
+  moneda: Moneda;
+  saldo_inicial: number;
+  saldo_actual: number;
+  negocio_id: string;
+  creado_at: Timestamp | FieldValue;
+  creado_por: string;
+}
+
+export interface Cliente {
+  id?: string;
+  nombre: string;
+  rfc?: string;
+  email?: string;
+  telefono?: string;
+  notas?: string;
+  negocio_id: string;
+  creado_at: Timestamp | FieldValue;
+  creado_por: string;
+}
+
+export interface Proveedor {
+  id?: string;
+  nombre: string;
+  rfc?: string;
+  categoria?: string;
+  email?: string;
+  telefono?: string;
+  terminos_pago_default?: string;
+  notas?: string;
+  creado_at: Timestamp | FieldValue;
+  creado_por: string;
+}
+
 export const COLLECTIONS = {
   USUARIOS: "usuarios",
   NEGOCIOS: "negocios",
@@ -33,3 +73,10 @@ export const COLLECTIONS = {
   MOVIMIENTOS: "movimientos",
   OPEX: "opex",
 } as const;
+
+export const TIPO_CUENTA_LABELS: Record<TipoCuenta, string> = {
+  banco: "Cuenta bancaria",
+  caja: "Caja / Efectivo",
+  credito: "Tarjeta de crédito",
+  otro: "Otro",
+};

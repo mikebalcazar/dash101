@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import { useNegocioActivo } from "@/lib/negocio-activo-context";
 import { createNegocio } from "@/lib/negocios";
 import type { Moneda } from "@/types/schema";
 import { IconArrowLeft } from "@tabler/icons-react";
@@ -11,6 +12,7 @@ import { IconArrowLeft } from "@tabler/icons-react";
 export default function NuevoNegocioPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const { refresh } = useNegocioActivo();
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [rfc, setRfc] = useState("");
@@ -30,6 +32,7 @@ export default function NuevoNegocioPage() {
         rfc: rfc.trim() || undefined,
         moneda,
       });
+      await refresh();
       router.push("/negocios");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al crear negocio");
@@ -70,9 +73,7 @@ export default function NuevoNegocioPage() {
         </div>
 
         <div>
-          <label className="text-xs font-medium text-ink-dim block mb-1.5">
-            Descripción
-          </label>
+          <label className="text-xs font-medium text-ink-dim block mb-1.5">Descripción</label>
           <textarea
             maxLength={200}
             value={descripcion}
@@ -85,9 +86,7 @@ export default function NuevoNegocioPage() {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs font-medium text-ink-dim block mb-1.5">
-              RFC
-            </label>
+            <label className="text-xs font-medium text-ink-dim block mb-1.5">RFC</label>
             <input
               type="text"
               maxLength={13}
@@ -98,9 +97,7 @@ export default function NuevoNegocioPage() {
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-ink-dim block mb-1.5">
-              Moneda
-            </label>
+            <label className="text-xs font-medium text-ink-dim block mb-1.5">Moneda</label>
             <select
               value={moneda}
               onChange={(e) => setMoneda(e.target.value as Moneda)}
@@ -113,9 +110,7 @@ export default function NuevoNegocioPage() {
         </div>
 
         {error && (
-          <p className="text-xs text-mauve-900 bg-mauve-50 px-3 py-2 rounded-xl">
-            {error}
-          </p>
+          <p className="text-xs text-mauve-900 bg-mauve-50 px-3 py-2 rounded-xl">{error}</p>
         )}
 
         <div className="flex gap-2 pt-2">

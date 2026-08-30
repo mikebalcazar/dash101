@@ -7,6 +7,22 @@
         { "fieldPath": "miembros_uids", "arrayConfig": "CONTAINS" },
         { "fieldPath": "creado_at", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "cuentas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "negocio_id", "order": "ASCENDING" },
+        { "fieldPath": "creado_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "clientes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "negocio_id", "order": "ASCENDING" },
+        { "fieldPath": "creado_at", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
