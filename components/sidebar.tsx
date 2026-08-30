@@ -14,6 +14,7 @@ import {
   IconSettings,
   IconLogout,
   IconBuildingSkyscraper,
+  IconUsersGroup,
 } from "@tabler/icons-react";
 
 type NavItem = { href: string; icon: typeof IconHome; label: string };
@@ -28,6 +29,7 @@ const items: NavItem[] = [
   { href: "/proveedores", icon: IconTruck, label: "Proveedores" },
   { href: "/opex", icon: IconReceipt, label: "OPEX" },
   { href: "/reportes", icon: IconChartBar, label: "Reportes" },
+  { href: "/equipo", icon: IconUsersGroup, label: "Equipo" },
 ];
 
 export function Sidebar() {

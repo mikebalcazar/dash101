@@ -12,6 +12,7 @@ import {
   arrayUnion,
   arrayRemove,
   orderBy,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { Negocio, Moneda } from "@/types/schema";
@@ -53,9 +54,13 @@ export async function createNegocio(uid: string, data: NegocioInput): Promise<st
 
   const ref = await addDoc(collection(db, "negocios"), payload);
 
-  // Vincular este negocio al usuario
+  // Vincular al usuario: negocios_acceso[] + memberships[negocio_id] = owner
   await updateDoc(doc(db, "usuarios", uid), {
     negocios_acceso: arrayUnion(ref.id),
+    [`memberships.${ref.id}`]: {
+      rol: "owner",
+      scope: "all",
+    },
   });
 
   return ref.id;
@@ -67,7 +72,34 @@ export async function updateNegocio(id: string, data: Partial<NegocioInput>): Pr
 
 export async function deleteNegocio(id: string, uid: string): Promise<void> {
   await deleteDoc(doc(db, "negocios", id));
+  // Limpia el acceso del owner (los otros miembros mantienen datos huerfanos hasta que la app los limpie)
   await updateDoc(doc(db, "usuarios", uid), {
     negocios_acceso: arrayRemove(id),
+    [`memberships.${id}`]: null,
   });
+}
+
+/**
+ * Remueve a un miembro del negocio.
+ * Elimina el uid de miembros_uids y limpia memberships/negocios_acceso del usuario.
+ */
+export async function removeMiembro(negocioId: string, uidToRemove: string): Promise<void> {
+  const batch = writeBatch(db);
+  batch.update(doc(db, "negocios", negocioId), {
+    miembros_uids: arrayRemove(uidToRemove),
+  });
+  batch.update(doc(db, "usuarios", uidToRemove), {
+    negocios_acceso: arrayRemove(negocioId),
+    [`memberships.${negocioId}`]: null,
+  });
+  await batch.commit();
+}
+
+/**
+ * Lista todos los uids que son miembros de un negocio.
+ */
+export async function listMiembrosDeNegocio(negocioId: string): Promise<string[]> {
+  const snap = await getDoc(doc(db, "negocios", negocioId));
+  if (!snap.exists()) return [];
+  return (snap.data().miembros_uids as string[]) ?? [];
 }

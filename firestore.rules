@@ -7,16 +7,37 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function negocioData(negocioId) {
-      return get(/databases/$(database)/documents/negocios/$(negocioId)).data;
+    function userDoc() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
     }
 
-    function isMember(negocioId) {
-      return isAuth() && request.auth.uid in negocioData(negocioId).miembros_uids;
+    function myMembership(negocioId) {
+      return userDoc().memberships[negocioId];
     }
 
-    function isOwnerOfNegocio(negocioId) {
-      return isAuth() && request.auth.uid == negocioData(negocioId).owner_uid;
+    function hasMembership(negocioId) {
+      return isAuth()
+        && 'memberships' in userDoc()
+        && negocioId in userDoc().memberships;
+    }
+
+    function isOwner(negocioId) {
+      return hasMembership(negocioId) && myMembership(negocioId).rol == 'owner';
+    }
+
+    function canWrite(negocioId) {
+      return hasMembership(negocioId) && myMembership(negocioId).rol in ['owner', 'socio'];
+    }
+
+    function hasProyectoAccess(proyectoId, negocioId) {
+      return hasMembership(negocioId) && (
+        myMembership(negocioId).scope == 'all' ||
+        proyectoId in myMembership(negocioId).proyectos_acceso
+      );
+    }
+
+    function canWriteProyecto(proyectoId, negocioId) {
+      return canWrite(negocioId) && hasProyectoAccess(proyectoId, negocioId);
     }
 
     // /usuarios/{uid}
@@ -30,51 +51,88 @@ service cloud.firestore {
     // /negocios/{id}
     match /negocios/{negocioId} {
       allow read: if isAuth() && request.auth.uid in resource.data.miembros_uids;
+
       allow create: if isAuth()
         && request.auth.uid == request.resource.data.owner_uid
         && request.auth.uid in request.resource.data.miembros_uids;
-      allow update: if isAuth() && request.auth.uid == resource.data.owner_uid;
-      allow delete: if isAuth() && request.auth.uid == resource.data.owner_uid;
+
+      // update: si soy owner, o si soy invitado aceptando (solo modifico miembros_uids)
+      allow update: if isAuth() && (
+        (request.auth.uid in resource.data.miembros_uids && isOwner(negocioId))
+        ||
+        // Aceptando invitación: solo agrego mi uid a miembros_uids
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['miembros_uids'])
+         && request.auth.uid in request.resource.data.miembros_uids)
+      );
+
+      allow delete: if isOwner(negocioId);
     }
 
     // /cuentas/{id}
     match /cuentas/{cuentaId} {
-      allow read: if isMember(resource.data.negocio_id);
-      allow create: if isAuth() && isMember(request.resource.data.negocio_id);
-      allow update: if isMember(resource.data.negocio_id);
-      allow delete: if isOwnerOfNegocio(resource.data.negocio_id);
+      allow read: if hasMembership(resource.data.negocio_id);
+      allow create: if canWrite(request.resource.data.negocio_id);
+      allow update: if canWrite(resource.data.negocio_id);
+      allow delete: if isOwner(resource.data.negocio_id);
     }
 
-    // /clientes/{id}
+    // /clientes/{id} — catálogo del negocio; cualquier member puede crear/read
     match /clientes/{clienteId} {
-      allow read: if isMember(resource.data.negocio_id);
-      allow create: if isAuth() && isMember(request.resource.data.negocio_id);
-      allow update: if isMember(resource.data.negocio_id);
-      allow delete: if isOwnerOfNegocio(resource.data.negocio_id);
+      allow read: if hasMembership(resource.data.negocio_id);
+      allow create: if hasMembership(request.resource.data.negocio_id);
+      allow update: if canWrite(resource.data.negocio_id);
+      allow delete: if isOwner(resource.data.negocio_id);
     }
 
-    // /proveedores/{id} — catálogo global
+    // /proveedores — catálogo global; cualquier auth lee/crea; solo autor edita/borra
     match /proveedores/{proveedorId} {
       allow read: if isAuth();
       allow create: if isAuth();
-      allow update: if isAuth();
-      allow delete: if isAuth();
+      allow update: if isAuth() && resource.data.creado_por == request.auth.uid;
+      allow delete: if isAuth() && resource.data.creado_por == request.auth.uid;
     }
 
-    // /proyectos/{id} — miembros del negocio
+    // /proyectos/{id} — respeta scope de proyectos si aplica
     match /proyectos/{proyectoId} {
-      allow read: if isMember(resource.data.negocio_id);
-      allow create: if isAuth() && isMember(request.resource.data.negocio_id);
-      allow update: if isMember(resource.data.negocio_id);
-      allow delete: if isOwnerOfNegocio(resource.data.negocio_id);
+      allow read: if hasProyectoAccess(proyectoId, resource.data.negocio_id);
+      allow create: if canWrite(request.resource.data.negocio_id);
+      allow update: if canWriteProyecto(proyectoId, resource.data.negocio_id);
+      allow delete: if isOwner(resource.data.negocio_id);
     }
 
-    // /movimientos/{id} — miembros del negocio; solo owner puede borrar
+    // /movimientos/{id}
     match /movimientos/{movimientoId} {
-      allow read: if isMember(resource.data.negocio_id);
-      allow create: if isAuth() && isMember(request.resource.data.negocio_id);
-      allow update: if isMember(resource.data.negocio_id);
-      allow delete: if isOwnerOfNegocio(resource.data.negocio_id);
+      allow read: if hasMembership(resource.data.negocio_id) && (
+        myMembership(resource.data.negocio_id).scope == 'all' ||
+        resource.data.proyecto_id in myMembership(resource.data.negocio_id).proyectos_acceso
+      );
+      allow create: if canWrite(request.resource.data.negocio_id) && (
+        myMembership(request.resource.data.negocio_id).scope == 'all' ||
+        (request.resource.data.proyecto_id != null &&
+         request.resource.data.proyecto_id in myMembership(request.resource.data.negocio_id).proyectos_acceso)
+      );
+      allow update: if canWrite(resource.data.negocio_id);
+      allow delete: if isOwner(resource.data.negocio_id);
+    }
+
+    // /invitaciones/{id}
+    match /invitaciones/{invId} {
+      // read: el owner del negocio, o cualquier auth que quiera aceptar (el flow valida email en la app)
+      allow read: if isAuth();
+
+      // create: solo owner del negocio
+      allow create: if isOwner(request.resource.data.negocio_id)
+        && request.resource.data.invited_by_uid == request.auth.uid;
+
+      // update: para revocar (solo owner) o para aceptar (invitado auto-aplica)
+      allow update: if isAuth() && (
+        isOwner(resource.data.negocio_id)
+        ||
+        (request.auth.token.email.lower() == resource.data.email
+         && request.resource.data.estado in ['aceptada', 'expirada'])
+      );
+
+      allow delete: if isOwner(resource.data.negocio_id);
     }
 
     // Deny todo lo demás

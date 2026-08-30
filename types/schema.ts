@@ -1,18 +1,28 @@
 import type { Timestamp, FieldValue } from "firebase/firestore";
 
 export type Moneda = "MXN" | "USD";
-export type RolUsuario = "owner" | "socio" | "viewer";
+export type RolMiembro = "owner" | "socio" | "viewer";
+export type ScopeMiembro = "all" | "proyectos";
 export type TipoCuenta = "banco" | "caja" | "credito" | "otro";
 export type EstadoProyecto = "planeando" | "activo" | "pausado" | "cerrado";
 export type EstadoPartida = "pendiente" | "parcial" | "pagado";
 export type TipoMovimiento = "ingreso" | "egreso" | "transferencia";
 export type TipoContraparte = "cliente" | "proveedor" | "cuenta" | "opex" | "ajuste";
+export type EstadoInvitacion = "pendiente" | "aceptada" | "revocada" | "expirada";
+
+export interface MembershipInfo {
+  rol: RolMiembro;
+  scope: ScopeMiembro;
+  proyectos_acceso?: string[];
+  invited_by_uid?: string;
+  invited_at?: Timestamp | FieldValue;
+}
 
 export interface Usuario {
   email: string;
   nombre: string;
-  rol: RolUsuario;
-  negocios_acceso: string[];
+  negocios_acceso: string[]; // IDs para query fácil
+  memberships: Record<string, MembershipInfo>; // negocio_id -> detalles
   creado_at: Timestamp | FieldValue;
 }
 
@@ -105,27 +115,39 @@ export interface Movimiento {
   tipo: TipoMovimiento;
   monto: number;
   fecha: Timestamp | FieldValue;
-
   proyecto_id?: string | null;
   proyecto_nombre?: string | null;
-
   cuenta_id: string;
   cuenta_nombre: string;
-
   cuenta_destino_id?: string | null;
   cuenta_destino_nombre?: string | null;
-
   contraparte_id?: string | null;
   contraparte_tipo: TipoContraparte;
   contraparte_nombre: string;
-
   negocio_id: string;
-
   descripcion?: string;
   categoria?: string;
-
   creado_por: string;
   creado_at: Timestamp | FieldValue;
+}
+
+export interface Invitacion {
+  id?: string;
+  email: string; // lowercase
+  negocio_id: string;
+  negocio_nombre: string;
+  invited_by_uid: string;
+  invited_by_nombre: string;
+  invited_by_email: string;
+  rol: RolMiembro;
+  scope: ScopeMiembro;
+  proyectos_ids?: string[];
+  proyectos_labels?: string[]; // display "nombre — cliente"
+  estado: EstadoInvitacion;
+  creado_at: Timestamp | FieldValue;
+  expira_at: Timestamp;
+  aceptada_at?: Timestamp | FieldValue;
+  aceptada_por_uid?: string;
 }
 
 export const COLLECTIONS = {
@@ -137,6 +159,7 @@ export const COLLECTIONS = {
   PROYECTOS: "proyectos",
   MOVIMIENTOS: "movimientos",
   OPEX: "opex",
+  INVITACIONES: "invitaciones",
 } as const;
 
 export const TIPO_CUENTA_LABELS: Record<TipoCuenta, string> = {
@@ -157,4 +180,16 @@ export const TIPO_MOVIMIENTO_LABELS: Record<TipoMovimiento, string> = {
   ingreso: "Ingreso",
   egreso: "Egreso",
   transferencia: "Transferencia",
+};
+
+export const ROL_LABELS: Record<RolMiembro, string> = {
+  owner: "Propietario",
+  socio: "Socio (lectura + escritura)",
+  viewer: "Solo lectura",
+};
+
+export const ROL_DESCRIPCION: Record<RolMiembro, string> = {
+  owner: "Control total. Puede invitar y eliminar.",
+  socio: "Puede crear/editar/borrar dentro de su scope. No invita.",
+  viewer: "Solo puede ver. No crea ni edita.",
 };
