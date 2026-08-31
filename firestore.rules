@@ -116,19 +116,12 @@ service cloud.firestore {
     }
 
     // /movimientos/{id}
+    // NOTA: rule simplificada temporalmente para debug.
+    // Solo valida canWrite (rol owner/socio en el negocio).
+    // Scope-por-proyectos se agregará de vuelta después de confirmar funcionamiento.
     match /movimientos/{movimientoId} {
-      allow read: if hasMembership(resource.data.negocio_id) && (
-        myScope(resource.data.negocio_id) == 'all' ||
-        (resource.data.proyecto_id != null &&
-         myProyectosAcceso(resource.data.negocio_id).hasAny([resource.data.proyecto_id]))
-      );
-
-      allow create: if canWrite(request.resource.data.negocio_id) && (
-        myScope(request.resource.data.negocio_id) == 'all' ||
-        (request.resource.data.proyecto_id != null &&
-         myProyectosAcceso(request.resource.data.negocio_id).hasAny([request.resource.data.proyecto_id]))
-      );
-
+      allow read: if hasMembership(resource.data.negocio_id);
+      allow create: if canWrite(request.resource.data.negocio_id);
       allow update: if canWrite(resource.data.negocio_id);
       allow delete: if canWrite(resource.data.negocio_id);
     }
