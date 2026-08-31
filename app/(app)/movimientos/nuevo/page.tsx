@@ -6,9 +6,9 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { useNegocioActivo } from "@/lib/negocio-activo-context";
 import { listCuentas } from "@/lib/cuentas";
-import { listClientes } from "@/lib/clientes";
-import { listProveedores } from "@/lib/proveedores";
-import { listProyectos } from "@/lib/proyectos";
+import { listClientes, createCliente } from "@/lib/clientes";
+import { listProveedores, createProveedor } from "@/lib/proveedores";
+import { listProyectos, createProyecto } from "@/lib/proyectos";
 import { createMovimiento } from "@/lib/movimientos";
 import type {
   Cuenta,
@@ -19,7 +19,16 @@ import type {
   TipoMovimiento,
 } from "@/types/schema";
 import { formatMonto } from "@/lib/format";
-import { IconArrowLeft, IconArrowDownLeft, IconArrowUpRight, IconChevronDown } from "@tabler/icons-react";
+import {
+  IconArrowLeft,
+  IconArrowDownLeft,
+  IconArrowUpRight,
+  IconChevronDown,
+  IconPlus,
+  IconX,
+} from "@tabler/icons-react";
+
+type QuickCreate = null | "proyecto" | "cliente" | "proveedor";
 
 export default function NuevoMovimientoPage() {
   const router = useRouter();
@@ -44,6 +53,7 @@ export default function NuevoMovimientoPage() {
   const [contraparteId, setContraparteId] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [showNota, setShowNota] = useState(false);
+  const [quickCreate, setQuickCreate] = useState<QuickCreate>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -53,38 +63,42 @@ export default function NuevoMovimientoPage() {
     [negocios, negocioId]
   );
 
-  // Setear negocio activo inicial
   useEffect(() => {
     if (!negocioId && activo?.id) setNegocioId(activo.id);
   }, [activo, negocioId]);
 
-  // Cargar catálogos cuando cambia el negocio
+  const loadCatalogos = async (nid: string) => {
+    setLoadingCat(true);
+    try {
+      const [cs, cls, pvs, prs] = await Promise.all([
+        listCuentas(nid),
+        listClientes(nid),
+        listProveedores(),
+        listProyectos(nid),
+      ]);
+      setCuentas(cs);
+      setClientes(cls);
+      setProveedores(pvs);
+      setProyectos(prs);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error catálogo");
+    } finally {
+      setLoadingCat(false);
+    }
+  };
+
   useEffect(() => {
     if (!negocioId) return;
-    setLoadingCat(true);
     setCuentaId("");
     setProyectoId("");
     setContraparteId("");
-    Promise.all([
-      listCuentas(negocioId),
-      listClientes(negocioId),
-      listProveedores(),
-      listProyectos(negocioId),
-    ])
-      .then(([cs, cls, pvs, prs]) => {
-        setCuentas(cs);
-        setClientes(cls);
-        setProveedores(pvs);
-        setProyectos(prs);
-      })
-      .catch((e) => setError(e instanceof Error ? e.message : "Error catálogo"))
-      .finally(() => setLoadingCat(false));
+    setQuickCreate(null);
+    loadCatalogos(negocioId);
   }, [negocioId]);
 
   const proyectoSel = proyectos.find((p) => p.id === proyectoId);
   const proveedoresDelProyecto = useMemo(() => {
     if (!proyectoSel) return proveedores;
-    // Proveedores en partidas del proyecto (más relevantes primero) + resto
     const ids = new Set(proyectoSel.partidas.map((p) => p.proveedor_id));
     const enPartidas = proveedores.filter((p) => ids.has(p.id!));
     const otros = proveedores.filter((p) => !ids.has(p.id!));
@@ -121,13 +135,11 @@ export default function NuevoMovimientoPage() {
       setError("Ingresa un monto válido");
       return;
     }
-
     const cuenta = cuentas.find((c) => c.id === cuentaId);
     if (!cuenta) {
       setError("Selecciona una cuenta");
       return;
     }
-
     const contraparteObj =
       tipo === "ingreso"
         ? clientes.find((c) => c.id === contraparteId)
@@ -204,6 +216,7 @@ export default function NuevoMovimientoPage() {
               onClick={() => {
                 setTipo("ingreso");
                 setContraparteId("");
+                setQuickCreate(null);
               }}
               className={`px-3 py-2.5 rounded-xl border text-sm font-medium flex items-center justify-center gap-1.5 transition ${
                 isIngreso
@@ -219,6 +232,7 @@ export default function NuevoMovimientoPage() {
               onClick={() => {
                 setTipo("egreso");
                 setContraparteId("");
+                setQuickCreate(null);
               }}
               className={`px-3 py-2.5 rounded-xl border text-sm font-medium flex items-center justify-center gap-1.5 transition ${
                 !isIngreso
@@ -232,7 +246,6 @@ export default function NuevoMovimientoPage() {
           </div>
         </div>
 
-        {/* Campos */}
         <div className="space-y-3">
           <div>
             <label className="text-xs font-medium text-ink-dim block mb-1.5">Fecha</label>
@@ -265,28 +278,40 @@ export default function NuevoMovimientoPage() {
             <p className="text-xs text-ink-muted text-center py-3">Cargando catálogo…</p>
           ) : (
             <>
-              <div>
-                <label className="text-xs font-medium text-ink-dim block mb-1.5">
-                  Proyecto {isIngreso && <span className="text-mauve-900">*</span>}
-                  {!isIngreso && <span className="text-ink-muted"> (opcional)</span>}
-                </label>
-                <select
-                  required={isIngreso}
-                  value={proyectoId}
-                  onChange={(e) => setProyectoId(e.target.value)}
-                  className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
-                >
-                  <option value="">
-                    {isIngreso ? "— Selecciona —" : "— Sin proyecto —"}
-                  </option>
-                  {proyectosActivos.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nombre} · {p.cliente_nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {/* Proyecto */}
+              <SelectConCrear
+                label={`Proyecto ${isIngreso ? "*" : "(opcional)"}`}
+                required={isIngreso}
+                value={proyectoId}
+                onChange={setProyectoId}
+                emptyLabel={isIngreso ? "— Selecciona —" : "— Sin proyecto —"}
+                options={proyectosActivos.map((p) => ({
+                  id: p.id!,
+                  label: `${p.nombre} · ${p.cliente_nombre}`,
+                }))}
+                createLabel="Crear nuevo proyecto"
+                onOpenCreate={() =>
+                  setQuickCreate(quickCreate === "proyecto" ? null : "proyecto")
+                }
+                isOpenCreate={quickCreate === "proyecto"}
+              />
+              {quickCreate === "proyecto" && (
+                <QuickCreateProyecto
+                  clientes={clientes}
+                  moneda={negocio?.moneda ?? "MXN"}
+                  onCancel={() => setQuickCreate(null)}
+                  onCreated={async (newId) => {
+                    await loadCatalogos(negocioId);
+                    setProyectoId(newId);
+                    setQuickCreate(null);
+                  }}
+                  onNeedCliente={() => setQuickCreate("cliente")}
+                  uid={user!.uid}
+                  negocio={negocio!}
+                />
+              )}
 
+              {/* Cuenta */}
               <div>
                 <label className="text-xs font-medium text-ink-dim block mb-1.5">
                   Cuenta <span className="text-mauve-900">*</span>
@@ -314,37 +339,53 @@ export default function NuevoMovimientoPage() {
                 )}
               </div>
 
-              <div>
-                <label className="text-xs font-medium text-ink-dim block mb-1.5">
-                  {contraparteLabel} <span className="text-mauve-900">*</span>
-                </label>
-                <select
-                  required
-                  value={contraparteId}
-                  onChange={(e) => setContraparteId(e.target.value)}
-                  className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
-                >
-                  <option value="">— Selecciona —</option>
-                  {contrapartes.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nombre}
-                    </option>
-                  ))}
-                </select>
-                {contrapartes.length === 0 && (
-                  <p className="text-xs text-ink-muted mt-1">
-                    Sin {contraparteLabel.toLowerCase()}s.{" "}
-                    <Link
-                      href={isIngreso ? "/clientes/nuevo" : "/proveedores/nuevo"}
-                      className="underline"
-                    >
-                      Crear {contraparteLabel.toLowerCase()}
-                    </Link>
-                  </p>
-                )}
-              </div>
+              {/* Contraparte */}
+              <SelectConCrear
+                label={`${contraparteLabel} *`}
+                required
+                value={contraparteId}
+                onChange={setContraparteId}
+                emptyLabel="— Selecciona —"
+                options={contrapartes.map((c) => ({ id: c.id!, label: c.nombre }))}
+                createLabel={`Crear nuevo ${contraparteLabel.toLowerCase()}`}
+                onOpenCreate={() =>
+                  setQuickCreate(
+                    quickCreate === (isIngreso ? "cliente" : "proveedor")
+                      ? null
+                      : isIngreso
+                      ? "cliente"
+                      : "proveedor"
+                  )
+                }
+                isOpenCreate={
+                  quickCreate === (isIngreso ? "cliente" : "proveedor")
+                }
+              />
+              {quickCreate === "cliente" && (
+                <QuickCreateCliente
+                  onCancel={() => setQuickCreate(null)}
+                  onCreated={async (newId) => {
+                    await loadCatalogos(negocioId);
+                    if (tipo === "ingreso") setContraparteId(newId);
+                    setQuickCreate(null);
+                  }}
+                  uid={user!.uid}
+                  negocioId={negocioId}
+                />
+              )}
+              {quickCreate === "proveedor" && (
+                <QuickCreateProveedor
+                  onCancel={() => setQuickCreate(null)}
+                  onCreated={async (newId) => {
+                    await loadCatalogos(negocioId);
+                    if (tipo === "egreso") setContraparteId(newId);
+                    setQuickCreate(null);
+                  }}
+                  uid={user!.uid}
+                />
+              )}
 
-              {/* Nota expandible */}
+              {/* Nota */}
               {!showNota ? (
                 <button
                   type="button"
@@ -356,9 +397,7 @@ export default function NuevoMovimientoPage() {
                 </button>
               ) : (
                 <div>
-                  <label className="text-xs font-medium text-ink-dim block mb-1.5">
-                    Nota
-                  </label>
+                  <label className="text-xs font-medium text-ink-dim block mb-1.5">Nota</label>
                   <input
                     type="text"
                     maxLength={200}
@@ -394,6 +433,325 @@ export default function NuevoMovimientoPage() {
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+// ─── Componentes helper ───
+
+function SelectConCrear({
+  label,
+  required,
+  value,
+  onChange,
+  options,
+  emptyLabel,
+  createLabel,
+  onOpenCreate,
+  isOpenCreate,
+}: {
+  label: string;
+  required?: boolean;
+  value: string;
+  onChange: (v: string) => void;
+  options: { id: string; label: string }[];
+  emptyLabel: string;
+  createLabel: string;
+  onOpenCreate: () => void;
+  isOpenCreate: boolean;
+}) {
+  return (
+    <div>
+      <label className="text-xs font-medium text-ink-dim block mb-1.5">{label}</label>
+      <div className="flex gap-2">
+        <select
+          required={required}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="flex-1 bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition min-w-0"
+        >
+          <option value="">{emptyLabel}</option>
+          {options.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={onOpenCreate}
+          title={createLabel}
+          className={`flex-shrink-0 rounded-xl px-3 py-2 text-sm border transition flex items-center gap-1 ${
+            isOpenCreate
+              ? "bg-ink text-cream border-ink"
+              : "bg-white text-ink-dim border-black/10 hover:border-black/20"
+          }`}
+        >
+          {isOpenCreate ? <IconX size={14} /> : <IconPlus size={14} />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function QuickCreateProyecto({
+  clientes,
+  moneda,
+  onCancel,
+  onCreated,
+  onNeedCliente,
+  uid,
+  negocio,
+}: {
+  clientes: Cliente[];
+  moneda: string;
+  onCancel: () => void;
+  onCreated: (id: string) => void | Promise<void>;
+  onNeedCliente: () => void;
+  uid: string;
+  negocio: Negocio;
+}) {
+  const [nombre, setNombre] = useState("");
+  const [clienteId, setClienteId] = useState("");
+  const [precio, setPrecio] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  const handleSave = async () => {
+    setErr("");
+    if (!nombre.trim()) return setErr("Nombre requerido");
+    const cliente = clientes.find((c) => c.id === clienteId);
+    if (!cliente) return setErr("Selecciona un cliente");
+    setSaving(true);
+    try {
+      const id = await createProyecto(uid, {
+        nombre: nombre.trim(),
+        cliente_id: cliente.id!,
+        cliente_nombre: cliente.nombre,
+        negocio_id: negocio.id!,
+        negocio_nombre: negocio.nombre,
+        precio_venta: parseFloat(precio) || 0,
+        partidas: [],
+        estado: "activo",
+        fecha_inicio: new Date(),
+      });
+      await onCreated(id);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Error");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-cream/60 rounded-xl p-3 space-y-2 border border-black/5">
+      <p className="text-xs font-medium text-ink-dim">Crear proyecto rápido</p>
+      <input
+        type="text"
+        placeholder="Nombre del proyecto"
+        value={nombre}
+        onChange={(e) => setNombre(e.target.value)}
+        className="w-full bg-white border border-black/10 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none"
+        autoFocus
+      />
+      {clientes.length === 0 ? (
+        <div className="bg-sky-50 text-sky-900 text-xs px-2.5 py-2 rounded-lg">
+          Necesitas crear un cliente primero.{" "}
+          <button
+            type="button"
+            onClick={onNeedCliente}
+            className="underline font-medium"
+          >
+            Crear cliente
+          </button>
+        </div>
+      ) : (
+        <select
+          value={clienteId}
+          onChange={(e) => setClienteId(e.target.value)}
+          className="w-full bg-white border border-black/10 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none"
+        >
+          <option value="">— Cliente —</option>
+          {clientes.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.nombre}
+            </option>
+          ))}
+        </select>
+      )}
+      <input
+        type="number"
+        step="0.01"
+        min="0"
+        placeholder={`Precio de venta (${moneda}) — opcional`}
+        value={precio}
+        onChange={(e) => setPrecio(e.target.value)}
+        className="w-full bg-white border border-black/10 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none"
+      />
+      {err && <p className="text-xs text-mauve-900">{err}</p>}
+      <div className="flex gap-2 justify-end pt-1">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="text-xs text-ink-muted px-2 py-1 hover:underline"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving || !nombre.trim() || clientes.length === 0}
+          className="bg-ink text-cream rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-ink/90 disabled:opacity-50 transition"
+        >
+          {saving ? "Creando…" : "Crear proyecto"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function QuickCreateCliente({
+  onCancel,
+  onCreated,
+  uid,
+  negocioId,
+}: {
+  onCancel: () => void;
+  onCreated: (id: string) => void | Promise<void>;
+  uid: string;
+  negocioId: string;
+}) {
+  const [nombre, setNombre] = useState("");
+  const [rfc, setRfc] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  const handleSave = async () => {
+    setErr("");
+    if (!nombre.trim()) return setErr("Nombre requerido");
+    setSaving(true);
+    try {
+      const id = await createCliente(uid, {
+        nombre: nombre.trim(),
+        rfc: rfc.trim() || undefined,
+        negocio_id: negocioId,
+      });
+      await onCreated(id);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Error");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-cream/60 rounded-xl p-3 space-y-2 border border-black/5">
+      <p className="text-xs font-medium text-ink-dim">Crear cliente rápido</p>
+      <input
+        type="text"
+        placeholder="Nombre o razón social"
+        value={nombre}
+        onChange={(e) => setNombre(e.target.value)}
+        className="w-full bg-white border border-black/10 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none"
+        autoFocus
+      />
+      <input
+        type="text"
+        placeholder="RFC (opcional)"
+        value={rfc}
+        onChange={(e) => setRfc(e.target.value.toUpperCase())}
+        maxLength={13}
+        className="w-full bg-white border border-black/10 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none uppercase"
+      />
+      {err && <p className="text-xs text-mauve-900">{err}</p>}
+      <div className="flex gap-2 justify-end pt-1">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="text-xs text-ink-muted px-2 py-1 hover:underline"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving || !nombre.trim()}
+          className="bg-ink text-cream rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-ink/90 disabled:opacity-50 transition"
+        >
+          {saving ? "Creando…" : "Crear cliente"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function QuickCreateProveedor({
+  onCancel,
+  onCreated,
+  uid,
+}: {
+  onCancel: () => void;
+  onCreated: (id: string) => void | Promise<void>;
+  uid: string;
+}) {
+  const [nombre, setNombre] = useState("");
+  const [categoria, setCategoria] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  const handleSave = async () => {
+    setErr("");
+    if (!nombre.trim()) return setErr("Nombre requerido");
+    setSaving(true);
+    try {
+      const id = await createProveedor(uid, {
+        nombre: nombre.trim(),
+        categoria: categoria.trim() || undefined,
+      });
+      await onCreated(id);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Error");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-cream/60 rounded-xl p-3 space-y-2 border border-black/5">
+      <p className="text-xs font-medium text-ink-dim">Crear proveedor rápido</p>
+      <input
+        type="text"
+        placeholder="Nombre del proveedor"
+        value={nombre}
+        onChange={(e) => setNombre(e.target.value)}
+        className="w-full bg-white border border-black/10 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none"
+        autoFocus
+      />
+      <input
+        type="text"
+        placeholder="Categoría (opcional)"
+        value={categoria}
+        onChange={(e) => setCategoria(e.target.value)}
+        className="w-full bg-white border border-black/10 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none"
+      />
+      {err && <p className="text-xs text-mauve-900">{err}</p>}
+      <div className="flex gap-2 justify-end pt-1">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="text-xs text-ink-muted px-2 py-1 hover:underline"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving || !nombre.trim()}
+          className="bg-ink text-cream rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-ink/90 disabled:opacity-50 transition"
+        >
+          {saving ? "Creando…" : "Crear proveedor"}
+        </button>
+      </div>
     </div>
   );
 }

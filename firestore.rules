@@ -21,23 +21,38 @@ service cloud.firestore {
         && negocioId in userDoc().memberships;
     }
 
+    function myRol(negocioId) {
+      return myMembership(negocioId).get('rol', 'viewer');
+    }
+
+    function myScope(negocioId) {
+      return myMembership(negocioId).get('scope', 'all');
+    }
+
+    function myProyectosAcceso(negocioId) {
+      return myMembership(negocioId).get('proyectos_acceso', []);
+    }
+
     function isOwner(negocioId) {
-      return hasMembership(negocioId) && myMembership(negocioId).rol == 'owner';
+      return hasMembership(negocioId) && myRol(negocioId) == 'owner';
     }
 
     function canWrite(negocioId) {
-      return hasMembership(negocioId) && myMembership(negocioId).rol in ['owner', 'socio'];
+      return hasMembership(negocioId) && myRol(negocioId) in ['owner', 'socio'];
     }
 
     function hasProyectoAccess(proyectoId, negocioId) {
       return hasMembership(negocioId) && (
-        myMembership(negocioId).scope == 'all' ||
-        proyectoId in myMembership(negocioId).proyectos_acceso
+        myScope(negocioId) == 'all' ||
+        (proyectoId != null && myProyectosAcceso(negocioId).hasAny([proyectoId]))
       );
     }
 
     function canWriteProyecto(proyectoId, negocioId) {
-      return canWrite(negocioId) && hasProyectoAccess(proyectoId, negocioId);
+      return canWrite(negocioId) && (
+        myScope(negocioId) == 'all' ||
+        (proyectoId != null && myProyectosAcceso(negocioId).hasAny([proyectoId]))
+      );
     }
 
     // /usuarios/{uid}
@@ -60,7 +75,7 @@ service cloud.firestore {
       allow update: if isAuth() && (
         (request.auth.uid in resource.data.miembros_uids && isOwner(negocioId))
         ||
-        // Aceptando invitación: solo agrego mi uid a miembros_uids
+        // Aceptando invitación
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['miembros_uids'])
          && request.auth.uid in request.resource.data.miembros_uids)
       );
@@ -76,7 +91,7 @@ service cloud.firestore {
       allow delete: if isOwner(resource.data.negocio_id);
     }
 
-    // /clientes/{id} — catálogo del negocio; cualquier member puede crear/read
+    // /clientes/{id}
     match /clientes/{clienteId} {
       allow read: if hasMembership(resource.data.negocio_id);
       allow create: if hasMembership(request.resource.data.negocio_id);
@@ -84,7 +99,7 @@ service cloud.firestore {
       allow delete: if isOwner(resource.data.negocio_id);
     }
 
-    // /proveedores — catálogo global; cualquier auth lee/crea; solo autor edita/borra
+    // /proveedores — catálogo global
     match /proveedores/{proveedorId} {
       allow read: if isAuth();
       allow create: if isAuth();
@@ -92,7 +107,7 @@ service cloud.firestore {
       allow delete: if isAuth() && resource.data.creado_por == request.auth.uid;
     }
 
-    // /proyectos/{id} — respeta scope de proyectos si aplica
+    // /proyectos/{id}
     match /proyectos/{proyectoId} {
       allow read: if hasProyectoAccess(proyectoId, resource.data.negocio_id);
       allow create: if canWrite(request.resource.data.negocio_id);
@@ -103,19 +118,22 @@ service cloud.firestore {
     // /movimientos/{id}
     match /movimientos/{movimientoId} {
       allow read: if hasMembership(resource.data.negocio_id) && (
-        myMembership(resource.data.negocio_id).scope == 'all' ||
-        resource.data.proyecto_id in myMembership(resource.data.negocio_id).proyectos_acceso
+        myScope(resource.data.negocio_id) == 'all' ||
+        (resource.data.proyecto_id != null &&
+         myProyectosAcceso(resource.data.negocio_id).hasAny([resource.data.proyecto_id]))
       );
+
       allow create: if canWrite(request.resource.data.negocio_id) && (
-        myMembership(request.resource.data.negocio_id).scope == 'all' ||
+        myScope(request.resource.data.negocio_id) == 'all' ||
         (request.resource.data.proyecto_id != null &&
-         request.resource.data.proyecto_id in myMembership(request.resource.data.negocio_id).proyectos_acceso)
+         myProyectosAcceso(request.resource.data.negocio_id).hasAny([request.resource.data.proyecto_id]))
       );
+
       allow update: if canWrite(resource.data.negocio_id);
-      allow delete: if isOwner(resource.data.negocio_id);
+      allow delete: if canWrite(resource.data.negocio_id);
     }
 
-    // /opex/{id} — gastos recurrentes por negocio
+    // /opex/{id}
     match /opex/{opexId} {
       allow read: if hasMembership(resource.data.negocio_id);
       allow create: if canWrite(request.resource.data.negocio_id);
@@ -125,14 +143,11 @@ service cloud.firestore {
 
     // /invitaciones/{id}
     match /invitaciones/{invId} {
-      // read: el owner del negocio, o cualquier auth que quiera aceptar (el flow valida email en la app)
       allow read: if isAuth();
 
-      // create: solo owner del negocio
       allow create: if isOwner(request.resource.data.negocio_id)
         && request.resource.data.invited_by_uid == request.auth.uid;
 
-      // update: para revocar (solo owner) o para aceptar (invitado auto-aplica)
       allow update: if isAuth() && (
         isOwner(resource.data.negocio_id)
         ||
