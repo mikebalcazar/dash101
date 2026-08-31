@@ -13,7 +13,6 @@ import {
   IconLeaf,
   IconArrowDownLeft,
   IconArrowUpRight,
-  IconTransfer,
   IconBuildingBank,
   IconCoin,
   IconCreditCard,
@@ -47,12 +46,6 @@ const MV_META = {
     color: "bg-mauve-50 text-mauve-900",
     montoColor: "text-mauve-900",
     prefix: "−",
-  },
-  transferencia: {
-    icon: IconTransfer,
-    color: "bg-sky-50 text-sky-900",
-    montoColor: "text-sky-900",
-    prefix: "",
   },
 } as const;
 
@@ -275,8 +268,10 @@ export default function DashboardPage() {
           </div>
         ) : (
           <div className="bg-white border border-black/5 rounded-2xl overflow-hidden">
-            {movimientos.map((m) => {
-              const meta = MV_META[m.tipo];
+            {movimientos
+              .filter((m) => m.tipo === "ingreso" || m.tipo === "egreso")
+              .map((m) => {
+              const meta = MV_META[m.tipo as "ingreso" | "egreso"];
               const Icon = meta.icon;
               const fecha = m.fecha as Timestamp | undefined;
               const dateStr =

@@ -6,7 +6,7 @@ export type ScopeMiembro = "all" | "proyectos";
 export type TipoCuenta = "banco" | "caja" | "credito" | "otro";
 export type EstadoProyecto = "planeando" | "activo" | "pausado" | "cerrado";
 export type EstadoPartida = "pendiente" | "parcial" | "pagado";
-export type TipoMovimiento = "ingreso" | "egreso" | "transferencia";
+export type TipoMovimiento = "ingreso" | "egreso";
 export type TipoContraparte = "cliente" | "proveedor" | "cuenta" | "opex" | "ajuste";
 export type EstadoInvitacion = "pendiente" | "aceptada" | "revocada" | "expirada";
 
@@ -122,7 +122,11 @@ export interface Movimiento {
   proyecto_nombre?: string | null;
   cuenta_id: string;
   cuenta_nombre: string;
+  /** Cuando 2 movs son parte de una transferencia entre cuentas, comparten transfer_id */
+  transfer_id?: string | null;
+  /** @deprecated usar transfer_id + dos movs ligados */
   cuenta_destino_id?: string | null;
+  /** @deprecated */
   cuenta_destino_nombre?: string | null;
   contraparte_id?: string | null;
   contraparte_tipo: TipoContraparte;
@@ -203,7 +207,6 @@ export const ESTADO_PROYECTO_LABELS: Record<EstadoProyecto, string> = {
 export const TIPO_MOVIMIENTO_LABELS: Record<TipoMovimiento, string> = {
   ingreso: "Ingreso",
   egreso: "Egreso",
-  transferencia: "Transferencia",
 };
 
 export const ROL_LABELS: Record<RolMiembro, string> = {

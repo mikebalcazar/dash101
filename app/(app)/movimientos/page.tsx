@@ -2,8 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { deleteDoc, doc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { useNegocioActivo } from "@/lib/negocio-activo-context";
-import { listMovimientos, deleteMovimiento } from "@/lib/movimientos";
+import {
+  listMovimientos,
+  deleteMovimiento,
+  recalcularCuenta,
+} from "@/lib/movimientos";
 import type { Movimiento, TipoMovimiento } from "@/types/schema";
 import { formatMonto, formatDateShort } from "@/lib/format";
 import { Timestamp } from "firebase/firestore";
@@ -12,8 +18,8 @@ import {
   IconPlus,
   IconArrowDownLeft,
   IconArrowUpRight,
-  IconTransfer,
   IconTrash,
+  IconLink,
 } from "@tabler/icons-react";
 
 const TIPO_META = {
@@ -29,12 +35,6 @@ const TIPO_META = {
     montoColor: "text-mauve-900",
     prefix: "−",
   },
-  transferencia: {
-    icon: IconTransfer,
-    color: "bg-sky-50 text-sky-900",
-    montoColor: "text-sky-900",
-    prefix: "",
-  },
 } as const;
 
 export default function MovimientosPage() {
@@ -44,6 +44,7 @@ export default function MovimientosPage() {
   const [error, setError] = useState("");
   const [filtroTipo, setFiltroTipo] = useState<TipoMovimiento | "todos">("todos");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [cleanupNotice, setCleanupNotice] = useState("");
 
   const load = () => {
     if (!activo?.id) {
@@ -53,7 +54,35 @@ export default function MovimientosPage() {
     }
     setLoading(true);
     listMovimientos(activo.id, { max: 200 })
-      .then(setMovimientos)
+      .then(async (all) => {
+        // Auto-cleanup: borrar movs viejos con tipo="transferencia"
+        const legacy = all.filter((m) => (m.tipo as string) === "transferencia");
+        if (legacy.length > 0) {
+          try {
+            const cuentasAfectadas = new Set<string>();
+            legacy.forEach((m) => {
+              cuentasAfectadas.add(m.cuenta_id);
+              if (m.cuenta_destino_id) cuentasAfectadas.add(m.cuenta_destino_id);
+            });
+            await Promise.all(
+              legacy.map((m) => deleteDoc(doc(db, "movimientos", m.id!)))
+            );
+            await Promise.all(Array.from(cuentasAfectadas).map(recalcularCuenta));
+            setCleanupNotice(
+              `Se limpiaron ${legacy.length} transferencia${legacy.length === 1 ? "" : "s"} del formato anterior. Saldos actualizados.`
+            );
+            setTimeout(() => setCleanupNotice(""), 5000);
+            // Recargar sin las viejas
+            const fresh = await listMovimientos(activo!.id!, { max: 200 });
+            setMovimientos(fresh.filter((m) => m.tipo === "ingreso" || m.tipo === "egreso"));
+          } catch (e) {
+            console.warn("Cleanup legacy transfers falló:", e);
+            setMovimientos(all.filter((m) => m.tipo === "ingreso" || m.tipo === "egreso"));
+          }
+        } else {
+          setMovimientos(all.filter((m) => m.tipo === "ingreso" || m.tipo === "egreso"));
+        }
+      })
       .catch((e) => setError(e instanceof Error ? e.message : "Error"))
       .finally(() => setLoading(false));
   };
@@ -64,11 +93,14 @@ export default function MovimientosPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activo, loadingNegocio]);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("¿Eliminar este movimiento? Los saldos y agregados se recalcularán.")) return;
-    setDeletingId(id);
+  const handleDelete = async (m: Movimiento) => {
+    const msg = m.transfer_id
+      ? "¿Eliminar esta transferencia? Se borrarán los 2 movimientos ligados y los saldos se recalcularán."
+      : "¿Eliminar este movimiento? Los saldos se recalcularán.";
+    if (!confirm(msg)) return;
+    setDeletingId(m.id!);
     try {
-      await deleteMovimiento(id);
+      await deleteMovimiento(m.id!);
       load();
     } catch (e) {
       alert(e instanceof Error ? e.message : "Error al eliminar");
@@ -139,9 +171,15 @@ export default function MovimientosPage() {
         </Link>
       </div>
 
+      {cleanupNotice && (
+        <div className="bg-mint-50 text-mint-900 text-xs px-3 py-2 rounded-xl mb-4">
+          {cleanupNotice}
+        </div>
+      )}
+
       {/* Filtros */}
       <div className="flex gap-2 mb-4">
-        {(["todos", "ingreso", "egreso", "transferencia"] as const).map((t) => (
+        {(["todos", "ingreso", "egreso"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setFiltroTipo(t)}
@@ -157,7 +195,9 @@ export default function MovimientosPage() {
       </div>
 
       {error && (
-        <div className="bg-mauve-50 text-mauve-900 text-xs px-3 py-2 rounded-xl mb-4">{error}</div>
+        <div className="bg-mauve-50 text-mauve-900 text-xs px-3 py-2 rounded-xl mb-4">
+          {error}
+        </div>
       )}
 
       {filtrados.length === 0 ? (
@@ -171,7 +211,7 @@ export default function MovimientosPage() {
           {movimientos.length === 0 && (
             <>
               <p className="text-xs text-ink-muted mb-5 max-w-xs mx-auto">
-                Registra ingresos, egresos y transferencias entre cuentas.
+                Registra ingresos y egresos de tus proyectos.
               </p>
               <Link
                 href="/movimientos/nuevo"
@@ -186,7 +226,7 @@ export default function MovimientosPage() {
       ) : (
         <div className="bg-white border border-black/5 rounded-2xl overflow-hidden">
           {filtrados.map((m) => {
-            const meta = TIPO_META[m.tipo];
+            const meta = TIPO_META[m.tipo as "ingreso" | "egreso"];
             const Icon = meta.icon;
             const fecha = m.fecha as Timestamp | undefined;
             const dateStr =
@@ -207,12 +247,20 @@ export default function MovimientosPage() {
                   <p className="text-sm font-medium text-ink-dim truncate">
                     {m.descripcion || m.contraparte_nombre}
                     {m.descripcion && (
-                      <span className="text-ink-muted font-normal"> · {m.contraparte_nombre}</span>
+                      <span className="text-ink-muted font-normal">
+                        {" · "}
+                        {m.contraparte_nombre}
+                      </span>
+                    )}
+                    {m.transfer_id && (
+                      <IconLink
+                        size={11}
+                        className="inline-block ml-1 text-sky-900"
+                      />
                     )}
                   </p>
                   <p className="text-[11px] text-ink-muted truncate">
                     {dateStr} · {m.cuenta_nombre}
-                    {m.cuenta_destino_nombre && ` → ${m.cuenta_destino_nombre}`}
                     {m.proyecto_nombre && ` · ${m.proyecto_nombre}`}
                   </p>
                 </div>
@@ -221,7 +269,7 @@ export default function MovimientosPage() {
                   {formatMonto(m.monto, activo.moneda)}
                 </p>
                 <button
-                  onClick={() => handleDelete(m.id!)}
+                  onClick={() => handleDelete(m)}
                   disabled={deletingId === m.id}
                   className="text-ink-muted hover:text-mauve-900 p-1 disabled:opacity-50"
                   title="Eliminar"

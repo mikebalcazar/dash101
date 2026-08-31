@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
@@ -15,68 +15,61 @@ import type {
   Cliente,
   Proveedor,
   Proyecto,
+  Negocio,
   TipoMovimiento,
 } from "@/types/schema";
 import { formatMonto } from "@/lib/format";
-import { IconArrowLeft, IconArrowDownLeft, IconArrowUpRight, IconTransfer } from "@tabler/icons-react";
-
-const TIPO_META = {
-  ingreso: {
-    label: "Ingreso",
-    color: "bg-mint-50 text-mint-900 border-mint-900",
-    icon: IconArrowDownLeft,
-    verbo: "entra a",
-  },
-  egreso: {
-    label: "Egreso",
-    color: "bg-mauve-50 text-mauve-900 border-mauve-900",
-    icon: IconArrowUpRight,
-    verbo: "sale de",
-  },
-  transferencia: {
-    label: "Transferencia",
-    color: "bg-sky-50 text-sky-900 border-sky-900",
-    icon: IconTransfer,
-    verbo: "se mueve de",
-  },
-} as const;
+import { IconArrowLeft, IconArrowDownLeft, IconArrowUpRight, IconChevronDown } from "@tabler/icons-react";
 
 export default function NuevoMovimientoPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
-  const { activo } = useNegocioActivo();
+  const { negocios, activo } = useNegocioActivo();
 
+  const [negocioId, setNegocioId] = useState<string>("");
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
-  const [loadingCat, setLoadingCat] = useState(true);
+  const [loadingCat, setLoadingCat] = useState(false);
 
   const [tipo, setTipo] = useState<TipoMovimiento>(
-    (searchParams?.get("tipo") as TipoMovimiento) || "ingreso"
+    (searchParams?.get("tipo") as TipoMovimiento) ?? "ingreso"
   );
   const [monto, setMonto] = useState("");
   const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
+  const [proyectoId, setProyectoId] = useState(searchParams?.get("proyecto") ?? "");
   const [cuentaId, setCuentaId] = useState("");
-  const [cuentaDestinoId, setCuentaDestinoId] = useState("");
-  const [proyectoId, setProyectoId] = useState(searchParams?.get("proyecto") || "");
   const [contraparteId, setContraparteId] = useState("");
   const [descripcion, setDescripcion] = useState("");
+  const [showNota, setShowNota] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  const negocio = useMemo<Negocio | null>(
+    () => negocios.find((n) => n.id === negocioId) ?? null,
+    [negocios, negocioId]
+  );
+
+  // Setear negocio activo inicial
   useEffect(() => {
-    if (!activo?.id) {
-      setLoadingCat(false);
-      return;
-    }
+    if (!negocioId && activo?.id) setNegocioId(activo.id);
+  }, [activo, negocioId]);
+
+  // Cargar catálogos cuando cambia el negocio
+  useEffect(() => {
+    if (!negocioId) return;
+    setLoadingCat(true);
+    setCuentaId("");
+    setProyectoId("");
+    setContraparteId("");
     Promise.all([
-      listCuentas(activo.id),
-      listClientes(activo.id),
+      listCuentas(negocioId),
+      listClientes(negocioId),
       listProveedores(),
-      listProyectos(activo.id),
+      listProyectos(negocioId),
     ])
       .then(([cs, cls, pvs, prs]) => {
         setCuentas(cs);
@@ -86,30 +79,41 @@ export default function NuevoMovimientoPage() {
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Error catálogo"))
       .finally(() => setLoadingCat(false));
-  }, [activo]);
+  }, [negocioId]);
 
-  // Auto-seleccionar cliente cuando se elige proyecto (ingreso)
-  useEffect(() => {
-    if (tipo === "ingreso" && proyectoId) {
-      const pr = proyectos.find((p) => p.id === proyectoId);
-      if (pr) setContraparteId(pr.cliente_id);
-    }
-  }, [proyectoId, tipo, proyectos]);
+  const proyectoSel = proyectos.find((p) => p.id === proyectoId);
+  const proveedoresDelProyecto = useMemo(() => {
+    if (!proyectoSel) return proveedores;
+    // Proveedores en partidas del proyecto (más relevantes primero) + resto
+    const ids = new Set(proyectoSel.partidas.map((p) => p.proveedor_id));
+    const enPartidas = proveedores.filter((p) => ids.has(p.id!));
+    const otros = proveedores.filter((p) => !ids.has(p.id!));
+    return [...enPartidas, ...otros];
+  }, [proyectoSel, proveedores]);
 
-  if (!activo) {
+  const proyectosActivos = proyectos.filter((p) => p.estado !== "cerrado");
+  const contrapartes = tipo === "ingreso" ? clientes : proveedoresDelProyecto;
+  const contraparteLabel = tipo === "ingreso" ? "Cliente" : "Proveedor";
+
+  if (negocios.length === 0) {
     return (
       <div className="max-w-lg">
         <Link href="/movimientos" className="text-xs text-ink-muted hover:text-ink-dim">
           ← Volver
         </Link>
-        <p className="mt-4 text-sm text-ink-muted">Selecciona o crea un negocio primero.</p>
+        <p className="mt-4 text-sm text-ink-muted">
+          Crea un negocio primero.{" "}
+          <Link href="/negocios/nuevo" className="underline">
+            Crear negocio
+          </Link>
+        </p>
       </div>
     );
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user || !negocio) return;
     setError("");
 
     const montoNum = parseFloat(monto);
@@ -118,52 +122,19 @@ export default function NuevoMovimientoPage() {
       return;
     }
 
-    const cuentaOrigen = cuentas.find((c) => c.id === cuentaId);
-    if (!cuentaOrigen) {
+    const cuenta = cuentas.find((c) => c.id === cuentaId);
+    if (!cuenta) {
       setError("Selecciona una cuenta");
       return;
     }
 
-    let cuentaDestino: Cuenta | undefined;
-    let contraparteNombre = "";
-    let contraparteTipoVal: "cliente" | "proveedor" | "cuenta" = "cliente";
-    let proyectoNombre: string | null = null;
-
-    if (tipo === "transferencia") {
-      cuentaDestino = cuentas.find((c) => c.id === cuentaDestinoId);
-      if (!cuentaDestino) {
-        setError("Selecciona cuenta destino");
-        return;
-      }
-      if (cuentaDestino.id === cuentaOrigen.id) {
-        setError("Cuenta origen y destino no pueden ser la misma");
-        return;
-      }
-      contraparteNombre = cuentaDestino.nombre;
-      contraparteTipoVal = "cuenta";
-    } else {
-      if (tipo === "ingreso") {
-        const cl = clientes.find((c) => c.id === contraparteId);
-        if (!cl) {
-          setError("Selecciona un cliente");
-          return;
-        }
-        contraparteNombre = cl.nombre;
-        contraparteTipoVal = "cliente";
-      } else {
-        const pv = proveedores.find((p) => p.id === contraparteId);
-        if (!pv) {
-          setError("Selecciona un proveedor");
-          return;
-        }
-        contraparteNombre = pv.nombre;
-        contraparteTipoVal = "proveedor";
-      }
-
-      if (proyectoId) {
-        const pr = proyectos.find((p) => p.id === proyectoId);
-        proyectoNombre = pr?.nombre ?? null;
-      }
+    const contraparteObj =
+      tipo === "ingreso"
+        ? clientes.find((c) => c.id === contraparteId)
+        : proveedores.find((p) => p.id === contraparteId);
+    if (!contraparteObj) {
+      setError(`Selecciona un ${contraparteLabel.toLowerCase()}`);
+      return;
     }
 
     setSubmitting(true);
@@ -172,16 +143,14 @@ export default function NuevoMovimientoPage() {
         tipo,
         monto: montoNum,
         fecha: new Date(fecha),
-        cuenta_id: cuentaOrigen.id!,
-        cuenta_nombre: cuentaOrigen.nombre,
-        cuenta_destino_id: cuentaDestino?.id ?? null,
-        cuenta_destino_nombre: cuentaDestino?.nombre ?? null,
-        proyecto_id: tipo === "transferencia" ? null : proyectoId || null,
-        proyecto_nombre: tipo === "transferencia" ? null : proyectoNombre,
-        contraparte_id: tipo === "transferencia" ? cuentaDestino!.id! : contraparteId,
-        contraparte_tipo: contraparteTipoVal,
-        contraparte_nombre: contraparteNombre,
-        negocio_id: activo.id!,
+        cuenta_id: cuenta.id!,
+        cuenta_nombre: cuenta.nombre,
+        proyecto_id: proyectoId || null,
+        proyecto_nombre: proyectoSel?.nombre ?? null,
+        contraparte_id: contraparteObj.id!,
+        contraparte_tipo: tipo === "ingreso" ? "cliente" : "proveedor",
+        contraparte_nombre: contraparteObj.nombre,
+        negocio_id: negocio.id!,
         descripcion: descripcion.trim() || undefined,
       });
       router.push("/movimientos");
@@ -192,10 +161,11 @@ export default function NuevoMovimientoPage() {
     }
   };
 
-  if (loadingCat) return <div className="text-sm text-ink-muted">Cargando catálogo…</div>;
-
-  const cuentasDisponibles = cuentas;
-  const proyectosActivos = proyectos.filter((p) => p.estado !== "cerrado");
+  const isIngreso = tipo === "ingreso";
+  const accentBg = isIngreso ? "bg-mint-50" : "bg-mauve-50";
+  const accentTxt = isIngreso ? "text-mint-900" : "text-mauve-900";
+  const accentLabel = isIngreso ? "text-mint-label" : "text-mauve-label";
+  const symbol = isIngreso ? "+" : "−";
 
   return (
     <div className="max-w-lg">
@@ -204,46 +174,66 @@ export default function NuevoMovimientoPage() {
         className="text-xs text-ink-muted inline-flex items-center gap-1 mb-4 hover:text-ink-dim transition"
       >
         <IconArrowLeft size={13} />
-        Volver a movimientos
+        Volver
       </Link>
 
-      <h2 className="text-lg font-medium text-ink-dim">Registrar movimiento</h2>
-      <p className="text-xs text-ink-muted mt-0.5 mb-6">
-        Se agregará a <strong>{activo.nombre}</strong>
-      </p>
-
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Tipo — segmented */}
-        <div>
-          <label className="text-xs font-medium text-ink-dim block mb-1.5">Tipo</label>
-          <div className="grid grid-cols-3 gap-2">
-            {(["ingreso", "egreso", "transferencia"] as TipoMovimiento[]).map((t) => {
-              const meta = TIPO_META[t];
-              const active = tipo === t;
-              const Icon = meta.icon;
-              return (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => {
-                    setTipo(t);
-                    setContraparteId("");
-                    setProyectoId("");
-                    setCuentaDestinoId("");
-                  }}
-                  className={`px-3 py-2.5 rounded-xl border text-xs font-medium flex flex-col items-center gap-1 transition ${
-                    active ? meta.color : "bg-white border-black/10 text-ink-muted hover:border-black/20"
-                  }`}
-                >
-                  <Icon size={16} />
-                  {meta.label}
-                </button>
-              );
-            })}
+        {/* Hero: monto + tipo */}
+        <div className={`${accentBg} rounded-3xl p-6`}>
+          <div className="flex items-baseline gap-2">
+            <span className={`text-3xl font-medium ${accentTxt}`}>{symbol}</span>
+            <span className={`text-xs font-medium ${accentLabel} mb-1`}>
+              {negocio?.moneda ?? "MXN"}
+            </span>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              required
+              value={monto}
+              onChange={(e) => setMonto(e.target.value)}
+              placeholder="0"
+              className={`flex-1 bg-transparent border-none text-4xl font-medium tracking-tight ${accentTxt} placeholder-current placeholder-opacity-30 focus:outline-none min-w-0`}
+              autoFocus
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 mt-4">
+            <button
+              type="button"
+              onClick={() => {
+                setTipo("ingreso");
+                setContraparteId("");
+              }}
+              className={`px-3 py-2.5 rounded-xl border text-sm font-medium flex items-center justify-center gap-1.5 transition ${
+                isIngreso
+                  ? "bg-white border-mint-900 text-mint-900"
+                  : "bg-transparent border-transparent text-ink-muted hover:bg-white/50"
+              }`}
+            >
+              <IconArrowDownLeft size={14} />
+              Ingreso
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTipo("egreso");
+                setContraparteId("");
+              }}
+              className={`px-3 py-2.5 rounded-xl border text-sm font-medium flex items-center justify-center gap-1.5 transition ${
+                !isIngreso
+                  ? "bg-white border-mauve-900 text-mauve-900"
+                  : "bg-transparent border-transparent text-ink-muted hover:bg-white/50"
+              }`}
+            >
+              <IconArrowUpRight size={14} />
+              Egreso
+            </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        {/* Campos */}
+        <div className="space-y-3">
           <div>
             <label className="text-xs font-medium text-ink-dim block mb-1.5">Fecha</label>
             <input
@@ -253,155 +243,135 @@ export default function NuevoMovimientoPage() {
               className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
             />
           </div>
+
           <div>
             <label className="text-xs font-medium text-ink-dim block mb-1.5">
-              Monto ({activo.moneda}) <span className="text-mauve-900">*</span>
+              Negocio <span className="text-mauve-900">*</span>
             </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              required
-              value={monto}
-              onChange={(e) => setMonto(e.target.value)}
-              placeholder="0.00"
-              className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition text-right"
-            />
+            <select
+              value={negocioId}
+              onChange={(e) => setNegocioId(e.target.value)}
+              className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
+            >
+              {negocios.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.nombre}
+                </option>
+              ))}
+            </select>
           </div>
-        </div>
 
-        {/* Cuenta origen / destino según tipo */}
-        {tipo === "transferencia" ? (
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-ink-dim block mb-1.5">
-                Cuenta origen <span className="text-mauve-900">*</span>
-              </label>
-              <select
-                required
-                value={cuentaId}
-                onChange={(e) => setCuentaId(e.target.value)}
-                className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
-              >
-                <option value="">— Selecciona —</option>
-                {cuentasDisponibles.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nombre} · {formatMonto(c.saldo_actual, c.moneda)}
+          {loadingCat ? (
+            <p className="text-xs text-ink-muted text-center py-3">Cargando catálogo…</p>
+          ) : (
+            <>
+              <div>
+                <label className="text-xs font-medium text-ink-dim block mb-1.5">
+                  Proyecto {isIngreso && <span className="text-mauve-900">*</span>}
+                  {!isIngreso && <span className="text-ink-muted"> (opcional)</span>}
+                </label>
+                <select
+                  required={isIngreso}
+                  value={proyectoId}
+                  onChange={(e) => setProyectoId(e.target.value)}
+                  className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
+                >
+                  <option value="">
+                    {isIngreso ? "— Selecciona —" : "— Sin proyecto —"}
                   </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-ink-dim block mb-1.5">
-                Cuenta destino <span className="text-mauve-900">*</span>
-              </label>
-              <select
-                required
-                value={cuentaDestinoId}
-                onChange={(e) => setCuentaDestinoId(e.target.value)}
-                className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
-              >
-                <option value="">— Selecciona —</option>
-                {cuentasDisponibles
-                  .filter((c) => c.id !== cuentaId)
-                  .map((c) => (
+                  {proyectosActivos.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nombre} · {p.cliente_nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-ink-dim block mb-1.5">
+                  Cuenta <span className="text-mauve-900">*</span>
+                </label>
+                <select
+                  required
+                  value={cuentaId}
+                  onChange={(e) => setCuentaId(e.target.value)}
+                  className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
+                >
+                  <option value="">— Selecciona —</option>
+                  {cuentas.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nombre} · {formatMonto(c.saldo_actual, c.moneda)}
+                    </option>
+                  ))}
+                </select>
+                {cuentas.length === 0 && (
+                  <p className="text-xs text-ink-muted mt-1">
+                    Sin cuentas.{" "}
+                    <Link href="/cuentas/nueva" className="underline">
+                      Crear cuenta
+                    </Link>
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-ink-dim block mb-1.5">
+                  {contraparteLabel} <span className="text-mauve-900">*</span>
+                </label>
+                <select
+                  required
+                  value={contraparteId}
+                  onChange={(e) => setContraparteId(e.target.value)}
+                  className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
+                >
+                  <option value="">— Selecciona —</option>
+                  {contrapartes.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.nombre}
                     </option>
                   ))}
-              </select>
-            </div>
-          </div>
-        ) : (
-          <>
-            <div>
-              <label className="text-xs font-medium text-ink-dim block mb-1.5">
-                Cuenta ({tipo === "ingreso" ? "destino" : "origen"}){" "}
-                <span className="text-mauve-900">*</span>
-              </label>
-              <select
-                required
-                value={cuentaId}
-                onChange={(e) => setCuentaId(e.target.value)}
-                className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
-              >
-                <option value="">— Selecciona —</option>
-                {cuentasDisponibles.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nombre} · {formatMonto(c.saldo_actual, c.moneda)}
-                  </option>
-                ))}
-              </select>
-              {cuentas.length === 0 && (
-                <p className="text-xs text-ink-muted mt-1">
-                  Sin cuentas.{" "}
-                  <Link href="/cuentas/nueva" className="underline">
-                    Crear cuenta
-                  </Link>
-                </p>
+                </select>
+                {contrapartes.length === 0 && (
+                  <p className="text-xs text-ink-muted mt-1">
+                    Sin {contraparteLabel.toLowerCase()}s.{" "}
+                    <Link
+                      href={isIngreso ? "/clientes/nuevo" : "/proveedores/nuevo"}
+                      className="underline"
+                    >
+                      Crear {contraparteLabel.toLowerCase()}
+                    </Link>
+                  </p>
+                )}
+              </div>
+
+              {/* Nota expandible */}
+              {!showNota ? (
+                <button
+                  type="button"
+                  onClick={() => setShowNota(true)}
+                  className="text-xs text-ink-muted hover:text-ink-dim transition flex items-center gap-1"
+                >
+                  <IconChevronDown size={12} />
+                  Agregar nota
+                </button>
+              ) : (
+                <div>
+                  <label className="text-xs font-medium text-ink-dim block mb-1.5">
+                    Nota
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={200}
+                    value={descripcion}
+                    onChange={(e) => setDescripcion(e.target.value)}
+                    placeholder="Ej: Factura 456, anticipo 2a parcialidad…"
+                    className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
+                    autoFocus
+                  />
+                </div>
               )}
-            </div>
-
-            <div>
-              <label className="text-xs font-medium text-ink-dim block mb-1.5">
-                Proyecto {tipo === "ingreso" && <span className="text-mauve-900">*</span>}
-                {tipo === "egreso" && <span className="text-ink-muted"> (opcional)</span>}
-              </label>
-              <select
-                required={tipo === "ingreso"}
-                value={proyectoId}
-                onChange={(e) => setProyectoId(e.target.value)}
-                className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
-              >
-                <option value="">
-                  {tipo === "ingreso" ? "— Selecciona —" : "— Sin proyecto —"}
-                </option>
-                {proyectosActivos.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.nombre} · {p.cliente_nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-xs font-medium text-ink-dim block mb-1.5">
-                {tipo === "ingreso" ? "Cliente" : "Proveedor"}{" "}
-                <span className="text-mauve-900">*</span>
-              </label>
-              <select
-                required
-                value={contraparteId}
-                onChange={(e) => setContraparteId(e.target.value)}
-                className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
-              >
-                <option value="">— Selecciona —</option>
-                {tipo === "ingreso"
-                  ? clientes.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nombre}
-                      </option>
-                    ))
-                  : proveedores.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.nombre}
-                      </option>
-                    ))}
-              </select>
-            </div>
-          </>
-        )}
-
-        <div>
-          <label className="text-xs font-medium text-ink-dim block mb-1.5">Descripción</label>
-          <input
-            type="text"
-            maxLength={200}
-            value={descripcion}
-            onChange={(e) => setDescripcion(e.target.value)}
-            placeholder="Nota opcional"
-            className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
-          />
+            </>
+          )}
         </div>
 
         {error && (
@@ -417,10 +387,10 @@ export default function NuevoMovimientoPage() {
           </Link>
           <button
             type="submit"
-            disabled={submitting || !monto || !cuentaId}
-            className="bg-ink text-cream rounded-xl px-5 py-2 text-sm font-medium hover:bg-ink/90 disabled:opacity-50 transition"
+            disabled={submitting || !monto || !cuentaId || !contraparteId || loadingCat}
+            className="flex-1 bg-ink text-cream rounded-xl px-5 py-2 text-sm font-medium hover:bg-ink/90 disabled:opacity-50 transition"
           >
-            {submitting ? "Registrando…" : "Registrar movimiento"}
+            {submitting ? "Registrando…" : `Registrar ${isIngreso ? "ingreso" : "egreso"}`}
           </button>
         </div>
       </form>
