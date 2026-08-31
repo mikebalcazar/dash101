@@ -85,14 +85,7 @@ export async function createMovimiento(uid: string, data: MovimientoInput): Prom
     creado_por: uid,
   };
 
-  let ref;
-  try {
-    ref = await addDoc(collection(db, "movimientos"), payload);
-  } catch (e) {
-    throw new Error(
-      `[addDoc movimiento] ${e instanceof Error ? e.message : String(e)}`
-    );
-  }
+  const ref = await addDoc(collection(db, "movimientos"), payload);
 
   try {
     await Promise.all([
@@ -100,7 +93,7 @@ export async function createMovimiento(uid: string, data: MovimientoInput): Prom
       data.proyecto_id ? recalcularProyecto(data.proyecto_id) : Promise.resolve(),
     ]);
   } catch (e) {
-    // No re-throw: el movimiento se creó bien, solo los agregados fallaron
+    // El movimiento se creó bien, solo los agregados fallaron. No abortar.
     console.warn(
       "[recalcular fallo, mov creado ok]",
       e instanceof Error ? e.message : e

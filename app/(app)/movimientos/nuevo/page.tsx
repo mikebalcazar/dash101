@@ -10,7 +10,6 @@ import { listClientes, createCliente } from "@/lib/clientes";
 import { listProveedores, createProveedor } from "@/lib/proveedores";
 import { listProyectos, createProyecto } from "@/lib/proyectos";
 import { createMovimiento } from "@/lib/movimientos";
-import { getUserDoc } from "@/lib/users";
 import type {
   Cuenta,
   Cliente,
@@ -58,7 +57,6 @@ export default function NuevoMovimientoPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [diagInfo, setDiagInfo] = useState<string>("");
 
   const negocio = useMemo<Negocio | null>(
     () => negocios.find((n) => n.id === negocioId) ?? null,
@@ -169,28 +167,7 @@ export default function NuevoMovimientoPage() {
       });
       router.push("/movimientos");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Error al crear movimiento";
-      setError(msg);
-      // Si es error de permisos, cargar diagnóstico
-      if (msg.toLowerCase().includes("permission") || msg.toLowerCase().includes("insufficient")) {
-        try {
-          const uDoc = await getUserDoc(user.uid);
-          const membership = uDoc?.memberships?.[negocio.id!];
-          const info = {
-            uid: user.uid,
-            email: user.email,
-            negocio_id: negocio.id,
-            negocio_nombre: negocio.nombre,
-            tengo_memberships: !!uDoc?.memberships,
-            memberships_keys: Object.keys(uDoc?.memberships ?? {}),
-            membership_this_negocio: membership ?? null,
-            negocios_acceso: uDoc?.negocios_acceso ?? [],
-          };
-          setDiagInfo(JSON.stringify(info, null, 2));
-        } catch (diagErr) {
-          setDiagInfo("No se pudo cargar diagnóstico: " + String(diagErr));
-        }
-      }
+      setError(err instanceof Error ? err.message : "Error al crear movimiento");
     } finally {
       setSubmitting(false);
     }
@@ -438,16 +415,6 @@ export default function NuevoMovimientoPage() {
 
         {error && (
           <p className="text-xs text-mauve-900 bg-mauve-50 px-3 py-2 rounded-xl">{error}</p>
-        )}
-        {diagInfo && (
-          <details className="bg-cream border border-black/10 rounded-xl overflow-hidden" open>
-            <summary className="text-xs font-medium text-ink-dim px-3 py-2 cursor-pointer">
-              🔍 Diagnóstico (compárteme esto)
-            </summary>
-            <pre className="text-[10px] text-ink-dim px-3 py-2 overflow-x-auto whitespace-pre-wrap break-all">
-              {diagInfo}
-            </pre>
-          </details>
         )}
 
         <div className="flex gap-2 pt-2">
