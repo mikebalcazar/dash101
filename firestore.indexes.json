@@ -63,6 +63,14 @@
         { "fieldPath": "negocio_id", "order": "ASCENDING" },
         { "fieldPath": "creado_at", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "opex",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "negocio_id", "order": "ASCENDING" },
+        { "fieldPath": "creado_at", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

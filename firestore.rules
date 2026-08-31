@@ -115,6 +115,14 @@ service cloud.firestore {
       allow delete: if isOwner(resource.data.negocio_id);
     }
 
+    // /opex/{id} — gastos recurrentes por negocio
+    match /opex/{opexId} {
+      allow read: if hasMembership(resource.data.negocio_id);
+      allow create: if canWrite(request.resource.data.negocio_id);
+      allow update: if canWrite(resource.data.negocio_id);
+      allow delete: if canWrite(resource.data.negocio_id);
+    }
+
     // /invitaciones/{id}
     match /invitaciones/{invId} {
       // read: el owner del negocio, o cualquier auth que quiera aceptar (el flow valida email en la app)

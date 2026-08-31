@@ -10,7 +10,7 @@ import {
   IconUsers,
   IconTruck,
   IconReceipt,
-  IconChartBar,
+  IconChartLine,
   IconSettings,
   IconLogout,
   IconBuildingSkyscraper,
@@ -28,7 +28,7 @@ const items: NavItem[] = [
   { href: "/clientes", icon: IconUsers, label: "Clientes" },
   { href: "/proveedores", icon: IconTruck, label: "Proveedores" },
   { href: "/opex", icon: IconReceipt, label: "OPEX" },
-  { href: "/reportes", icon: IconChartBar, label: "Reportes" },
+  { href: "/flujo", icon: IconChartLine, label: "Flujo" },
   { href: "/equipo", icon: IconUsersGroup, label: "Equipo" },
 ];
 

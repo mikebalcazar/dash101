@@ -10,6 +10,9 @@ export type TipoMovimiento = "ingreso" | "egreso" | "transferencia";
 export type TipoContraparte = "cliente" | "proveedor" | "cuenta" | "opex" | "ajuste";
 export type EstadoInvitacion = "pendiente" | "aceptada" | "revocada" | "expirada";
 
+export type FrecuenciaOpex = "semanal" | "mensual" | "anual";
+export type TipoOpex = "egreso" | "ingreso";
+
 export interface MembershipInfo {
   rol: RolMiembro;
   scope: ScopeMiembro;
@@ -150,6 +153,27 @@ export interface Invitacion {
   aceptada_por_uid?: string;
 }
 
+export interface Opex {
+  id?: string;
+  nombre: string;
+  tipo: TipoOpex;
+  monto: number;
+  moneda: Moneda;
+  frecuencia: FrecuenciaOpex;
+  dia_semana?: number | null; // 0-6 (0=domingo) para frecuencia=semanal
+  dia_del_mes?: number | null; // 1-31 para frecuencia=mensual; auto-ajusta si mes tiene menos días
+  fecha_inicio: Timestamp | FieldValue;
+  fecha_fin?: Timestamp | null;
+  cuenta_id?: string | null;
+  cuenta_nombre?: string | null;
+  categoria?: string;
+  activo: boolean;
+  negocio_id: string;
+  descripcion?: string;
+  creado_at: Timestamp | FieldValue;
+  creado_por: string;
+}
+
 export const COLLECTIONS = {
   USUARIOS: "usuarios",
   NEGOCIOS: "negocios",
@@ -193,3 +217,11 @@ export const ROL_DESCRIPCION: Record<RolMiembro, string> = {
   socio: "Puede crear/editar/borrar dentro de su scope. No invita.",
   viewer: "Solo puede ver. No crea ni edita.",
 };
+
+export const FRECUENCIA_LABELS: Record<FrecuenciaOpex, string> = {
+  semanal: "Cada semana",
+  mensual: "Cada mes",
+  anual: "Cada año",
+};
+
+export const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
