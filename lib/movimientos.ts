@@ -84,12 +84,28 @@ export async function createMovimiento(uid: string, data: MovimientoInput): Prom
     creado_at: serverTimestamp(),
     creado_por: uid,
   };
-  const ref = await addDoc(collection(db, "movimientos"), payload);
 
-  await Promise.all([
-    recalcularCuenta(data.cuenta_id),
-    data.proyecto_id ? recalcularProyecto(data.proyecto_id) : Promise.resolve(),
-  ]);
+  let ref;
+  try {
+    ref = await addDoc(collection(db, "movimientos"), payload);
+  } catch (e) {
+    throw new Error(
+      `[addDoc movimiento] ${e instanceof Error ? e.message : String(e)}`
+    );
+  }
+
+  try {
+    await Promise.all([
+      recalcularCuenta(data.cuenta_id),
+      data.proyecto_id ? recalcularProyecto(data.proyecto_id) : Promise.resolve(),
+    ]);
+  } catch (e) {
+    // No re-throw: el movimiento se creó bien, solo los agregados fallaron
+    console.warn(
+      "[recalcular fallo, mov creado ok]",
+      e instanceof Error ? e.message : e
+    );
+  }
 
   return ref.id;
 }

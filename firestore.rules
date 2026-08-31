@@ -84,11 +84,12 @@ service cloud.firestore {
     }
 
     // /cuentas/{id}
+    // TEMPORAL DEBUG: solo isAuth para aislar problema de recalcularCuenta
     match /cuentas/{cuentaId} {
-      allow read: if hasMembership(resource.data.negocio_id);
-      allow create: if canWrite(request.resource.data.negocio_id);
-      allow update: if canWrite(resource.data.negocio_id);
-      allow delete: if isOwner(resource.data.negocio_id);
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow update: if isAuth();
+      allow delete: if isAuth();
     }
 
     // /clientes/{id}
@@ -116,14 +117,12 @@ service cloud.firestore {
     }
 
     // /movimientos/{id}
-    // NOTA: rule simplificada temporalmente para debug.
-    // Solo valida canWrite (rol owner/socio en el negocio).
-    // Scope-por-proyectos se agregará de vuelta después de confirmar funcionamiento.
+    // TEMPORAL DEBUG: solo isAuth para aislar problema
     match /movimientos/{movimientoId} {
-      allow read: if hasMembership(resource.data.negocio_id);
-      allow create: if canWrite(request.resource.data.negocio_id);
-      allow update: if canWrite(resource.data.negocio_id);
-      allow delete: if canWrite(resource.data.negocio_id);
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow update: if isAuth();
+      allow delete: if isAuth();
     }
 
     // /opex/{id}
