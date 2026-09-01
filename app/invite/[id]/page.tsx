@@ -5,7 +5,6 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { getInvitacion, aceptarInvitacion } from "@/lib/invitaciones";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
 import type { Invitacion } from "@/types/schema";
 import { ROL_LABELS } from "@/types/schema";
 import { Timestamp } from "firebase/firestore";
@@ -16,13 +15,14 @@ import {
   IconAlertTriangle,
   IconCheck,
   IconLeaf,
+  IconLock,
 } from "@tabler/icons-react";
 
 export default function AceptarInvitacionPage() {
   const router = useRouter();
   const params = useParams();
   const id = params?.id as string;
-  const { user, loading: authLoading, signInGoogle } = useAuth();
+  const { user, loading: authLoading, signInGoogle, signInEmail, signUpEmail } = useAuth();
 
   // Solo usar el context de negocio activo si el usuario está logueado
   // (evita error si el provider no está)
@@ -31,6 +31,11 @@ export default function AceptarInvitacionPage() {
   const [error, setError] = useState("");
   const [accepting, setAccepting] = useState(false);
   const [accepted, setAccepted] = useState<{ nombre: string } | null>(null);
+
+  // Email + password
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [password, setPassword] = useState("");
+  const [passwordLoading, setPasswordLoading] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -52,6 +57,40 @@ export default function AceptarInvitacionPage() {
       await signInGoogle();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al iniciar sesión");
+    }
+  };
+
+  const handleEmailPassword = async () => {
+    if (!inv) return;
+    setError("");
+    if (password.length < 6) {
+      setError("La contraseña debe tener al menos 6 caracteres");
+      return;
+    }
+    setPasswordLoading(true);
+    try {
+      // Intenta crear cuenta primero; si ya existe, hace login
+      try {
+        await signUpEmail(inv.email, password);
+      } catch (e) {
+        const code = (e as { code?: string })?.code;
+        if (code === "auth/email-already-in-use") {
+          await signInEmail(inv.email, password);
+        } else {
+          throw e;
+        }
+      }
+    } catch (e) {
+      const code = (e as { code?: string })?.code;
+      if (code === "auth/wrong-password" || code === "auth/invalid-credential") {
+        setError("Contraseña incorrecta para esta cuenta");
+      } else if (code === "auth/weak-password") {
+        setError("Contraseña muy débil (mínimo 6 caracteres)");
+      } else {
+        setError(e instanceof Error ? e.message : "Error al iniciar sesión");
+      }
+    } finally {
+      setPasswordLoading(false);
     }
   };
 
@@ -206,13 +245,83 @@ export default function AceptarInvitacionPage() {
                   <p className="text-xs text-ink-muted mb-3 text-center">
                     Inicia sesión con <strong>{inv!.email}</strong> para aceptar
                   </p>
-                  <button
-                    onClick={handleGoogle}
-                    className="w-full flex items-center justify-center gap-2 bg-cream hover:bg-cream/80 transition rounded-xl py-2.5 text-sm font-medium"
-                  >
-                    <IconBrandGoogle size={16} />
-                    Continuar con Google
-                  </button>
+
+                  {!showEmailForm ? (
+                    <>
+                      <button
+                        onClick={handleGoogle}
+                        className="w-full flex items-center justify-center gap-2 bg-cream hover:bg-cream/80 transition rounded-xl py-2.5 text-sm font-medium mb-2"
+                      >
+                        <IconBrandGoogle size={16} />
+                        Continuar con Google
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowEmailForm(true)}
+                        className="w-full flex items-center justify-center gap-2 border border-black/10 hover:bg-cream/50 transition rounded-xl py-2.5 text-sm font-medium"
+                      >
+                        <IconLock size={14} />
+                        Usar email y contraseña
+                      </button>
+                      <p className="text-[10px] text-ink-muted text-center mt-2">
+                        (Necesario si tu email no es de Google, ej: Hotmail, Yahoo)
+                      </p>
+                    </>
+                  ) : (
+                    <div className="space-y-2">
+                      <div>
+                        <label className="text-xs font-medium text-ink-dim block mb-1">
+                          Email
+                        </label>
+                        <input
+                          type="email"
+                          value={inv!.email}
+                          disabled
+                          className="w-full bg-cream border border-black/10 rounded-xl px-3 py-2 text-sm text-ink-muted"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-ink-dim block mb-1">
+                          Contraseña <span className="text-mauve-900">*</span>
+                        </label>
+                        <input
+                          type="password"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder="Mínimo 6 caracteres"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleEmailPassword();
+                          }}
+                          className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40"
+                        />
+                        <p className="text-[10px] text-ink-muted mt-1">
+                          Si es tu primera vez, se creará una cuenta. Si ya tienes cuenta,
+                          usa tu contraseña habitual.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleEmailPassword}
+                        disabled={passwordLoading || !password}
+                        className="w-full bg-ink text-cream rounded-xl py-2.5 text-sm font-medium hover:bg-ink/90 disabled:opacity-50 transition"
+                      >
+                        {passwordLoading ? "Ingresando…" : "Ingresar y aceptar"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowEmailForm(false);
+                          setPassword("");
+                          setError("");
+                        }}
+                        disabled={passwordLoading}
+                        className="w-full text-xs text-ink-muted hover:text-ink-dim py-1"
+                      >
+                        ← Volver a opciones
+                      </button>
+                    </div>
+                  )}
                 </>
               ) : !emailMatch ? (
                 <div className="bg-mauve-50 text-mauve-900 text-xs px-3 py-2 rounded-xl">

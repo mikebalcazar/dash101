@@ -100,7 +100,9 @@ service cloud.firestore {
 
     // /invitaciones/{id}
     match /invitaciones/{invId} {
-      allow read: if isAuth();
+      // Read público: el invitado (aún no autenticado) necesita ver detalles.
+      // IDs son UUIDs no adivinables → seguridad por obscuridad aceptable.
+      allow read: if true;
 
       allow create: if isOwnerUid(request.resource.data.negocio_id)
         && request.resource.data.invited_by_uid == request.auth.uid;
