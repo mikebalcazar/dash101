@@ -58,9 +58,18 @@ service cloud.firestore {
       allow delete: if isOwnerUid(resource.data.negocio_id);
     }
 
+    // ---- Portal de clientes (app aparte, solo lectura) ----
+    // Un cliente con acceso tiene uid de Firebase Auth. Los docs que puede
+    // leer traen ese uid denormalizado en `cliente_uid` (o `uid` en clientes).
+    // Lo pone/quita CONTA MASTER al activar/desactivar el acceso. Sin escritura.
+    function esClientePortal(uidCampo) {
+      return isAuth() && uidCampo != null && request.auth.uid == uidCampo;
+    }
+
     // /clientes/{id}
     match /clientes/{clienteId} {
-      allow read: if isMember(resource.data.negocio_id);
+      allow read: if isMember(resource.data.negocio_id)
+        || (esClientePortal(resource.data.uid) && resource.data.portal_activo == true);
       allow create: if isMember(request.resource.data.negocio_id);
       allow update: if isMember(resource.data.negocio_id);
       allow delete: if isOwnerUid(resource.data.negocio_id);
@@ -76,7 +85,8 @@ service cloud.firestore {
 
     // /proyectos/{id}
     match /proyectos/{proyectoId} {
-      allow read: if isMember(resource.data.negocio_id);
+      allow read: if isMember(resource.data.negocio_id)
+        || esClientePortal(resource.data.cliente_uid);
       allow create: if isMember(request.resource.data.negocio_id);
       allow update: if isMember(resource.data.negocio_id);
       allow delete: if isOwnerUid(resource.data.negocio_id);
@@ -84,7 +94,8 @@ service cloud.firestore {
 
     // /movimientos/{id}
     match /movimientos/{movimientoId} {
-      allow read: if isMember(resource.data.negocio_id);
+      allow read: if isMember(resource.data.negocio_id)
+        || esClientePortal(resource.data.cliente_uid);
       allow create: if isMember(request.resource.data.negocio_id);
       allow update: if isMember(resource.data.negocio_id);
       allow delete: if isMember(resource.data.negocio_id);

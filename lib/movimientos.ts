@@ -16,6 +16,7 @@ import {
 import { db } from "./firebase";
 import type { Movimiento, TipoMovimiento, TipoContraparte } from "@/types/schema";
 import { recalcularProyecto } from "./proyectos";
+import { getClienteUid } from "./clientes";
 
 export interface MovimientoInput {
   tipo: TipoMovimiento; // ingreso | egreso
@@ -28,6 +29,9 @@ export interface MovimientoInput {
   contraparte_id?: string | null;
   contraparte_tipo: TipoContraparte;
   contraparte_nombre: string;
+  /** Ingreso de cliente asignado a un producto del proyecto */
+  producto_id?: string | null;
+  producto_nombre?: string | null;
   negocio_id: string;
   descripcion?: string;
   categoria?: string;
@@ -66,6 +70,11 @@ export async function getMovimiento(id: string): Promise<Movimiento | null> {
 }
 
 export async function createMovimiento(uid: string, data: MovimientoInput): Promise<string> {
+  // Ingreso de un cliente con portal → se denormaliza su uid para que lo pueda leer
+  const cliente_uid =
+    data.tipo === "ingreso" && data.contraparte_tipo === "cliente" && data.contraparte_id
+      ? await getClienteUid(data.contraparte_id)
+      : null;
   const payload = {
     tipo: data.tipo,
     monto: data.monto,
@@ -78,6 +87,9 @@ export async function createMovimiento(uid: string, data: MovimientoInput): Prom
     contraparte_id: data.contraparte_id ?? null,
     contraparte_tipo: data.contraparte_tipo,
     contraparte_nombre: data.contraparte_nombre,
+    producto_id: data.producto_id ?? null,
+    producto_nombre: data.producto_nombre ?? null,
+    cliente_uid,
     negocio_id: data.negocio_id,
     descripcion: data.descripcion ?? "",
     categoria: data.categoria ?? "",

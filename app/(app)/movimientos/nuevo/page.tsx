@@ -51,6 +51,7 @@ export default function NuevoMovimientoPage() {
   const [proyectoId, setProyectoId] = useState(searchParams?.get("proyecto") ?? "");
   const [cuentaId, setCuentaId] = useState("");
   const [contraparteId, setContraparteId] = useState("");
+  const [productoId, setProductoId] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [showNota, setShowNota] = useState(false);
   const [quickCreate, setQuickCreate] = useState<QuickCreate>(null);
@@ -92,11 +93,21 @@ export default function NuevoMovimientoPage() {
     setCuentaId("");
     setProyectoId("");
     setContraparteId("");
+    setProductoId("");
     setQuickCreate(null);
     loadCatalogos(negocioId);
   }, [negocioId]);
 
   const proyectoSel = proyectos.find((p) => p.id === proyectoId);
+  const productosDelProyecto = proyectoSel?.productos ?? [];
+  const productoSel = productosDelProyecto.find((pr) => pr.id === productoId);
+
+  // Ingreso a un proyecto de un cliente: preselecciona al cliente del proyecto
+  useEffect(() => {
+    setProductoId("");
+    if (tipo === "ingreso" && proyectoSel?.cliente_id) setContraparteId(proyectoSel.cliente_id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proyectoId, tipo]);
   const proveedoresDelProyecto = useMemo(() => {
     if (!proyectoSel) return proveedores;
     const ids = new Set(proyectoSel.partidas.map((p) => p.proveedor_id));
@@ -162,6 +173,8 @@ export default function NuevoMovimientoPage() {
         contraparte_id: contraparteObj.id!,
         contraparte_tipo: tipo === "ingreso" ? "cliente" : "proveedor",
         contraparte_nombre: contraparteObj.nombre,
+        producto_id: tipo === "ingreso" && productoSel ? productoSel.id : null,
+        producto_nombre: tipo === "ingreso" && productoSel ? productoSel.nombre : null,
         negocio_id: negocio.id!,
         descripcion: descripcion.trim() || undefined,
       });
@@ -309,6 +322,27 @@ export default function NuevoMovimientoPage() {
                   uid={user!.uid}
                   negocio={negocio!}
                 />
+              )}
+
+              {/* Producto (ingreso a proyecto con productos) */}
+              {isIngreso && productosDelProyecto.length > 0 && (
+                <div>
+                  <label className="text-xs font-medium text-ink-dim block mb-1.5">
+                    Producto <span className="text-ink-muted font-normal">(portal del cliente)</span>
+                  </label>
+                  <select
+                    value={productoId}
+                    onChange={(e) => setProductoId(e.target.value)}
+                    className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
+                  >
+                    <option value="">— Sin asignar (solo al proyecto) —</option>
+                    {productosDelProyecto.map((pr) => (
+                      <option key={pr.id} value={pr.id}>
+                        {pr.nombre} · {formatMonto(pr.pagado ?? 0)} / {formatMonto(pr.monto)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               )}
 
               {/* Cuenta */}

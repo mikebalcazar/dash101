@@ -4,72 +4,154 @@
       "collectionGroup": "negocios",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "miembros_uids", "arrayConfig": "CONTAINS" },
-        { "fieldPath": "creado_at", "order": "DESCENDING" }
+        {
+          "fieldPath": "miembros_uids",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "creado_at",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "cuentas",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "negocio_id", "order": "ASCENDING" },
-        { "fieldPath": "creado_at", "order": "DESCENDING" }
+        {
+          "fieldPath": "negocio_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "creado_at",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "clientes",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "negocio_id", "order": "ASCENDING" },
-        { "fieldPath": "creado_at", "order": "DESCENDING" }
+        {
+          "fieldPath": "negocio_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "creado_at",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "proyectos",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "negocio_id", "order": "ASCENDING" },
-        { "fieldPath": "creado_at", "order": "DESCENDING" }
+        {
+          "fieldPath": "negocio_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "creado_at",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "movimientos",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "negocio_id", "order": "ASCENDING" },
-        { "fieldPath": "fecha", "order": "DESCENDING" }
+        {
+          "fieldPath": "negocio_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fecha",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "movimientos",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "proyecto_id", "order": "ASCENDING" },
-        { "fieldPath": "fecha", "order": "DESCENDING" }
+        {
+          "fieldPath": "proyecto_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fecha",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "movimientos",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "cuenta_destino_id", "order": "ASCENDING" },
-        { "fieldPath": "tipo", "order": "ASCENDING" }
+        {
+          "fieldPath": "cuenta_destino_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "tipo",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "invitaciones",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "negocio_id", "order": "ASCENDING" },
-        { "fieldPath": "creado_at", "order": "DESCENDING" }
+        {
+          "fieldPath": "negocio_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "creado_at",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "opex",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "negocio_id", "order": "ASCENDING" },
-        { "fieldPath": "creado_at", "order": "DESCENDING" }
+        {
+          "fieldPath": "negocio_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "creado_at",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "proyectos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "cliente_uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "creado_at",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "movimientos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "cliente_uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fecha",
+          "order": "DESCENDING"
+        }
       ]
     }
   ],

@@ -14,7 +14,13 @@ import {
   runTransaction,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import type { Proyecto, PartidaProyecto, EstadoProyecto } from "@/types/schema";
+import type {
+  Proyecto,
+  PartidaProyecto,
+  ProductoProyecto,
+  EstadoProyecto,
+} from "@/types/schema";
+import { getClienteUid } from "./clientes";
 
 export interface ProyectoInput {
   nombre: string;
@@ -25,9 +31,45 @@ export interface ProyectoInput {
   negocio_nombre: string;
   precio_venta: number;
   partidas: PartidaProyectoInput[];
+  productos?: ProductoProyectoInput[];
   estado: EstadoProyecto;
   fecha_inicio: Date;
   fecha_fin_estimada?: Date | null;
+}
+
+export interface ProductoProyectoInput {
+  id?: string; // vacío → se genera
+  nombre: string;
+  descripcion?: string;
+  monto: number;
+  fecha_entrega?: Date | null;
+  quell_id?: string | null;
+}
+
+function nuevoId(): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID().slice(0, 8)
+    : `p_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
+/** Normaliza productos del form; preserva `pagado` de los que ya existían (por id). */
+function armarProductos(
+  input: ProductoProyectoInput[],
+  previos: ProductoProyecto[] = []
+): ProductoProyecto[] {
+  const prevById = new Map(previos.map((p) => [p.id, p]));
+  return input.map((p) => {
+    const id = p.id || nuevoId();
+    return {
+      id,
+      nombre: p.nombre,
+      descripcion: p.descripcion ?? "",
+      monto: p.monto,
+      pagado: prevById.get(id)?.pagado ?? 0,
+      fecha_entrega: p.fecha_entrega ? Timestamp.fromDate(p.fecha_entrega) : null,
+      quell_id: p.quell_id ?? null,
+    };
+  });
 }
 
 export interface PartidaProyectoInput {
@@ -66,11 +108,14 @@ export async function createProyecto(uid: string, data: ProyectoInput): Promise<
     estado: "pendiente",
   }));
 
+  const cliente_uid = await getClienteUid(data.cliente_id);
   const payload = {
     nombre: data.nombre,
     descripcion: data.descripcion ?? "",
     cliente_id: data.cliente_id,
     cliente_nombre: data.cliente_nombre,
+    cliente_uid,
+    productos: armarProductos(data.productos ?? []),
     negocio_id: data.negocio_id,
     negocio_nombre: data.negocio_nombre,
     precio_venta: data.precio_venta,
@@ -100,6 +145,7 @@ export async function updateProyecto(
     descripcion?: string;
     precio_venta?: number;
     partidas?: PartidaProyectoInput[];
+    productos?: ProductoProyectoInput[];
     estado?: EstadoProyecto;
     fecha_inicio?: Date;
     fecha_fin_estimada?: Date | null;
@@ -121,6 +167,10 @@ export async function updateProyecto(
       updates.fecha_fin_estimada = data.fecha_fin_estimada
         ? Timestamp.fromDate(data.fecha_fin_estimada)
         : null;
+
+    if (data.productos !== undefined) {
+      updates.productos = armarProductos(data.productos, current.productos ?? []);
+    }
 
     if (data.partidas !== undefined) {
       // preservar monto_pagado y estado de partidas existentes
@@ -158,6 +208,32 @@ export async function updateProyecto(
   });
 }
 
+/**
+ * Propaga el uid del portal del cliente a sus proyectos y a los ingresos
+ * de esos proyectos. Se llama al activar/desactivar el acceso del cliente.
+ */
+export async function propagarClienteUid(
+  clienteId: string,
+  clienteUid: string | null
+): Promise<{ proyectos: number; movimientos: number }> {
+  const proySnap = await getDocs(
+    query(collection(db, "proyectos"), where("cliente_id", "==", clienteId))
+  );
+  let nMovs = 0;
+  for (const p of proySnap.docs) {
+    await updateDoc(p.ref, { cliente_uid: clienteUid });
+    const movSnap = await getDocs(
+      query(collection(db, "movimientos"), where("proyecto_id", "==", p.id))
+    );
+    for (const m of movSnap.docs) {
+      if (m.data().tipo !== "ingreso") continue;
+      await updateDoc(m.ref, { cliente_uid: clienteUid });
+      nMovs++;
+    }
+  }
+  return { proyectos: proySnap.size, movimientos: nMovs };
+}
+
 export async function deleteProyecto(id: string): Promise<void> {
   await deleteDoc(doc(db, "proyectos", id));
 }
@@ -178,11 +254,18 @@ export async function recalcularProyecto(proyectoId: string): Promise<void> {
   let cobrado = 0;
   let pagado = 0;
   const pagosPorProveedor = new Map<string, number>();
+  const cobrosPorProducto = new Map<string, number>();
 
   movsSnap.forEach((d) => {
     const m = d.data();
     if (m.tipo === "ingreso") {
       cobrado += m.monto ?? 0;
+      if (m.producto_id) {
+        cobrosPorProducto.set(
+          m.producto_id,
+          (cobrosPorProducto.get(m.producto_id) ?? 0) + (m.monto ?? 0)
+        );
+      }
     } else if (m.tipo === "egreso") {
       pagado += m.monto ?? 0;
       if (m.contraparte_tipo === "proveedor" && m.contraparte_id) {
@@ -210,11 +293,17 @@ export async function recalcularProyecto(proyectoId: string): Promise<void> {
       return { ...p, monto_pagado: pagoTotal, estado };
     });
 
+    const productos: ProductoProyecto[] = (data.productos ?? []).map((p) => ({
+      ...p,
+      pagado: cobrosPorProducto.get(p.id) ?? 0,
+    }));
+
     tx.update(proyectoRef, {
       cobrado,
       pagado,
       disponible: cobrado - pagado,
       partidas,
+      productos,
       actualizado_at: serverTimestamp(),
     });
   });

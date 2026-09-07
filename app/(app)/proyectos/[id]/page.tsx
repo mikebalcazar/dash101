@@ -5,11 +5,18 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { getProyecto, updateProyecto, deleteProyecto } from "@/lib/proyectos";
 import { listProveedores } from "@/lib/proveedores";
-import type { Proyecto, Proveedor, EstadoProyecto, PartidaProyecto } from "@/types/schema";
+import type {
+  Proyecto,
+  Proveedor,
+  EstadoProyecto,
+  PartidaProyecto,
+  ProductoProyecto,
+} from "@/types/schema";
 import { ESTADO_PROYECTO_LABELS } from "@/types/schema";
 import { formatMonto, formatMontoExact } from "@/lib/format";
 import { Timestamp } from "firebase/firestore";
 import { IconArrowLeft, IconTrash, IconPlus, IconEdit } from "@tabler/icons-react";
+import { formatDateShort } from "@/lib/format";
 
 const ESTADO_STYLE: Record<string, string> = {
   planeando: "bg-cream text-ink-muted",
@@ -31,6 +38,19 @@ interface PartidaForm {
   monto_acordado: string;
 }
 
+interface ProductoForm {
+  id: string;
+  nombre: string;
+  descripcion: string;
+  monto: string;
+  fecha_entrega: string; // yyyy-mm-dd | ""
+}
+
+function tsToInput(t: unknown): string {
+  const ts = t as Timestamp | null | undefined;
+  return ts && typeof ts.toDate === "function" ? ts.toDate().toISOString().slice(0, 10) : "";
+}
+
 export default function ProyectoDetallePage() {
   const router = useRouter();
   const params = useParams();
@@ -46,6 +66,7 @@ export default function ProyectoDetallePage() {
   const [estado, setEstado] = useState<EstadoProyecto>("planeando");
   const [fechaInicio, setFechaInicio] = useState("");
   const [partidasEdit, setPartidasEdit] = useState<PartidaForm[]>([]);
+  const [productosEdit, setProductosEdit] = useState<ProductoForm[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -77,6 +98,15 @@ export default function ProyectoDetallePage() {
           monto_acordado: String(pt.monto_acordado),
         }))
       );
+      setProductosEdit(
+        (p.productos ?? []).map((pr) => ({
+          id: pr.id,
+          nombre: pr.nombre,
+          descripcion: pr.descripcion ?? "",
+          monto: String(pr.monto),
+          fecha_entrega: tsToInput(pr.fecha_entrega),
+        }))
+      );
     });
   };
 
@@ -105,12 +135,29 @@ export default function ProyectoDetallePage() {
         }
       }
 
+      for (const pr of productosEdit) {
+        if (pr.nombre.trim() && !(parseFloat(pr.monto) > 0)) {
+          setError(`El producto «${pr.nombre}» necesita monto`);
+          setSaving(false);
+          return;
+        }
+      }
+
       await updateProyecto(id, {
         nombre: nombre.trim(),
         descripcion: descripcion.trim() || "",
         precio_venta: parseFloat(precioVenta) || 0,
         estado,
         fecha_inicio: fechaInicio ? new Date(fechaInicio) : undefined,
+        productos: productosEdit
+          .filter((pr) => pr.nombre.trim())
+          .map((pr) => ({
+            id: pr.id || undefined,
+            nombre: pr.nombre.trim(),
+            descripcion: pr.descripcion.trim() || undefined,
+            monto: parseFloat(pr.monto) || 0,
+            fecha_entrega: pr.fecha_entrega ? new Date(pr.fecha_entrega + "T12:00:00") : null,
+          })),
         partidas: partidasValidas.map((p) => ({
           proveedor_id: p.proveedor_id,
           proveedor_nombre: p.proveedor_nombre,
@@ -274,6 +321,9 @@ export default function ProyectoDetallePage() {
             </p>
           </div>
 
+          {/* Productos del cliente */}
+          <ProductosVista proyecto={p} />
+
           {/* Partidas table */}
           <div className="mb-4">
             <h3 className="text-sm font-medium text-ink-dim mb-2">Partidas de proveedores</h3>
@@ -375,6 +425,8 @@ export default function ProyectoDetallePage() {
           setFechaInicio={setFechaInicio}
           partidas={partidasEdit}
           setPartidas={setPartidasEdit}
+          productos={productosEdit}
+          setProductos={setProductosEdit}
           onSave={handleSave}
           onCancel={() => {
             setEditMode(false);
@@ -406,6 +458,8 @@ interface EditFormProps {
   setFechaInicio: (v: string) => void;
   partidas: PartidaForm[];
   setPartidas: React.Dispatch<React.SetStateAction<PartidaForm[]>>;
+  productos: ProductoForm[];
+  setProductos: React.Dispatch<React.SetStateAction<ProductoForm[]>>;
   onSave: (e: React.FormEvent) => void;
   onCancel: () => void;
   saving: boolean;
@@ -432,6 +486,17 @@ function ProyectoEditForm(props: EditFormProps) {
     0
   );
   const precioNum = parseFloat(props.precioVenta) || 0;
+
+  const addProducto = () =>
+    props.setProductos((prev) => [
+      ...prev,
+      { id: "", nombre: "", descripcion: "", monto: "", fecha_entrega: "" },
+    ]);
+  const updateProducto = (i: number, patch: Partial<ProductoForm>) =>
+    props.setProductos((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+  const removeProducto = (i: number) =>
+    props.setProductos((prev) => prev.filter((_, idx) => idx !== i));
+  const sumaProductos = props.productos.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
 
   return (
     <form onSubmit={props.onSave} className="space-y-4">
@@ -492,6 +557,95 @@ function ProyectoEditForm(props: EditFormProps) {
             className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
           />
         </div>
+      </div>
+
+      <div className="pt-2">
+        <div className="flex justify-between items-baseline mb-1">
+          <label className="text-xs font-medium text-ink-dim">Productos del cliente</label>
+          <button
+            type="button"
+            onClick={addProducto}
+            className="text-xs text-ink hover:underline flex items-center gap-1"
+          >
+            <IconPlus size={12} />
+            Agregar
+          </button>
+        </div>
+        <p className="text-[11px] text-ink-muted mb-2">
+          Lo que el cliente ve en su estado de cuenta. Cada ingreso se asigna a un producto.
+        </p>
+        {props.productos.length === 0 ? (
+          <div className="bg-cream/60 rounded-xl p-4 text-center text-xs text-ink-muted">
+            Sin productos.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {props.productos.map((pr, i) => (
+              <div key={i} className="bg-white border border-black/10 rounded-xl p-3 space-y-2">
+                <div className="flex gap-2 items-start">
+                  <input
+                    type="text"
+                    placeholder="Producto (p. ej. Cocina integral 3.6 m)"
+                    value={pr.nombre}
+                    onChange={(e) => updateProducto(i, { nombre: e.target.value })}
+                    className="flex-1 min-w-0 bg-bg border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Monto"
+                    value={pr.monto}
+                    onChange={(e) => updateProducto(i, { monto: e.target.value })}
+                    className="w-28 bg-bg border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none text-right"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeProducto(i)}
+                    className="text-ink-muted hover:text-mauve-900 p-1"
+                  >
+                    <IconTrash size={14} />
+                  </button>
+                </div>
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="text"
+                    placeholder="Descripción corta (material, medidas…)"
+                    value={pr.descripcion}
+                    onChange={(e) => updateProducto(i, { descripcion: e.target.value })}
+                    className="flex-1 min-w-0 bg-bg border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
+                  />
+                  <label className="text-[10px] text-ink-muted whitespace-nowrap">Entrega</label>
+                  <input
+                    type="date"
+                    value={pr.fecha_entrega}
+                    onChange={(e) => updateProducto(i, { fecha_entrega: e.target.value })}
+                    className="w-36 bg-bg border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {props.productos.length > 0 && (
+          <div className="mt-2 flex justify-between text-xs px-1">
+            <span className="text-ink-muted">Suma de productos</span>
+            <span
+              className={`font-medium ${
+                precioNum > 0 && Math.abs(sumaProductos - precioNum) > 0.5
+                  ? "text-mauve-900"
+                  : "text-ink-dim"
+              }`}
+            >
+              {formatMontoExact(sumaProductos)}
+              {precioNum > 0 && Math.abs(sumaProductos - precioNum) > 0.5 && (
+                <span className="ml-2 font-normal text-mauve-900">
+                  ≠ precio venta {formatMontoExact(precioNum)}
+                </span>
+              )}
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="pt-2">
@@ -606,5 +760,84 @@ function ProyectoEditForm(props: EditFormProps) {
         </button>
       </div>
     </form>
+  );
+}
+
+// --- Productos del cliente (vista) ---
+
+function ProductosVista({ proyecto }: { proyecto: Proyecto }) {
+  const productos: ProductoProyecto[] = proyecto.productos ?? [];
+  const suma = productos.reduce((s, p) => s + p.monto, 0);
+  const sinAsignar = proyecto.cobrado - productos.reduce((s, p) => s + (p.pagado ?? 0), 0);
+  return (
+    <div className="mb-4">
+      <div className="flex justify-between items-baseline mb-2">
+        <h3 className="text-sm font-medium text-ink-dim">Productos del cliente</h3>
+        {productos.length > 0 && (
+          <span className="text-[11px] text-ink-muted">
+            {formatMonto(suma, "MXN")}
+            {proyecto.precio_venta > 0 && Math.abs(suma - proyecto.precio_venta) > 0.5 && (
+              <span className="text-mauve-900 ml-1">≠ precio venta</span>
+            )}
+          </span>
+        )}
+      </div>
+      {productos.length === 0 ? (
+        <div className="bg-white border border-black/5 rounded-2xl p-6 text-center text-xs text-ink-muted">
+          Sin productos. Edita el proyecto para agregarlos: es lo que el cliente ve en su portal.
+        </div>
+      ) : (
+        <div className="bg-white border border-black/5 rounded-2xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-cream/50 text-xs text-ink-muted uppercase tracking-wide">
+              <tr>
+                <th className="text-left px-4 py-2 font-medium">Producto</th>
+                <th className="text-left px-4 py-2 font-medium">Entrega</th>
+                <th className="text-right px-4 py-2 font-medium">Monto</th>
+                <th className="text-right px-4 py-2 font-medium">Cobrado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {productos.map((pr) => {
+                const pct = pr.monto > 0 ? Math.min(100, (pr.pagado / pr.monto) * 100) : 0;
+                const fe = pr.fecha_entrega as Timestamp | null | undefined;
+                return (
+                  <tr key={pr.id} className="border-t border-black/5">
+                    <td className="px-4 py-3">
+                      <p className="text-sm font-medium text-ink-dim">{pr.nombre}</p>
+                      {pr.descripcion && (
+                        <p className="text-[11px] text-ink-muted">{pr.descripcion}</p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-ink-muted whitespace-nowrap">
+                      {fe && typeof fe.toDate === "function" ? formatDateShort(fe.toDate()) : "—"}
+                    </td>
+                    <td className="text-right px-4 py-3 text-sm text-ink-dim">
+                      {formatMonto(pr.monto, "MXN")}
+                    </td>
+                    <td className="text-right px-4 py-3">
+                      <p className="text-sm text-ink-dim">{formatMonto(pr.pagado ?? 0, "MXN")}</p>
+                      <div className="flex items-center gap-1.5 justify-end mt-1">
+                        <div className="w-16 h-1 bg-cream rounded-full overflow-hidden">
+                          <div className="h-full bg-mint-900" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-[10px] text-ink-muted w-7 text-right">
+                          {pct.toFixed(0)}%
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {sinAsignar > 0.5 && (
+            <p className="px-4 py-2 text-[11px] text-ink-muted bg-cream/40 border-t border-black/5">
+              {formatMonto(sinAsignar, "MXN")} cobrados sin asignar a un producto.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

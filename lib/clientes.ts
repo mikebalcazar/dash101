@@ -64,3 +64,19 @@ export async function updateCliente(
 export async function deleteCliente(id: string): Promise<void> {
   await deleteDoc(doc(db, "clientes", id));
 }
+
+/** uid del portal del cliente (null si no tiene acceso). */
+export async function getClienteUid(clienteId: string): Promise<string | null> {
+  if (!clienteId) return null;
+  const snap = await getDoc(doc(db, "clientes", clienteId));
+  if (!snap.exists()) return null;
+  const c = snap.data() as Cliente;
+  return c.portal_activo && c.uid ? c.uid : null;
+}
+
+export async function setAccesoPortal(
+  clienteId: string,
+  data: { uid: string | null; portal_email: string | null; portal_activo: boolean }
+): Promise<void> {
+  await updateDoc(doc(db, "clientes", clienteId), data);
+}

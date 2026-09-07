@@ -63,6 +63,10 @@ export interface Cliente {
   telefono?: string;
   notas?: string;
   negocio_id: string;
+  /** Acceso al portal de estados de cuenta (Firebase Auth uid del cliente) */
+  uid?: string | null;
+  portal_email?: string | null;
+  portal_activo?: boolean;
   creado_at: Timestamp | FieldValue;
   creado_por: string;
 }
@@ -89,12 +93,31 @@ export interface PartidaProyecto {
   estado: EstadoPartida;
 }
 
+/**
+ * Producto/ítem que el cliente compra dentro del proyecto (lo que ve en su
+ * estado de cuenta). Distinto de PartidaProyecto, que es compromiso con proveedor.
+ * La etapa de fabricación NO vive aquí: viene de quell101 (quell_id la liga).
+ */
+export interface ProductoProyecto {
+  id: string;
+  nombre: string;
+  descripcion?: string;
+  monto: number;
+  /** Σ ingresos con producto_id == id — calculado por recalcularProyecto() */
+  pagado: number;
+  fecha_entrega?: Timestamp | null;
+  quell_id?: string | null;
+}
+
 export interface Proyecto {
   id?: string;
   nombre: string;
   descripcion?: string;
   cliente_id: string;
   cliente_nombre: string;
+  /** uid del portal del cliente, denormalizado para rules de lectura */
+  cliente_uid?: string | null;
+  productos?: ProductoProyecto[];
   negocio_id: string;
   negocio_nombre: string;
   precio_venta: number;
@@ -131,6 +154,11 @@ export interface Movimiento {
   contraparte_id?: string | null;
   contraparte_tipo: TipoContraparte;
   contraparte_nombre: string;
+  /** Ingreso de cliente asignado a un producto del proyecto (portal) */
+  producto_id?: string | null;
+  producto_nombre?: string | null;
+  /** uid del portal del cliente, denormalizado para rules de lectura */
+  cliente_uid?: string | null;
   negocio_id: string;
   descripcion?: string;
   categoria?: string;
