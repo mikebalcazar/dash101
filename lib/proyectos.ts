@@ -216,18 +216,44 @@ export async function propagarClienteUid(
   clienteId: string,
   clienteUid: string | null
 ): Promise<{ proyectos: number; movimientos: number }> {
-  const proySnap = await getDocs(
-    query(collection(db, "proyectos"), where("cliente_id", "==", clienteId))
-  );
+  const etiqueta = (t: string, e: unknown) => {
+    const err = e as { code?: string; message?: string };
+    return new Error(`[${t}] ${err.code ?? ""} ${err.message ?? String(e)}`.trim());
+  };
+
+  let proySnap;
+  try {
+    proySnap = await getDocs(
+      query(collection(db, "proyectos"), where("cliente_id", "==", clienteId))
+    );
+  } catch (e) {
+    throw etiqueta("2a leer proyectos del cliente", e);
+  }
+
   let nMovs = 0;
   for (const p of proySnap.docs) {
-    await updateDoc(p.ref, { cliente_uid: clienteUid });
-    const movSnap = await getDocs(
-      query(collection(db, "movimientos"), where("proyecto_id", "==", p.id))
-    );
+    try {
+      await updateDoc(p.ref, { cliente_uid: clienteUid });
+    } catch (e) {
+      throw etiqueta(`2b escribir proyecto ${p.id}`, e);
+    }
+
+    let movSnap;
+    try {
+      movSnap = await getDocs(
+        query(collection(db, "movimientos"), where("proyecto_id", "==", p.id))
+      );
+    } catch (e) {
+      throw etiqueta(`2c leer movimientos del proyecto ${p.id}`, e);
+    }
+
     for (const m of movSnap.docs) {
       if (m.data().tipo !== "ingreso") continue;
-      await updateDoc(m.ref, { cliente_uid: clienteUid });
+      try {
+        await updateDoc(m.ref, { cliente_uid: clienteUid });
+      } catch (e) {
+        throw etiqueta(`2d escribir movimiento ${m.id}`, e);
+      }
       nMovs++;
     }
   }

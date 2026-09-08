@@ -37,6 +37,20 @@ export function validarPin(pin: string): string | null {
 }
 
 /**
+ * Envuelve cada escritura para que el error diga EN QUE paso truena.
+ * Firestore solo manda "Missing or insufficient permissions" sin decir cual.
+ */
+async function paso<T>(etiqueta: string, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    const err = e as { code?: string; message?: string };
+    if (err.code === "auth/email-already-in-use") throw e;
+    throw new Error(`[${etiqueta}] ${err.code ?? ""} ${err.message ?? String(e)}`.trim());
+  }
+}
+
+/**
  * Crea el usuario del cliente y liga todo lo que tiene que poder leer.
  * Devuelve el uid.
  */
@@ -51,8 +65,12 @@ export async function activarAccesoPortal(
 
   // Ya tuvo acceso con este mismo correo → sólo se reactiva (el usuario de Auth sigue ahí)
   if (cliente.uid && cliente.portal_email === correo) {
-    await setAccesoPortal(clienteId, { uid: cliente.uid, portal_email: correo, portal_activo: true });
-    const n = await propagarClienteUid(clienteId, cliente.uid);
+    await paso("1/3 guardar acceso en el cliente", () =>
+      setAccesoPortal(clienteId, { uid: cliente.uid!, portal_email: correo, portal_activo: true })
+    );
+    const n = await paso("2/3 marcar proyectos e ingresos del cliente", () =>
+      propagarClienteUid(clienteId, cliente.uid!)
+    );
     return { uid: cliente.uid, ...n, reactivado: true };
   }
 
@@ -62,7 +80,9 @@ export async function activarAccesoPortal(
   const auth = getAuth(appSecundaria());
   let uid: string;
   try {
-    const cred = await createUserWithEmailAndPassword(auth, correo, pin);
+    const cred = await paso("0/3 crear usuario de Firebase Auth", () =>
+      createUserWithEmailAndPassword(auth, correo, pin)
+    );
     uid = cred.user.uid;
   } catch (e) {
     const code = (e as { code?: string }).code ?? "";
@@ -76,8 +96,12 @@ export async function activarAccesoPortal(
     await signOut(auth).catch(() => {});
   }
 
-  await setAccesoPortal(clienteId, { uid, portal_email: correo, portal_activo: true });
-  const n = await propagarClienteUid(clienteId, uid);
+  await paso("1/3 guardar acceso en el cliente", () =>
+    setAccesoPortal(clienteId, { uid, portal_email: correo, portal_activo: true })
+  );
+  const n = await paso("2/3 marcar proyectos e ingresos del cliente", () =>
+    propagarClienteUid(clienteId, uid)
+  );
   return { uid, ...n, reactivado: false };
 }
 
