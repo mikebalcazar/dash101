@@ -36,7 +36,10 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ["system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
+        // "Cifras" delante y limitada por unicode-range: solo se lleva los
+        // digitos y los signos de medida, que caen en Fira Sans. El resto, Raleway.
+        sans: ["Cifras", "Raleway", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
+        marca: ["Sansation", "Raleway", "sans-serif"],
       },
       borderRadius: {
         "2xl": "18px",

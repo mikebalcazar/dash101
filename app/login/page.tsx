@@ -49,7 +49,7 @@ export default function LoginPage() {
           <div className="w-10 h-10 rounded-xl bg-ink text-cream flex items-center justify-center">
             <IconLeaf size={20} />
           </div>
-          <h1 className="text-xl font-medium">Conta Master</h1>
+          <h1 className="text-xl font-marca">Conta Master</h1>
         </div>
 
         <div className="bg-white border border-black/5 rounded-3xl p-7">

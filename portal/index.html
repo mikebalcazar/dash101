@@ -6,8 +6,24 @@
 <meta name="robots" content="noindex">
 <title>Estado de cuenta · Taller 101</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3E%3Ccircle cx='15' cy='15' r='15' fill='%230080C1'/%3E%3Ctext x='15' y='20' text-anchor='middle' font-family='sans-serif' font-weight='800' font-size='12' fill='%23fff'%3E101%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800&display=swap">
 <style>
+/* Tipografia de la suite 101 -- claude/tipografia-cifras-suite101.md, 8-sep-2026.
+   Las cifras (medidas, cantidades, precios, fechas) van en Fira Sans, que las
+   dibuja alineadas y del mismo alto: se leen de un golpe. El texto sigue en
+   Raleway y la marca en Sansation. "Cifras" va PRIMERO en la pila y solo cubre
+   digitos y signos de medida por unicode-range, asi que ningun marcado cambia:
+   los numeros caen en Fira solos. Las fuentes viajan dentro de la app; nada se
+   pide a Google. El subconjunto lleva la caracteristica tnum, sin la cual
+   font-variant-numeric:tabular-nums no hace nada -- en silencio. */
+@font-face{font-family:"Cifras";src:url("fonts/fira-cifras-400.woff2") format("woff2");font-weight:400 500;font-display:swap;unicode-range:U+0030-0039,U+00B0,U+00B1,U+00D7,U+0025}
+@font-face{font-family:"Cifras";src:url("fonts/fira-cifras-600.woff2") format("woff2");font-weight:600 900;font-display:swap;unicode-range:U+0030-0039,U+00B0,U+00B1,U+00D7,U+0025}
+@font-face{font-family:"Raleway";src:url("fonts/raleway-400.woff2") format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"Raleway";src:url("fonts/raleway-500.woff2") format("woff2");font-weight:500;font-display:swap}
+@font-face{font-family:"Raleway";src:url("fonts/raleway-600.woff2") format("woff2");font-weight:600;font-display:swap}
+@font-face{font-family:"Raleway";src:url("fonts/raleway-700.woff2") format("woff2");font-weight:700;font-display:swap}
+@font-face{font-family:"Raleway";src:url("fonts/raleway-800.woff2") format("woff2");font-weight:800;font-display:swap}
+@font-face{font-family:"Sansation";src:url("fonts/sansation-700.woff2") format("woff2");font-weight:700;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Sansation";src:url("fonts/sansation-700-ext.woff2") format("woff2");font-weight:700;font-display:swap;unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
 :root{
   --marca:#0080C1; --marca-2:#3AA3DC; --marca-oscuro:#122733;
   --fondo:#F3F6F8; --sup:#FFFFFF; --sup-2:#E9EEF2; --linea:#D5DDE3;
@@ -28,7 +44,7 @@
   --marca-oscuro:#0B1A24;
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--fondo);color:var(--tinta);font-family:Raleway,"Segoe UI",Helvetica,Arial,sans-serif;font-size:15px;line-height:1.45}
+body{margin:0;background:var(--fondo);color:var(--tinta);font-family:"Cifras","Raleway","Segoe UI",Helvetica,Arial,sans-serif;font-variant-numeric:lining-nums;font-size:15px;line-height:1.45}
 h1,h2,h3{margin:0;font-weight:700;text-wrap:balance}
 button{font:inherit;cursor:pointer}
 .num{font-variant-numeric:tabular-nums}
@@ -36,7 +52,7 @@ button{font:inherit;cursor:pointer}
 
 /* barra */
 .barra{background:var(--marca);color:#fff;height:56px;display:flex;align-items:center;padding:0 22px;gap:14px}
-.logo{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:-.02em;font-size:17px}
+.logo{display:flex;align-items:center;gap:10px;font-family:"Sansation","Raleway",sans-serif;font-weight:700;letter-spacing:-.02em;font-size:17px}
 .logo svg{display:block}
 .barra .quien{margin-left:auto;font-size:13px;opacity:.92;display:flex;gap:14px;align-items:center}
 .barra .quien button{background:transparent;border:1px solid rgba(255,255,255,.5);color:#fff;border-radius:6px;padding:5px 11px;font-size:12.5px;font-weight:600}
