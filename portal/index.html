@@ -275,7 +275,10 @@ async function cargar(uid) {
     p.items = (p.productos ?? []).map(pr => ({ ...pr, pagado: pr.pagado ?? 0 }));
     p.pagos = (pagosPorProy[p.id] ?? []).sort((a, b) => (toDate(b.fecha) - toDate(a.fecha)));
     p.total = p.items.length ? sum(p.items, 'monto') : (p.precio_venta ?? 0);
-    p.cobrado = p.cobrado ?? sum(p.pagos, 'monto');
+    // Siempre desde los pagos que el portal puede ver: el KPI y la tabla de
+    // "Pagos recibidos" tienen que dar lo mismo. El campo `cobrado` del doc se
+    // usa solo de respaldo si todavia no hay ingresos ligados al cliente.
+    p.cobrado = sum(p.pagos, 'monto') || (p.cobrado ?? 0);
     p.entrega = p.items.length
       ? p.items.map(i => toDate(i.fecha_entrega)).filter(Boolean).sort((a, b) => b - a)[0] ?? toDate(p.fecha_fin_estimada)
       : toDate(p.fecha_fin_estimada);
