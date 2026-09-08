@@ -1,0 +1,52 @@
+# Verifica lo publicado cuando quien publica no es GitHub.
+#
+# Netlify construye por su cuenta al recibir el push, así que aquí no hay un
+# trabajo que esperar: se espera un rato y luego se mide. Si el sitio tarda más
+# de lo normal, el run sale rojo y hay que volver a dispararlo a mano.
+#
+# Este repositorio publica DOS sitios distintos desde un solo push, cada uno con
+# su propio netlify.toml, así que los dos se comprueban por separado. Cuidado con
+# la marca: se busca en el HTML tal como llega, y si el nombre está dibujado en un
+# SVG o en un <img> no aparece como texto y sale rojo con el sitio perfecto.
+
+name: Verificar lo publicado
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  esperar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Darle tiempo a la construcción de afuera
+        run: sleep 120
+
+  app:
+    needs: esperar
+    uses: ./.github/workflows/verificar.yml
+    with:
+      url: https://conta-master.netlify.app
+      marca: Conta Master
+      # Las cinco fuentes, una por una: que la portada responda no dice nada de
+      # ellas. Si una .woff2 se cae, la app abre igual y solo se ve con otra letra.
+      rutas: >-
+        /fonts/fira-cifras-400.woff2
+        /fonts/fira-cifras-600.woff2
+        /fonts/raleway-400.woff2
+        /fonts/raleway-700.woff2
+        /fonts/sansation-700.woff2
+
+  portal:
+    needs: esperar
+    uses: ./.github/workflows/verificar.yml
+    with:
+      url: https://cuenta-taller101.netlify.app
+      marca: Estado de cuenta
+      rutas: >-
+        /fonts/fira-cifras-400.woff2
+        /fonts/fira-cifras-600.woff2
+        /fonts/raleway-400.woff2
+        /fonts/raleway-700.woff2
+        /fonts/sansation-700.woff2
