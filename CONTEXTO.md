@@ -50,10 +50,11 @@ Dos pipelines corren **en paralelo** desde push a `main`:
 ### 3.3 Token GitHub
 - Fine-grained PAT en `/tmp/.gh_token` (container-ephemeral — resetea entre chats)
 - **NO tiene permiso `workflow`** → archivos en `.github/workflows/` los creó Mike manualmente en GitHub web
-- Token value (si expira, regenerar):
-  ```
-  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
-  ```
+- **El valor del token NO se guarda aqui.** Nunca escribir un PAT en este repo:
+  queda en el historial de git para siempre. Mike lo genera en GitHub -> Settings ->
+  Developer settings -> Personal access tokens -> Fine-grained, con acceso solo a
+  `mikebalcazar/conta-master`, permiso `Contents: Read and write`, expiracion corta,
+  y lo pega en el chat al inicio de cada sesion.
 
 ### 3.4 Firebase config web
 ```
