@@ -69,7 +69,7 @@ export async function activarAccesoPortal(
       setAccesoPortal(clienteId, { uid: cliente.uid!, portal_email: correo, portal_activo: true })
     );
     const n = await paso("2/3 marcar proyectos e ingresos del cliente", () =>
-      propagarClienteUid(clienteId, cliente.uid!)
+      propagarClienteUid(clienteId, cliente.uid!, cliente.negocio_id)
     );
     return { uid: cliente.uid, ...n, reactivado: true };
   }
@@ -100,7 +100,7 @@ export async function activarAccesoPortal(
     setAccesoPortal(clienteId, { uid, portal_email: correo, portal_activo: true })
   );
   const n = await paso("2/3 marcar proyectos e ingresos del cliente", () =>
-    propagarClienteUid(clienteId, uid)
+    propagarClienteUid(clienteId, uid, cliente.negocio_id)
   );
   return { uid, ...n, reactivado: false };
 }
@@ -115,7 +115,7 @@ export async function desactivarAccesoPortal(cliente: Cliente): Promise<void> {
     portal_email: cliente.portal_email ?? null,
     portal_activo: false,
   });
-  await propagarClienteUid(cliente.id!, null);
+  await propagarClienteUid(cliente.id!, null, cliente.negocio_id);
 }
 
 /** Firebase manda un correo al cliente para poner un PIN nuevo. */

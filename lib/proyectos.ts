@@ -214,7 +214,8 @@ export async function updateProyecto(
  */
 export async function propagarClienteUid(
   clienteId: string,
-  clienteUid: string | null
+  clienteUid: string | null,
+  negocioId: string
 ): Promise<{ proyectos: number; movimientos: number }> {
   const etiqueta = (t: string, e: unknown) => {
     const err = e as { code?: string; message?: string };
@@ -224,7 +225,11 @@ export async function propagarClienteUid(
   let proySnap;
   try {
     proySnap = await getDocs(
-      query(collection(db, "proyectos"), where("cliente_id", "==", clienteId))
+      query(
+        collection(db, "proyectos"),
+        where("negocio_id", "==", negocioId),
+        where("cliente_id", "==", clienteId)
+      )
     );
   } catch (e) {
     throw etiqueta("2a leer proyectos del cliente", e);
@@ -241,7 +246,11 @@ export async function propagarClienteUid(
     let movSnap;
     try {
       movSnap = await getDocs(
-        query(collection(db, "movimientos"), where("proyecto_id", "==", p.id))
+        query(
+          collection(db, "movimientos"),
+          where("negocio_id", "==", negocioId),
+          where("proyecto_id", "==", p.id)
+        )
       );
     } catch (e) {
       throw etiqueta(`2c leer movimientos del proyecto ${p.id}`, e);
