@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 330 330" width="330" height="330" role="img" aria-label="peek101">
+  <title>peek101</title>
+  <circle cx="165.0" cy="165.0" r="165.0" fill="#0080C1"/>
+  <g fill="#FFFFFF" transform="translate(-586.00 -54.50)">
+    <g transform="translate(641.75 279.27) scale(0.083008 -0.083008)"><path d="M250 0V1211H100V1320L515 1460V0Z"/></g>
+    <g transform="translate(691.03 279.27) scale(0.083008 -0.083008)"><path d="M728 220Q1080 220 1080 719Q1080 1210 728 1210Q365 1210 365 719Q365 220 728 220ZM90 713Q90 1440 728 1440Q1355 1440 1355 713Q1355 -10 728 -10Q90 -10 90 713Z"/></g>
+    <g transform="translate(802.97 279.27) scale(0.083008 -0.083008)"><path d="M250 0V1211H100V1320L515 1460V0Z"/></g>
+  </g>
+</svg>
