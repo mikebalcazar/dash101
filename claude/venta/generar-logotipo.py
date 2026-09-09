@@ -9,9 +9,10 @@ archivo original vive en el repositorio de nest101 y desde aquí no se alcanza.
 Si algún día se tiene a mano, se sustituyen por los de verdad y este archivo
 solo sirve para la palabra.
 
-    python3 claude/venta/marca/generar.py
+    python3 claude/venta/generar-logotipo.py dash101
+    python3 claude/venta/generar-logotipo.py peek101
 
-Escribe logo.svg, logo-blanco.svg e icono.svg en esta misma carpeta.
+Escribe logo.svg, logo-blanco.svg e icono.svg en claude/venta/<app>/marca/.
 """
 
 from pathlib import Path
@@ -20,7 +21,7 @@ from fontTools.pens.svgPathPen import SVGPathPen
 from fontTools.ttLib import TTFont
 
 AQUI = Path(__file__).parent
-FUENTE = AQUI.parents[2] / "public" / "fonts" / "sansation-700.woff2"
+FUENTE = AQUI.parents[1] / "public" / "fonts" / "sansation-700.woff2"
 
 AZUL = "#0080C1"
 
@@ -37,7 +38,7 @@ BLOQUE_DERECHO = 469.6
 CIRCULO_D = 330
 MARGEN_DERECHO = 10
 RAYA_GROSOR = 26
-AIRE_RAYA = 20  # a cada lado de la raya
+AIRE_RAYA = 34  # a cada lado de la raya, medido desde la tinta
 
 TAMANO_101 = 170
 TRACKING_101 = -8
@@ -49,11 +50,19 @@ def cargar():
 
 
 def trazar(texto, tamano, tracking, x, y, fuente, cmap, hmtx, upem):
-    """Devuelve (path_d, ancho_total) del texto ya convertido a curvas."""
+    """Devuelve (path_d, ancho_avance, fin_tinta) del texto ya en curvas.
+
+    `fin_tinta` es donde acaba el trazo de la última letra, que no es lo mismo
+    que el avance: la «h» deja 13.7 px de aire después de la tinta y la «k»
+    solo 2.7. Si el aire de la raya se mide contra el avance, «peek» sale
+    apretada y «dash» no.
+    """
     escala = tamano / upem
     glifos = fuente.getGlyphSet()
+    glifos_tt = fuente["glyf"]
     partes = []
     pluma_x = x
+    fin_tinta = x
     for letra in texto:
         nombre = cmap[ord(letra)]
         pluma = SVGPathPen(glifos)
@@ -65,15 +74,16 @@ def trazar(texto, tamano, tracking, x, y, fuente, cmap, hmtx, upem):
                 f'<g transform="translate({pluma_x:.2f} {y:.2f}) '
                 f'scale({escala:.6f} {-escala:.6f})"><path d="{d}"/></g>'
             )
+            fin_tinta = pluma_x + glifos_tt[nombre].xMax * escala
         pluma_x += hmtx[nombre][0] * escala + tracking
     ancho = pluma_x - tracking - x
-    return "\n    ".join(partes), ancho
+    return "\n    ".join(partes), ancho, fin_tinta
 
 
 def construir(palabra="dash"):
     fuente, cmap, hmtx, upem = cargar()
 
-    letras, ancho_palabra = trazar(
+    letras, ancho_palabra, fin_tinta = trazar(
         palabra, TAMANO, TRACKING, INICIO_X, BASE_Y, fuente, cmap, hmtx, upem
     )
     ancho = round(ancho_palabra + INICIO_X + BLOQUE_DERECHO)
@@ -92,7 +102,7 @@ def construir(palabra="dash"):
     # versión que no incluye sCapHeight.
     glifos_tt = fuente["glyf"]
     alto_cifra = glifos_tt[cmap[ord("0")]].yMax * escala_101
-    d101, _ = trazar(
+    d101, _, _ = trazar(
         "101",
         TAMANO_101,
         TRACKING_101,
@@ -104,7 +114,8 @@ def construir(palabra="dash"):
         upem,
     )
 
-    raya_x1 = INICIO_X + ancho_palabra + AIRE_RAYA
+    # desde donde acaba la tinta, no desde el avance (ver trazar)
+    raya_x1 = fin_tinta + AIRE_RAYA
     raya_x2 = circulo_x - radio - AIRE_RAYA
     if raya_x2 - raya_x1 < 40:
         raise SystemExit(
@@ -124,9 +135,9 @@ def construir(palabra="dash"):
     }
 
 
-def svg_completo(g, color):
-    return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {g['ancho']} {ALTO}" width="{g['ancho']}" height="{ALTO}" role="img" aria-label="dash101">
-  <title>dash101</title>
+def svg_completo(g, palabra, color):
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {g['ancho']} {ALTO}" width="{g['ancho']}" height="{ALTO}" role="img" aria-label="{palabra}101">
+  <title>{palabra}101</title>
   <g fill="{color}">
     {g['letras']}
     <rect x="{g['raya_x1']:.2f}" y="{ALTO/2 - RAYA_GROSOR/2:.2f}" width="{g['raya_x2']-g['raya_x1']:.2f}" height="{RAYA_GROSOR}"/>
@@ -139,15 +150,15 @@ def svg_completo(g, color):
 """
 
 
-def svg_icono(g):
+def svg_icono(g, palabra):
     lado = CIRCULO_D
     r = g["radio"]
     d101 = g["d101"]
     # recentrar el «101» en un lienzo cuadrado
     dx = r - g["circulo_x"]
     dy = r - g["circulo_y"]
-    return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {lado} {lado}" width="{lado}" height="{lado}" role="img" aria-label="dash101">
-  <title>dash101</title>
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {lado} {lado}" width="{lado}" height="{lado}" role="img" aria-label="{palabra}101">
+  <title>{palabra}101</title>
   <circle cx="{r}" cy="{r}" r="{r}" fill="{AZUL}"/>
   <g fill="#FFFFFF" transform="translate({dx:.2f} {dy:.2f})">
     {d101}
@@ -157,11 +168,21 @@ def svg_icono(g):
 
 
 def main():
-    g = construir()
-    (AQUI / "logo.svg").write_text(svg_completo(g, AZUL), encoding="utf-8")
-    (AQUI / "logo-blanco.svg").write_text(svg_completo(g, "#FFFFFF"), encoding="utf-8")
-    (AQUI / "icono.svg").write_text(svg_icono(g), encoding="utf-8")
-    print(f"lienzo {g['ancho']}x{ALTO} · escritos logo.svg, logo-blanco.svg, icono.svg")
+    import sys
+
+    app = sys.argv[1] if len(sys.argv) > 1 else "dash101"
+    palabra = app.replace("101", "")
+    destino = AQUI / app / "marca"
+    if not destino.is_dir():
+        raise SystemExit(f"no existe {destino}")
+
+    g = construir(palabra)
+    (destino / "logo.svg").write_text(svg_completo(g, palabra, AZUL), encoding="utf-8")
+    (destino / "logo-blanco.svg").write_text(
+        svg_completo(g, palabra, "#FFFFFF"), encoding="utf-8"
+    )
+    (destino / "icono.svg").write_text(svg_icono(g, palabra), encoding="utf-8")
+    print(f"{app}: lienzo {g['ancho']}x{ALTO} · tres archivos en {destino}")
 
 
 if __name__ == "__main__":

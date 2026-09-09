@@ -9,7 +9,7 @@
 Se regeneran con:
 
 ```bash
-python3 claude/venta/marca/generar.py
+python3 claude/venta/generar-logotipo.py dash101
 ```
 
 ## Qué está medido y qué está reconstruido
@@ -29,11 +29,16 @@ El lienzo sí se derivó del original: en «taller» la raya y el círculo ocupa
 440.4 de «taller», el lienzo queda en 917 en lugar de 900 — el mismo criterio con
 el que «nest», más corta, bajó a 840.
 
+El aire antes de la raya se mide desde donde acaba la tinta, no desde el avance
+del último glifo. La «h» de «dash» deja 13.7 px de sobra después del trazo y la
+«k» de «peek» solo 2.7: midiendo contra el avance, «peek» salía apretada contra
+la raya y «dash» no. Se vio al rasterizar.
+
 Lo que falta por comprobar contra el original: el diámetro del círculo (aquí 330),
 el grosor de la raya (26) y el tamaño del «101» (170). Se eligieron para que la
 raya tuviera ritmo, no porque se hayan medido.
 
 ## Cuando aparezca el original
 
-Sustituir en `generar.py` el `<circle>`, el `<rect>` de la raya y el «101» por los
+Sustituir en `generar-logotipo.py` el `<circle>`, el `<rect>` de la raya y el «101» por los
 del archivo de verdad. La parte de la palabra ya no se toca.
