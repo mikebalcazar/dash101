@@ -171,7 +171,7 @@ export function proyecto(
 
 /* ─────────────── movimientos y opex ─────────────── */
 
-const CONTRAPARTES: Record<string, TipoContraparte> = { cliente: 'cliente', proveedor: 'proveedor', personal: 'personal', otro: 'otro' };
+const CONTRAPARTES: Record<string, TipoContraparte> = { cliente: 'cliente', proveedor: 'proveedor', personal: 'personal', otro: 'otro', cuenta: 'cuenta', opex: 'opex', ajuste: 'ajuste' };
 
 export function movimiento(
   f: FilaMovimiento,

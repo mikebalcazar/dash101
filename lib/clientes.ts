@@ -12,8 +12,9 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { fuente, noEscribeTodavia } from "./fuente";
+import { fuente } from "./fuente";
 import * as leer from "./api/leer";
+import * as escribir from "./api/escribir";
 import type { Cliente } from "@/types/schema";
 
 export interface ClienteInput {
@@ -44,7 +45,7 @@ export async function getCliente(id: string): Promise<Cliente | null> {
 }
 
 export async function createCliente(uid: string, data: ClienteInput): Promise<string> {
-  if (fuente() === 'api') throw noEscribeTodavia('clientes');
+  if (fuente() === 'api') return escribir.createCliente(uid, data);
   const payload = {
     nombre: data.nombre,
     rfc: data.rfc ?? "",
@@ -63,12 +64,12 @@ export async function updateCliente(
   id: string,
   data: Partial<Omit<ClienteInput, "negocio_id">>
 ): Promise<void> {
-  if (fuente() === 'api') throw noEscribeTodavia('clientes');
+  if (fuente() === 'api') return escribir.updateCliente(id, data);
   await updateDoc(doc(db, "clientes", id), data);
 }
 
 export async function deleteCliente(id: string): Promise<void> {
-  if (fuente() === 'api') throw noEscribeTodavia('clientes');
+  if (fuente() === 'api') return escribir.deleteCliente(id);
   await deleteDoc(doc(db, "clientes", id));
 }
 
@@ -86,6 +87,7 @@ export async function setAccesoPortal(
   clienteId: string,
   data: { uid: string | null; portal_email: string | null; portal_activo: boolean }
 ): Promise<void> {
-  if (fuente() === 'api') throw noEscribeTodavia('el acceso al portal (va contra POST /clientes/:id/acceso, en la siguiente entrega)');
+  // Con la API el acceso se prende y se apaga en lib/portal.ts (POST/DELETE …/acceso); esto es de Firestore.
+  if (fuente() === 'api') throw new Error('Con FUENTE=api el acceso al portal se maneja en lib/portal.ts.');
   await updateDoc(doc(db, "clientes", clienteId), data);
 }

@@ -17,6 +17,7 @@ import {
 import { db } from "./firebase";
 import { fuente, noEscribeTodavia } from "./fuente";
 import * as leer from "./api/leer";
+import * as escribir from "./api/escribir";
 import type { Negocio, Moneda } from "@/types/schema";
 
 export interface NegocioInput {
@@ -45,7 +46,7 @@ export async function getNegocio(id: string): Promise<Negocio | null> {
 }
 
 export async function createNegocio(uid: string, data: NegocioInput): Promise<string> {
-  if (fuente() === 'api') throw noEscribeTodavia('negocios');
+  if (fuente() === 'api') return escribir.createNegocio(uid, data);
   const payload = {
     nombre: data.nombre,
     descripcion: data.descripcion ?? "",
@@ -72,12 +73,12 @@ export async function createNegocio(uid: string, data: NegocioInput): Promise<st
 }
 
 export async function updateNegocio(id: string, data: Partial<NegocioInput>): Promise<void> {
-  if (fuente() === 'api') throw noEscribeTodavia('negocios');
+  if (fuente() === 'api') return escribir.updateNegocio(id, data);
   await updateDoc(doc(db, "negocios", id), data);
 }
 
 export async function deleteNegocio(id: string, uid: string): Promise<void> {
-  if (fuente() === 'api') throw noEscribeTodavia('negocios');
+  if (fuente() === 'api') return escribir.deleteNegocio(id);
   await deleteDoc(doc(db, "negocios", id));
   // Limpia el acceso del owner (los otros miembros mantienen datos huerfanos hasta que la app los limpie)
   await updateDoc(doc(db, "usuarios", uid), {

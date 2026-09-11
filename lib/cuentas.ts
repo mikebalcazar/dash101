@@ -12,8 +12,9 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { fuente, noEscribeTodavia } from "./fuente";
+import { fuente } from "./fuente";
 import * as leer from "./api/leer";
+import * as escribir from "./api/escribir";
 import type { Cuenta, TipoCuenta, Moneda } from "@/types/schema";
 
 export interface CuentaInput {
@@ -45,7 +46,7 @@ export async function getCuenta(id: string): Promise<Cuenta | null> {
 }
 
 export async function createCuenta(uid: string, data: CuentaInput): Promise<string> {
-  if (fuente() === 'api') throw noEscribeTodavia('cuentas');
+  if (fuente() === 'api') return escribir.createCuenta(uid, data);
   const payload = {
     nombre: data.nombre,
     tipo: data.tipo,
@@ -66,11 +67,11 @@ export async function updateCuenta(
   id: string,
   data: Partial<Omit<CuentaInput, "negocio_id" | "saldo_inicial">>
 ): Promise<void> {
-  if (fuente() === 'api') throw noEscribeTodavia('cuentas');
+  if (fuente() === 'api') return escribir.updateCuenta(id, data);
   await updateDoc(doc(db, "cuentas", id), data);
 }
 
 export async function deleteCuenta(id: string): Promise<void> {
-  if (fuente() === 'api') throw noEscribeTodavia('cuentas');
+  if (fuente() === 'api') return escribir.deleteCuenta(id);
   await deleteDoc(doc(db, "cuentas", id));
 }

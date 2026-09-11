@@ -13,8 +13,9 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { fuente, noEscribeTodavia } from "./fuente";
+import { fuente } from "./fuente";
 import * as leer from "./api/leer";
+import * as escribir from "./api/escribir";
 import type { Opex, TipoOpex, FrecuenciaOpex, Moneda } from "@/types/schema";
 
 export interface OpexInput {
@@ -54,7 +55,7 @@ export async function getOpex(id: string): Promise<Opex | null> {
 }
 
 export async function createOpex(uid: string, data: OpexInput): Promise<string> {
-  if (fuente() === 'api') throw noEscribeTodavia('opex');
+  if (fuente() === 'api') return escribir.createOpex(uid, data);
   const payload = {
     nombre: data.nombre,
     tipo: data.tipo,
@@ -82,7 +83,7 @@ export async function updateOpex(
   id: string,
   data: Partial<Omit<OpexInput, "negocio_id">>
 ): Promise<void> {
-  if (fuente() === 'api') throw noEscribeTodavia('opex');
+  if (fuente() === 'api') return escribir.updateOpex(id, data);
   const patch: Record<string, unknown> = {};
   if (data.nombre !== undefined) patch.nombre = data.nombre;
   if (data.tipo !== undefined) patch.tipo = data.tipo;
@@ -104,7 +105,7 @@ export async function updateOpex(
 }
 
 export async function deleteOpex(id: string): Promise<void> {
-  if (fuente() === 'api') throw noEscribeTodavia('opex');
+  if (fuente() === 'api') return escribir.deleteOpex(id);
   await deleteDoc(doc(db, "opex", id));
 }
 

@@ -398,11 +398,77 @@ hay que fijar las tres variables en el sitio, cosa que decide Mike.
 
 ---
 
-## Lo que sigue · fase 3, segunda mitad
+## Fase 3 · escritura y «abrir portal», hecha el 11-sep
 
-La pantalla «abrir portal» contra `POST /orgs/:o/clientes/:id/acceso`; luego
-escritura por la API (los `create*/update*/delete*` de `lib/`, uno por módulo,
-con el mismo interruptor); Google en el login con `api` (el `redirect_uri` de
-`/auth/google` cae fuera de `/s101/`: se resuelve en la API o se queda con
-correo, código y PIN). Después, fase 4: dash101 como Worker (OpenNext o
+**dash101 ya escribe en `suite101-api`** con `NEXT_PUBLIC_FUENTE=api` (PR #13
+de dash101; antes, PR #34 de la API, contrato **0.3.1**). Por omisión sigue en
+Firestore.
+
+- `lib/api/escribir.ts` tiene las mismas firmas que los `create*/update*/
+  delete*` de `lib/`: recibe pesos y `Date`, manda centavos y `AAAA-MM-DD`,
+  y no manda ningún caché (la API los recalcula; si se mandan, 403).
+- **Tres reglas nuevas**, porque la suite no es Firestore:
+  1. *El precio de venta es la suma de los ítems.* Un proyecto capturado con
+     precio y sin productos se guarda como **un ítem con el nombre del
+     proyecto** y ese monto. Con productos, el precio es su suma y el campo
+     «precio» se ignora (la pantalla ya avisaba «≠ precio venta»).
+  2. *Un ítem no se borra: se cancela.* Quitar un producto lo deja en
+     `cancelado`; la lectura no lo enseña ni la API lo suma.
+  3. *Lo que tiene filas colgando no se borra.* Un proyecto con movimientos
+     truena con «cámbialo a Cerrado»; un cliente con ítems (aunque
+     cancelados) o una cuenta con movimientos contestan `409 en_uso`, que
+     aquí se vuelve un mensaje que la pantalla enseña tal cual.
+- Ítems por id (los que vienen se actualizan, los nuevos se crean, los que no
+  vienen se cancelan); partidas por proveedor, como lo hacía Firestore, y las
+  que sobran sí se borran. Transferencias: se borran los dos movimientos.
+- **«Abrir portal»** (`lib/portal.ts`, `components/acceso-portal.tsx`): con
+  la API es `POST /clientes/:id/acceso`; **desactivar** es `DELETE
+  …/acceso`, que apaga `accesos.activo` en el D1 (antes no existía: la
+  bandera `portal_activo` sola no cerraba nada). **Cambiar el PIN** se hace
+  aquí mismo (mismo POST) en vez de mandar una liga, porque el PIN lo guarda
+  la API y no un proveedor. Reactivar pide PIN siempre.
+- Lo que la suite no tiene y se acepta sin guardar: `negocios.descripcion`,
+  `cuentas.numero`, `opex.descripcion`, los nombres denormalizados.
+- La API ganó tres cosas para esto (PR #34): `DELETE …/acceso`, `409 en_uso`
+  (antes `500 falla_interna` por la llave foránea) y `DELETE /admin/orgs/:o`
+  **solo fuera de producción**, con el que se reinició y resembró `demo`
+  después de que la medición de las llaves foráneas la ensuciara.
+
+**Cómo se midió:** `pruebas/escritura-api.spec.ts` en una org propia de
+staging (`prueba-escritura`, se crea al empezar y se reinicia al terminar;
+`demo` no se toca). Crea negocio, cuentas, cliente, proveedor y proyecto con
+partida; un ingreso al producto y un egreso al proveedor dejan cobrado 2,000,
+pagado 700.25, disponible 1,299.75, partida parcial, Banco 12,000.50 y Caja
+−700.25; editar cambia nombre, productos por id, partida a pagada, precio
+7,500 = Σ ítems; quitar un producto lo cancela; el portal: entra con PIN y
+ve `/peek` (200), PIN nuevo (viejo 401, nuevo 200), desactivar (`/peek`
+403), reactivar (200); opex; borrar un movimiento recalcula; borrar proyecto
+con movimientos truena y sin ellos se va. **15 de 15** más los 14 de
+lectura, `tsc` limpio, `next build` completo. Los dos archivos corren uno a
+la vez (`fileParallelism: false`): entran con el mismo correo y el segundo
+código invalidaba al primero.
+
+**Hallazgo para la fase 5 (corte):** el importador de la API deja en
+`precio_venta = 0` cualquier proyecto que venga **sin productos**, porque el
+precio es un caché que sale de los ítems y no crea ninguno. `forespot` tiene
+proyectos así (la medición de la fase 0 contó 0 productos). El cuadre no lo
+vio porque `precio_venta` no está entre sus llaves. Lo razonable es que el
+importador aplique la misma regla 1 de arriba (un ítem con el nombre del
+proyecto y el precio) y que el cuadre compare `proyectos.precio_venta`. No
+se hizo aquí: es cambio del importador y va con aviso previo.
+
+**No verificado:** las pantallas en un navegador con `FUENTE=api` (todo se
+midió por los módulos de `lib/`, que es lo que las pantallas llaman). Que
+`admin` de la suite deba escribir como `owner` en dash101 es decisión de
+Mike.
+
+---
+
+## Lo que sigue · fase 3, tercera parte, y fase 4
+
+Google en el login con `api` (el `redirect_uri` de `/auth/google` cae fuera
+de `/s101/`: se resuelve en la API o se queda con correo, código y PIN).
+Probar las pantallas en el navegador con las tres variables puestas en
+`next dev` o en un deploy preview de Netlify. El importador con la regla del
+precio (arriba). Después, fase 4: dash101 como Worker (OpenNext o
 `output: 'export'`) y fase 5, el corte.

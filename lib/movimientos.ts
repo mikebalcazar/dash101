@@ -14,8 +14,9 @@ import {
   runTransaction,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { fuente, noEscribeTodavia } from "./fuente";
+import { fuente } from "./fuente";
 import * as leer from "./api/leer";
+import * as escribir from "./api/escribir";
 import type { Movimiento, TipoMovimiento, TipoContraparte } from "@/types/schema";
 import { recalcularProyecto } from "./proyectos";
 import { getClienteUid } from "./clientes";
@@ -75,7 +76,7 @@ export async function getMovimiento(id: string): Promise<Movimiento | null> {
 }
 
 export async function createMovimiento(uid: string, data: MovimientoInput): Promise<string> {
-  if (fuente() === 'api') throw noEscribeTodavia('movimientos');
+  if (fuente() === 'api') return escribir.createMovimiento(uid, data);
   // Ingreso de un cliente con portal → se denormaliza su uid para que lo pueda leer
   const cliente_uid =
     data.tipo === "ingreso" && data.contraparte_tipo === "cliente" && data.contraparte_id
@@ -182,7 +183,7 @@ export async function createTransferencia(
  * también borra el par.
  */
 export async function deleteMovimiento(id: string): Promise<void> {
-  if (fuente() === 'api') throw noEscribeTodavia('movimientos');
+  if (fuente() === 'api') return escribir.deleteMovimiento(id);
   const snap = await getDoc(doc(db, "movimientos", id));
   if (!snap.exists()) return;
   const m = snap.data() as Movimiento;

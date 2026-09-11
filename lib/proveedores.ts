@@ -11,8 +11,9 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { fuente, noEscribeTodavia } from "./fuente";
+import { fuente } from "./fuente";
 import * as leer from "./api/leer";
+import * as escribir from "./api/escribir";
 import type { Proveedor } from "@/types/schema";
 
 export interface ProveedorInput {
@@ -40,7 +41,7 @@ export async function getProveedor(id: string): Promise<Proveedor | null> {
 }
 
 export async function createProveedor(uid: string, data: ProveedorInput): Promise<string> {
-  if (fuente() === 'api') throw noEscribeTodavia('proveedores');
+  if (fuente() === 'api') return escribir.createProveedor(uid, data);
   const payload = {
     nombre: data.nombre,
     rfc: data.rfc ?? "",
@@ -57,11 +58,11 @@ export async function createProveedor(uid: string, data: ProveedorInput): Promis
 }
 
 export async function updateProveedor(id: string, data: Partial<ProveedorInput>): Promise<void> {
-  if (fuente() === 'api') throw noEscribeTodavia('proveedores');
+  if (fuente() === 'api') return escribir.updateProveedor(id, data);
   await updateDoc(doc(db, "proveedores", id), data);
 }
 
 export async function deleteProveedor(id: string): Promise<void> {
-  if (fuente() === 'api') throw noEscribeTodavia('proveedores');
+  if (fuente() === 'api') return escribir.deleteProveedor(id);
   await deleteDoc(doc(db, "proveedores", id));
 }
