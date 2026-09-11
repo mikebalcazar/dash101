@@ -6,14 +6,14 @@
  * que la app enseña después de escribir son las que Firestore habría dejado
  * con sus fórmulas (cobrado, pagado, disponible, margen, saldo, partidas).
  *
- * Corre en la org `prueba-escritura`, que se crea al empezar y se reinicia al
- * terminar con DELETE /admin/orgs/:o (existe solo fuera de producción). La
- * org `demo` no se toca: es la que ven peek101 y las capturas. */
+ * Corre en una org propia por corrida (`pe-<run>`), que se crea al empezar y
+ * se reinicia al terminar con DELETE /admin/orgs/:o (existe solo fuera de
+ * producción). La org `demo` no se toca: es la que ven peek101 y las capturas. */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Timestamp } from "firebase/firestore";
 import { apiBase, fuente } from "@/lib/fuente";
-import { entrarConCodigo, pedirCodigo, pedir } from "@/lib/api/cliente";
+import { entrarDePrueba, pedir } from "@/lib/api/cliente";
 import { createNegocio, getNegocio, updateNegocio, deleteNegocio } from "@/lib/negocios";
 import { createCuenta, listCuentas, updateCuenta, deleteCuenta } from "@/lib/cuentas";
 import { createCliente, getCliente, updateCliente, deleteCliente, getClienteUid } from "@/lib/clientes";
@@ -24,7 +24,9 @@ import { createOpex, listOpex, updateOpex, deleteOpex } from "@/lib/opex";
 import { activarAccesoPortal, cambiarPinPortal, desactivarAccesoPortal } from "@/lib/portal";
 
 const CORREO = process.env.CORREO_SUPERADMIN ?? "mike@forespot.com";
-const ORG = "prueba-escritura";
+// Una org por corrida: dos corridas a la vez (dos PR con el flujo de pruebas
+// al mismo tiempo) se pisaban la misma org y una borraba la de la otra.
+const ORG = `pe-${(process.env.GITHUB_RUN_ID ?? Date.now().toString(36)).toString().toLowerCase().slice(-12)}`;
 const ORG_ANTES = process.env.NEXT_PUBLIC_ORG;
 const CORREO_CLIENTE = "prueba.escritura@ejemplo.mx";
 
@@ -46,8 +48,7 @@ beforeAll(async () => {
   expect(fuente()).toBe("api");
   const salud = await pedir<{ entorno: string }>("/salud");
   expect(salud.entorno).toBe("staging");
-  const c = await pedirCodigo(CORREO);
-  const u = await entrarConCodigo(CORREO, c.codigo_prueba!);
+  const u = await entrarDePrueba(CORREO);
   uid = u.id;
 
   // La org de prueba nace limpia: si quedó de una corrida rota, se reinicia.

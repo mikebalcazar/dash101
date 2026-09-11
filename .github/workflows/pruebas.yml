@@ -8,6 +8,12 @@
 
 name: Pruebas
 
+# Una corrida a la vez: las pruebas entran a staging con el mismo superadmin
+# y el segundo código invalida al primero. Las que esperan, esperan.
+concurrency:
+  group: pruebas-staging
+  cancel-in-progress: false
+
 on:
   pull_request:
   push:

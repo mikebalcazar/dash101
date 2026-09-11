@@ -93,6 +93,27 @@ export async function pedirCodigo(correo: string): Promise<{ codigo_prueba?: str
   return pedir<{ codigo_prueba?: string }>('/auth/codigo', { method: 'POST', body: { correo } });
 }
 
+/** Pide un código y entra con él, reintentando si otro proceso pidió otro
+ *  código para el mismo correo entre medias (pasa cuando dos corridas de las
+ *  pruebas entran a la vez con el mismo superadmin). Sólo sirve donde la API
+ *  devuelve `codigo_prueba`, o sea fuera de producción. */
+export async function entrarDePrueba(correo: string, intentos = 4): Promise<Yo['usuario']> {
+  let ultimo: unknown;
+  for (let i = 0; i < intentos; i++) {
+    try {
+      const c = await pedirCodigo(correo);
+      if (!c.codigo_prueba) throw new Error('la API no devolvió codigo_prueba: esto no es staging');
+      return await entrarConCodigo(correo, c.codigo_prueba);
+    } catch (e) {
+      ultimo = e;
+      const reintentable = e instanceof ErrorApi && (e.error === 'codigo_invalido' || e.error === 'demasiados_intentos');
+      if (!reintentable) throw e;
+      await new Promise((r) => setTimeout(r, 3000 * (i + 1)));
+    }
+  }
+  throw ultimo;
+}
+
 export async function entrarConCodigo(correo: string, codigo: string): Promise<Yo['usuario']> {
   const r = await pedir<{ usuario: Yo['usuario'] }>('/auth/entrar', { method: 'POST', body: { correo, codigo } });
   return r.usuario;
