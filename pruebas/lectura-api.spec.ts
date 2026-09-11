@@ -18,7 +18,7 @@ import { listNegocios, getNegocio } from "@/lib/negocios";
 import { listCuentas } from "@/lib/cuentas";
 import { listClientes, getClienteUid } from "@/lib/clientes";
 import { listProveedores } from "@/lib/proveedores";
-import { listProyectos, getProyecto, createProyecto } from "@/lib/proyectos";
+import { listProyectos, getProyecto } from "@/lib/proyectos";
 import { listMovimientos, listMovimientosByProyecto } from "@/lib/movimientos";
 import { listOpex, estimarMensual } from "@/lib/opex";
 import { getUserDoc, canWriteInNegocio } from "@/lib/users";
@@ -187,13 +187,5 @@ describe("movimientos y gastos fijos", () => {
     expect(renta).toMatchObject({ monto: 18000, frecuencia: "mensual", dia_del_mes: 5, cuenta_nombre: "Banco Demo", activo: true });
     expect(estimarMensual(renta)).toBe(18000);
     expect(dia(renta.fecha_inicio).getFullYear()).toBe(2026);
-  });
-});
-
-describe("lo que todavía no: escribir", () => {
-  it("una escritura con FUENTE=api truena con un mensaje claro, no escribe en Firestore por debajo", async () => {
-    await expect(
-      createProyecto(uid, { nombre: "x", cliente_id: "x", cliente_nombre: "x", negocio_id: negocioId, negocio_nombre: "x", precio_venta: 0, partidas: [], estado: "activo", fecha_inicio: new Date() }),
-    ).rejects.toThrow(/todavía no se escribe/);
   });
 });

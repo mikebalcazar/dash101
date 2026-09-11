@@ -11,6 +11,9 @@ export default defineConfig({
   },
   test: {
     include: ["pruebas/**/*.spec.ts"],
+    // Un archivo a la vez: los dos entran con el mismo correo por
+    // `/auth/codigo`, y el segundo código invalida al primero si corren juntos.
+    fileParallelism: false,
     environment: "node",
     testTimeout: 30000,
     env: {

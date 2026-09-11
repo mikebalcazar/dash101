@@ -4,11 +4,13 @@ import { useState } from "react";
 import type { Cliente } from "@/types/schema";
 import {
   activarAccesoPortal,
+  cambiarPinPortal,
   desactivarAccesoPortal,
   enviarCambioPin,
   validarPin,
   PORTAL_URL,
 } from "@/lib/portal";
+import { fuente } from "@/lib/fuente";
 import { IconKey, IconExternalLink, IconMailForward, IconUserOff } from "@tabler/icons-react";
 
 const inputCls =
@@ -33,9 +35,13 @@ export function AccesoPortal({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [confirmOff, setConfirmOff] = useState(false);
+  const [pinNuevo, setPinNuevo] = useState("");
 
+  // Con la API el PIN lo guarda suite101-api y no Firebase: reactivar pide
+  // PIN siempre, y el PIN nuevo se pone aquí en vez de mandar una liga.
+  const conApi = fuente() === "api";
   const activo = !!cliente.portal_activo && !!cliente.uid;
-  const reactivable = !activo && !!cliente.uid && cliente.portal_email === correo.trim().toLowerCase();
+  const reactivable = !conApi && !activo && !!cliente.uid && cliente.portal_email === correo.trim().toLowerCase();
 
   const run = async (fn: () => Promise<string>) => {
     setError("");
@@ -74,7 +80,15 @@ export function AccesoPortal({
       return `Liga enviada a ${cliente.portal_email}`;
     });
 
+  const ponerPinNuevo = () =>
+    run(async () => {
+      await cambiarPinPortal(cliente, pinNuevo);
+      setPinNuevo("");
+      return "PIN cambiado. Entrégaselo al cliente: no se puede consultar después.";
+    });
+
   const pinErr = pin ? validarPin(pin) : null;
+  const pinNuevoErr = pinNuevo ? validarPin(pinNuevo) : null;
 
   return (
     <div className="mt-10 pt-6 border-t border-black/5">
@@ -112,15 +126,38 @@ export function AccesoPortal({
             </span>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={cambiarPin}
-              disabled={busy}
-              className="inline-flex items-center gap-1.5 bg-white border border-black/10 rounded-xl px-3 py-1.5 text-xs hover:border-black/20 disabled:opacity-50 transition"
-            >
-              <IconMailForward size={13} />
-              Enviar liga para cambiar PIN
-            </button>
+            {conApi ? (
+              <span className="inline-flex items-center gap-1.5">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={pinNuevo}
+                  onChange={(e) => setPinNuevo(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="PIN nuevo"
+                  className="w-28 bg-white border border-black/10 rounded-xl px-3 py-1.5 text-xs text-center tracking-[0.3em] focus:outline-none focus:border-ink/40"
+                />
+                <button
+                  type="button"
+                  onClick={ponerPinNuevo}
+                  disabled={busy || pinNuevo.length !== 6 || !!pinNuevoErr}
+                  className="inline-flex items-center gap-1.5 bg-white border border-black/10 rounded-xl px-3 py-1.5 text-xs hover:border-black/20 disabled:opacity-50 transition"
+                >
+                  <IconKey size={13} />
+                  Cambiar PIN
+                </button>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={cambiarPin}
+                disabled={busy}
+                className="inline-flex items-center gap-1.5 bg-white border border-black/10 rounded-xl px-3 py-1.5 text-xs hover:border-black/20 disabled:opacity-50 transition"
+              >
+                <IconMailForward size={13} />
+                Enviar liga para cambiar PIN
+              </button>
+            )}
             {!confirmOff ? (
               <button
                 type="button"

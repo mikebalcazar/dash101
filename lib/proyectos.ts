@@ -14,8 +14,9 @@ import {
   runTransaction,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { fuente, noEscribeTodavia } from "./fuente";
+import { fuente } from "./fuente";
 import * as leer from "./api/leer";
+import * as escribir from "./api/escribir";
 import type {
   Proyecto,
   PartidaProyecto,
@@ -104,7 +105,7 @@ export async function getProyecto(id: string): Promise<Proyecto | null> {
 }
 
 export async function createProyecto(uid: string, data: ProyectoInput): Promise<string> {
-  if (fuente() === 'api') throw noEscribeTodavia('proyectos');
+  if (fuente() === 'api') return escribir.createProyecto(uid, data);
   const compromiso = calcCompromiso(data.partidas);
   const partidasFull: PartidaProyecto[] = data.partidas.map((p) => ({
     ...p,
@@ -156,7 +157,7 @@ export async function updateProyecto(
     fecha_fin_estimada?: Date | null;
   }
 ): Promise<void> {
-  if (fuente() === 'api') throw noEscribeTodavia('proyectos');
+  if (fuente() === 'api') return escribir.updateProyecto(id, data);
   const ref = doc(db, "proyectos", id);
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);
@@ -278,6 +279,7 @@ export async function propagarClienteUid(
 }
 
 export async function deleteProyecto(id: string): Promise<void> {
+  if (fuente() === 'api') return escribir.deleteProyecto(id);
   await deleteDoc(doc(db, "proyectos", id));
 }
 

@@ -14,9 +14,12 @@ import {
   signOut,
 } from "firebase/auth";
 import { setAccesoPortal } from "./clientes";
-import { fuente, noEscribeTodavia } from "./fuente";
+import { fuente } from "./fuente";
 import type { Cliente } from "@/types/schema";
 import { propagarClienteUid } from "./proyectos";
+import * as escribir from "./api/escribir";
+import { listar } from "./api/cliente";
+import type { FilaMovimiento, FilaProyecto } from "./api/adaptar";
 
 export const PORTAL_URL =
   process.env.NEXT_PUBLIC_PORTAL_URL ?? "https://cuenta-taller101.netlify.app";
@@ -60,10 +63,21 @@ export async function activarAccesoPortal(
   email: string,
   pin: string
 ): Promise<{ uid: string; proyectos: number; movimientos: number; reactivado: boolean }> {
-  if (fuente() === 'api') throw noEscribeTodavia('el acceso al portal (va contra POST /clientes/:id/acceso, en la siguiente entrega)');
   const clienteId = cliente.id!;
   const correo = email.trim().toLowerCase();
   if (!/^\S+@\S+\.\S+$/.test(correo)) throw new Error("Correo inválido");
+
+  /* Con la API es una sola llamada: POST /clientes/:id/acceso crea (o
+   * encuentra) al usuario en el D1, le pone el PIN y prende el acceso. No hay
+   * nada que propagar: el portal lee por `clientes.usuario_id`. Reactivar es
+   * el mismo POST, y siempre con PIN: la API no guarda el viejo en claro. */
+  if (fuente() === 'api') {
+    const err = validarPin(pin);
+    if (err) throw new Error(err);
+    const r = await escribir.darAccesoPortal(clienteId, correo, pin);
+    const n = await contarLoVisible(clienteId, cliente.negocio_id);
+    return { uid: r.usuario_id, ...n, reactivado: !!cliente.uid && cliente.uid === r.usuario_id };
+  }
 
   // Ya tuvo acceso con este mismo correo → sólo se reactiva (el usuario de Auth sigue ahí)
   if (cliente.uid && cliente.portal_email === correo) {
@@ -112,7 +126,9 @@ export async function activarAccesoPortal(
  * uid en el cliente se conservan para poder reactivar sin crear otro usuario.
  */
 export async function desactivarAccesoPortal(cliente: Cliente): Promise<void> {
-  if (fuente() === 'api') throw noEscribeTodavia('el acceso al portal');
+  // DELETE …/acceso apaga `accesos.activo` en el D1: la puerta de la org ya
+  // no abre aunque el cliente entre con su PIN. Reactivar es volver a dar acceso.
+  if (fuente() === 'api') return escribir.quitarAccesoPortal(cliente.id!);
   await setAccesoPortal(cliente.id!, {
     uid: cliente.uid ?? null,
     portal_email: cliente.portal_email ?? null,
@@ -121,9 +137,28 @@ export async function desactivarAccesoPortal(cliente: Cliente): Promise<void> {
   await propagarClienteUid(cliente.id!, null, cliente.negocio_id);
 }
 
+/** Con la API el socio pone el PIN nuevo aquí mismo: es el mismo POST de dar
+ *  acceso, con el correo que ya tenía. Firebase no lo permitía (mandaba una
+ *  liga); la suite sí, porque el PIN lo guarda la API y no un proveedor. */
+export async function cambiarPinPortal(cliente: Cliente, pin: string): Promise<void> {
+  if (fuente() !== 'api') throw new Error("Con Firestore el PIN se cambia con la liga por correo.");
+  const err = validarPin(pin);
+  if (err) throw new Error(err);
+  if (!cliente.portal_email) throw new Error("Este cliente no tiene acceso activo.");
+  await escribir.darAccesoPortal(cliente.id!, cliente.portal_email, pin);
+}
+
+/** Cuántos proyectos e ingresos verá el cliente en su portal, para el aviso. */
+async function contarLoVisible(clienteId: string, negocioId: string): Promise<{ proyectos: number; movimientos: number }> {
+  const proyectos = await listar<FilaProyecto>("proyectos", { negocio_id: negocioId, cliente_id: clienteId });
+  const ids = new Set(proyectos.map((p) => p.id));
+  const movs = await listar<FilaMovimiento>("movimientos", { negocio_id: negocioId });
+  return { proyectos: proyectos.length, movimientos: movs.filter((m) => m.tipo === "ingreso" && m.proyecto_id && ids.has(m.proyecto_id)).length };
+}
+
 /** Firebase manda un correo al cliente para poner un PIN nuevo. */
 export async function enviarCambioPin(email: string): Promise<void> {
-  if (fuente() === 'api') throw noEscribeTodavia('el cambio de PIN (en la suite es «olvidé mi PIN»: código al correo y /auth/pin)');
+  if (fuente() === 'api') throw new Error("Con la API el PIN nuevo se pone aquí mismo, no por liga.");
   const auth = getAuth(appSecundaria());
   await sendPasswordResetEmail(auth, email.trim().toLowerCase(), { url: PORTAL_URL });
 }
