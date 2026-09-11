@@ -61,7 +61,11 @@ COLECCIONES: dict[str, list[str]] = {
 # (`mapeo.ts` §2). Se suman igual, pero se marcan, para que nadie compare un
 # caché de Firestore contra un caché recalculado y crea que hay un descuadre.
 CACHES = {
-    "proyectos.precio_venta",
+    # `precio_venta` ya no va aquí: desde el 12-sep el importador aplica la
+    # regla del producto único (un proyecto con precio y sin productos produce
+    # un ítem con su nombre y su precio), así que `items.monto` en la API tiene
+    # que ser Σ productos.monto + Σ precio_venta de los proyectos sin productos.
+    # Ese número se imprime abajo, para compararlo contra la API al importar.
     "proyectos.cobrado",
     "proyectos.pagado",
     "proyectos.disponible",
@@ -130,6 +134,9 @@ def main() -> int:
     productos_con_quell = 0
     proyectos_con_productos = 0
     movs_con_producto = 0
+    # La regla del producto único: lo que la API va a sumar en items.monto.
+    proyectos_sin_productos_con_precio = 0
+    precio_sin_productos = 0
 
     for col, campos in COLECCIONES.items():
         n = 0
@@ -171,6 +178,11 @@ def main() -> int:
                 prods = d.get("productos") or []
                 if isinstance(prods, list) and prods:
                     proyectos_con_productos += 1
+                else:
+                    c, _, malo = centavos(d.get("precio_venta"))
+                    if c and not malo:
+                        proyectos_sin_productos_con_precio += 1
+                        precio_sin_productos += c
                 for p in prods if isinstance(prods, list) else []:
                     if not isinstance(p, dict):
                         continue
@@ -201,6 +213,13 @@ def main() -> int:
     for clave in sorted(dinero):
         marca = "  ← caché, la API lo recalcula" if clave in CACHES else ""
         print(f"  {clave:<38} {dinero[clave]:>14}   ({pesos(dinero[clave])}){marca}")
+    print()
+
+    print("== Lo que la API debe sumar en items.monto al importar (regla del producto único) ==")
+    esperado_items = dinero.get("proyectos.productos.monto", 0) + precio_sin_productos
+    print(f"  Σ productos.monto                       {dinero.get('proyectos.productos.monto', 0):>14}   ({pesos(dinero.get('proyectos.productos.monto', 0))})")
+    print(f"  Σ precio_venta sin productos ({proyectos_sin_productos_con_precio} proy.)  {precio_sin_productos:>14}   ({pesos(precio_sin_productos)})")
+    print(f"  {'items.monto esperado en la API':<38} {esperado_items:>14}   ({pesos(esperado_items)})")
     print()
 
     if redondeos or ilegibles:
