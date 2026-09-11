@@ -25,19 +25,28 @@ no se pudo medir desde aquí y se dice cómo se mide.
 
 ## Fase 0 · las cuatro mediciones
 
-### 1. El reporte de cuadre de `forespot` hoy — **no verificado**
+### 1. El reporte de cuadre de `forespot` hoy — **el lado de Firestore ya está medido**
 
 - Se lee sólo con sesión de superadmin en `GET /admin/importar`. Esta sesión
   no la tiene y no la pide.
-- **Decisión de Mike (11-sep):** queda no verificado hasta que exista M5 (la
-  cuenta de servicio de sólo lectura, secreto `FIREBASE_SA_LECTURA`). **No se da
-  por buena la frase «cuadrados» del 9-sep.**
-- Cómo se va a medir: con M5, un guion en el runner lee Firestore y saca filas y
-  sumas por colección; del lado de la API, `sumarDinero()` y `contarFilas()`
-  (`suite101-api/src/org-db.ts:586` y `:670`). Los dos números se comparan al
-  centavo. Para que el runner alcance `/admin/importar` hace falta la puerta de
-  servicio que el arranque pide proponer en el muro antes de tocar la API
-  (fase 5).
+- **M5 quedó el 11-sep**, y no como estaba escrito: la organización de Google
+  prohíbe crear llaves JSON de cuenta de servicio
+  (`iam.disableServiceAccountKeyCreation`), así que no hay secreto
+  `FIREBASE_SA_LECTURA` ni lo va a haber. En su lugar, el corredor se
+  identifica con su propio token y Google le presta por una hora la cuenta
+  `lector-firestore` (`roles/datastore.viewer`), y sólo se la presta al
+  repositorio `mikebalcazar/dash101`. **No hay ninguna llave que guardar ni que
+  revocar.**
+- Con eso, `cuadre-firestore.yml` ya midió el lado viejo: los números están
+  abajo, en «La medición del 11-sep». **Sigue sin medirse el lado de la API**
+  (el OrgDB de `forespot` es un Durable Object y no se lee desde fuera), así
+  que la frase «cuadrados» del 9-sep **sigue sin comprobarse**: falta la mitad
+  de la comparación.
+- Lo que falta para cerrarlo: una manera de que el corredor le pregunte a la
+  API sus `contarFilas()` y `sumarDinero()`
+  (`suite101-api/src/org-db.ts:578` y `:586`) sin sesión de superadmin. Es la
+  puerta de servicio que el arranque pide **proponer en el muro antes de tocar
+  la API** (fase 5). Hasta entonces, el cuadre está medido de un lado.
 
 ### 2. Cómo usa Firebase el código — **medido**
 
@@ -110,7 +119,7 @@ no se pudo medir desde aquí y se dice cómo se mide.
   Recomendación de esta sesión: medir primero el camino 1 con `next build` en
   el runner; si pasa, no hace falta OpenNext.
 
-### 4. La forma real de `partidas` — **medida en el código; el conteo de datos no**
+### 4. La forma real de `partidas` — **medida en el código y en los datos**
 
 - `types/schema.ts:87`:
   ```ts
@@ -130,10 +139,10 @@ no se pudo medir desde aquí y se dice cómo se mide.
   más, con el dinero convertido a centavos por `c.dinero`.
 - **Por código: 0 partidas con referencia a ítem; el 100 % sin.** No hay nada
   que «se mueva solo».
-- **Cuántas partidas hay en total en `forespot`: no verificado.** Están en
-  Firestore, y ni el cuadre las cuenta (`contarFilas` cuenta proyectos, no sus
-  partidas). Se mide con M5, o con el reporte de cuadre de Mike, que sí trae
-  `proyectos.partidas.monto_acordado` y `monto_pagado`.
+- **Cuántas partidas hay en total en `forespot`: una.** Medido el 11-sep (ver
+  abajo). La «trampa» de la fase 2 —repartir a ojo las partidas sin ítem— es
+  **un renglón**, de 100,000.00 pesos, en estado `pendiente`, con
+  `monto_pagado` en cero.
 - **Decisión de Mike (11-sep) para la fase 2:** las partidas **cuelgan del
   proyecto**. Tabla propia
   `partidas(id, proyecto_id NOT NULL → proyectos, item_id NULL → items,
@@ -142,6 +151,73 @@ no se pudo medir desde aquí y se dice cómo se mide.
   sumas quedan iguales al centavo; dash101 liga cada partida a su ítem después,
   desde la pantalla. Es el cambio que la fase 2 hace en `suite101-api`, con su
   recado previo en el muro y `VERSION_CONTRATO` nueva.
+
+---
+
+## La medición del 11-sep · lo que hay hoy en Firestore
+
+Medido por `.github/workflows/cuadre-firestore.yml` sobre `contamaster-fs`, run
+`34643868352`, commit `5e3fdd7`, en verde. Los números completos están en el
+comentario de ese commit. **Son las mismas cifras que sacan `contarFilas()` y
+`sumarDinero()` del OrgDB**, para poder compararlas al centavo cuando exista la
+puerta de servicio.
+
+| Colección | Filas |
+| --- | --- |
+| usuarios | 1 |
+| negocios | 3 |
+| cuentas | 1 |
+| clientes | 3 |
+| proveedores | 1 |
+| proyectos | 3 |
+| movimientos | 8 |
+| opex | 0 |
+| invitaciones | 1 |
+| **total** | **21** |
+
+Dinero, en centavos enteros (entre paréntesis, en pesos):
+
+| Campo | Centavos | Pesos |
+| --- | --- | --- |
+| `cuentas.saldo_inicial` | 14,800,000 | 148,000.00 |
+| `movimientos.monto` | 31,000,000 | 310,000.00 |
+| `proyectos.compromiso_total` | 10,000,000 | 100,000.00 |
+| `proyectos.partidas.monto_acordado` | 10,000,000 | 100,000.00 |
+| `proyectos.partidas.monto_pagado` | 0 | 0.00 |
+| `proyectos.precio_venta` *(caché)* | 85,000,000 | 850,000.00 |
+| `proyectos.cobrado` *(caché)* | 10,000,000 | 100,000.00 |
+| `proyectos.pagado` *(caché)* | 0 | 0.00 |
+| `proyectos.disponible` *(caché)* | 10,000,000 | 100,000.00 |
+| `proyectos.margen_proyectado` *(caché)* | 75,000,000 | 750,000.00 |
+
+Los marcados *(caché)* la API no los importa: los recalcula desde los
+movimientos (`mapeo.ts` §2). Compararlos de frente daría un descuadre que no
+existe.
+
+**Cuatro cosas que esto cambia:**
+
+1. **Hay una sola partida en todo `forespot`**, en 1 de los 3 proyectos:
+   100,000.00 pesos, estado `pendiente`, sin pagar. Sus campos son los seis del
+   código y ninguno apunta a un ítem (se buscó `producto_id`, `item_id`,
+   `quell_id`, `producto` e `item`). La decisión de Mike —que las partidas
+   cuelguen del proyecto— se aplica igual, pero el riesgo de la fase 2 es de un
+   renglón, no de un inventario.
+2. **No hay un solo producto en Firestore.** Cero, en los tres proyectos; cero
+   movimientos con `producto_id`. El catálogo de ítems de la suite **nace
+   vacío**: no hay nada que migrar y nada que ligar. Eso también quiere decir
+   que el portal del cliente hoy no enseña ítems, porque no existen.
+3. **El paso de pesos a centavos es exacto**: ningún valor necesitó redondeo.
+   El importador no va a introducir ni un centavo de diferencia.
+4. **No hay colecciones inesperadas** en la raíz de Firestore: las nueve que
+   documenta el código son todas las que existen.
+
+Y una comprobación de consistencia que sale sola: `precio_venta` (850,000) −
+`compromiso_total` (100,000) = `margen_proyectado` (750,000). Las cachés de
+Firestore están al día con sus propias partidas.
+
+**Cuidado al leer `movimientos.monto`:** suma ingresos y egresos sin distinguir
+el `tipo`, igual que `sumarDinero()` de la API. Sirve para comparar los dos
+lados; no es el flujo del negocio.
 
 ---
 
@@ -163,7 +239,11 @@ no se pudo medir desde aquí y se dice cómo se mide.
 
 - **M5** cuenta de servicio de Firebase de sólo lectura → sin ella no hay
   cuadre ni conteo de partidas desde el runner.
-- **M6** revocar el PAT viejo. `CONTEXTO.md` ya **no** trae el valor del PAT
+- **M6 en pausa, por decisión de Mike (11-sep):** el PAT viejo **no se revoca
+  todavía**, hasta estar seguros de que ninguna aplicación de fuera de la suite
+  lo usa. Cómo saberlo sin adivinar: GitHub → Settings → Developer settings →
+  Personal access tokens → Fine-grained tokens muestra **«Last used»** de cada
+  uno. Si pasan una o dos semanas sin uso, ya nadie lo ocupa. `CONTEXTO.md` ya **no** trae el valor del PAT
   (medido: 0 coincidencias de `github_pat_`/`ghp_`; §51-53 dicen que vivía en
   `/tmp`), pero sí trae una llave web de Firebase (patrón `AIza…`). Esa llave es
   pública por diseño en un SDK de cliente, pero no tiene por qué vivir en un
