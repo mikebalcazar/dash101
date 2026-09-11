@@ -43,7 +43,8 @@ type AuthContextValue = {
   signInEmail: (email: string, password: string) => Promise<void>;
   signUpEmail: (email: string, password: string) => Promise<void>;
   /** FUENTE=api: manda el código de seis dígitos al correo. */
-  pedirCodigo: (correo: string) => Promise<void>;
+  /** Devuelve `codigo_prueba` sólo fuera de producción (staging): la pantalla lo rellena. */
+  pedirCodigo: (correo: string) => Promise<{ codigo_prueba?: string }>;
   entrarConCodigo: (correo: string, codigo: string) => Promise<void>;
   entrarConPin: (correo: string, pin: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -107,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const pedirCodigo = async (correo: string) => {
     soloApi();
-    await api.pedirCodigo(correo.trim().toLowerCase());
+    return api.pedirCodigo(correo.trim().toLowerCase());
   };
   const entrarConCodigo = async (correo: string, codigo: string) => {
     soloApi();

@@ -21,6 +21,7 @@ function LoginApi() {
   const [pin, setPin] = useState("");
   const [codigo, setCodigo] = useState("");
   const [codigoPedido, setCodigoPedido] = useState(false);
+  const [dePrueba, setDePrueba] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -60,14 +61,22 @@ function LoginApi() {
         <button
           type="button"
           disabled={loading || !correo}
-          onClick={() => intenta(async () => { await pedirCodigo(correo); setCodigoPedido(true); })}
+          onClick={() => intenta(async () => {
+            const r = await pedirCodigo(correo);
+            // Staging devuelve el código en la respuesta para poder entrar sin
+            // buzón; producción nunca lo hace. Se rellena y se dice.
+            if (r.codigo_prueba) { setCodigo(r.codigo_prueba); setDePrueba(true); }
+            setCodigoPedido(true);
+          })}
           className={botonSuave}
         >
           Mandarme un código
         </button>
       ) : (
         <form onSubmit={(e) => { e.preventDefault(); void intenta(() => entrarConCodigo(correo, codigo)); }} className="space-y-3">
-          <p className="text-xs text-ink-muted">Te mandamos seis dígitos a {correo}. Vencen en diez minutos.</p>
+          <p className="text-xs text-ink-muted">
+            {dePrueba ? "Ambiente de pruebas: el código se rellenó solo. Sólo falta entrar." : `Te mandamos seis dígitos a ${correo}. Vencen en diez minutos.`}
+          </p>
           <input inputMode="numeric" pattern="\d{6}" maxLength={6} value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="código de 6 dígitos" className={caja} autoFocus />
           <button type="submit" disabled={loading || codigo.length !== 6} className={boton}>
             {loading ? "Entrando…" : "Entrar con el código"}
