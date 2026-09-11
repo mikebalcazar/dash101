@@ -16,7 +16,7 @@ export default function LoginPage() {
 
 function LoginApi() {
   const router = useRouter();
-  const { user, pedirCodigo, entrarConCodigo, entrarConPin } = useAuth();
+  const { user, pedirCodigo, entrarConCodigo, entrarConPin, signInGoogle } = useAuth();
   const [correo, setCorreo] = useState("");
   const [pin, setPin] = useState("");
   const [codigo, setCodigo] = useState("");
@@ -83,6 +83,15 @@ function LoginApi() {
           </button>
         </form>
       )}
+
+      <div className="flex items-center gap-3 text-xs text-ink-muted my-4">
+        <div className="flex-1 h-px bg-black/10" />
+        o con tu cuenta de Google
+        <div className="flex-1 h-px bg-black/10" />
+      </div>
+      <button type="button" disabled={loading} onClick={() => intenta(signInGoogle)} className={botonSuave}>
+        Entrar con Google
+      </button>
 
       {error && <p className="mt-4 text-xs text-mauve-900 bg-mauve-50 px-3 py-2 rounded-lg">{error}</p>}
     </Marco>

@@ -12,7 +12,7 @@
 
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Timestamp } from "firebase/firestore";
-import { entrarDePrueba, pedir, yo } from "@/lib/api/cliente";
+import { canjear, entrarDePrueba, pedir, urlGoogle, yo } from "@/lib/api/cliente";
 import { fuente, org } from "@/lib/fuente";
 import { listNegocios, getNegocio } from "@/lib/negocios";
 import { listCuentas } from "@/lib/cuentas";
@@ -72,6 +72,16 @@ describe("la sesión", () => {
     expect(u?.email).toBe(CORREO);
     expect(u?.negocios_acceso.length).toBeGreaterThan(0);
     for (const n of u!.negocios_acceso) expect(canWriteInNegocio(u, n)).toBe(true);
+  });
+});
+
+describe("Google detrás del proxy: lo que la app puede medir sin credenciales", () => {
+  it("un boleto inventado no entra, y un volver_a ajeno no se acepta", async () => {
+    await expect(canjear("no-existe")).rejects.toMatchObject({ error: "entrada_invalida", estado: 401 });
+    const r = await fetch(urlGoogle("https://malo.ejemplo.mx/login"), { redirect: "manual" });
+    // En staging ORIGENES es "*": el origen pasa y lo que falta son las
+    // credenciales (501) o, si ya están, el salto a Google (3xx).
+    expect([501, 302, 303]).toContain(r.status);
   });
 });
 

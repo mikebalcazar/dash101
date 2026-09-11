@@ -3,11 +3,11 @@
 /* Quién está en sesión. Dos caminos, una sola cara para las pantallas.
  *
  *   FUENTE=firestore   Firebase Auth, como siempre: Google o correo/contraseña.
- *   FUENTE=api         la cookie `s101` de suite101-api: correo + código, o
- *                      correo + PIN. Sin Google por ahora: la API arma el
- *                      `redirect_uri` de /auth/google con el origen de la
- *                      petición, y detrás del proxy /s101/ el regreso caería
- *                      fuera del prefijo (arranque §4, fase 3).
+ *   FUENTE=api         la cookie `s101` de suite101-api: correo + código,
+ *                      correo + PIN, o Google. Google regresa al Worker, no
+ *                      a la app; el Worker manda de vuelta un boleto de un
+ *                      solo uso (?entrada=) y aquí se canjea por el proxy
+ *                      /s101/, con lo que la cookie queda en este origen.
  *
  * Las pantallas usan `user.uid`, `user.email` y `user.displayName` y nada
  * más; `Sesion` es justo eso, y un `User` de Firebase lo cumple tal cual. */
@@ -61,11 +61,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (modo === "api") {
-      api
-        .yo()
-        .then((s) => setUser(s ? desdeApi(s.usuario) : null))
-        .catch((e) => console.error("No se pudo leer la sesión de la API:", e))
-        .finally(() => setLoading(false));
+      (async () => {
+        try {
+          // De regreso de Google: el boleto viene en la URL y se canjea una
+          // sola vez. Se quita de la barra para que un recargar no lo repita.
+          const u = new URL(window.location.href);
+          const entrada = u.searchParams.get("entrada");
+          if (entrada) {
+            u.searchParams.delete("entrada");
+            window.history.replaceState(null, "", u.pathname + (u.search || "") + u.hash);
+            try {
+              await api.canjear(entrada);
+            } catch (e) {
+              console.error("El boleto de entrada no valió:", e);
+            }
+          }
+          const s = await api.yo();
+          setUser(s ? desdeApi(s.usuario) : null);
+        } catch (e) {
+          console.error("No se pudo leer la sesión de la API:", e);
+        } finally {
+          setLoading(false);
+        }
+      })();
       return;
     }
     if (!auth) {
@@ -87,14 +105,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [modo]);
 
   const soloFirebase = (que: string) => {
-    if (modo === "api") throw new Error(`Con la API se entra con correo y código o PIN, no con ${que}.`);
+    if (modo === "api") throw new Error(`Con la API se entra con correo y código, PIN o Google, no con ${que}.`);
   };
   const soloApi = () => {
     if (modo !== "api") throw new Error("Este camino es de FUENTE=api.");
   };
 
   const signInGoogle = async () => {
-    soloFirebase("Google");
+    if (modo === "api") {
+      const url = api.urlGoogle(`${window.location.origin}/login`);
+      // Se pregunta primero sin seguir el salto: si la API no tiene
+      // credenciales de Google contesta 501 y se dice aquí, en vez de dejar
+      // al usuario en una pestaña con un JSON.
+      const r = await fetch(url, { redirect: "manual", credentials: "include" });
+      if (r.type === "opaqueredirect" || (r.status >= 300 && r.status < 400)) {
+        window.location.href = url;
+        return;
+      }
+      const cuerpo = (await r.json().catch(() => ({}))) as { error?: string };
+      if (cuerpo.error === "google_no_configurado") throw new Error("Entrar con Google todavía no está configurado. Usa tu correo con código o PIN.");
+      throw new Error(cuerpo.error ?? `Google contestó ${r.status}`);
+    }
     await signInWithPopup(auth, new GoogleAuthProvider());
   };
   const signInEmail = async (email: string, password: string) => {

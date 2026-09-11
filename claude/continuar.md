@@ -472,6 +472,32 @@ Mike.
 
 ---
 
+## Decisiones de Mike del 11-sep (noche), una por una
+
+| Decisión | Qué eligió | Estado |
+| --- | --- | --- |
+| Importador: proyecto sin productos | **Regla del producto único** | Hecho: suite101-api #36, cuadre en dash101 #16 |
+| Login con la API | **También Google** | API lista (#37: boleto y `/auth/canje`); app lista (este PR); faltan las credenciales de Google, que pone Mike (guía en el chat) |
+| Roles: `admin` de la suite en dash101 | **admin = propietario** | Queda como está |
+| Regla del wall por entrega | **A los siete repositorios** | Hecho: OPERAR.md §5.6 ×7, copias idénticas |
+| Ver las pantallas con la API | **Deploy preview en Netlify**, variables puestas por mí con el conector | Hecho: dash101 #15; preview `deploy-preview-15--conta-master.netlify.app`, `/s101/salud` contesta staging |
+| PAT viejo | **Dejarlo vivo por ahora** | Sin fecha; no se vuelve a preguntar hasta que Mike lo saque |
+
+**Google, cómo queda armado:** el navegador va a `/s101/auth/google?volver_a=<app>/login`;
+Google regresa al Worker; el Worker abre la sesión, deja un boleto de un
+minuto y un solo uso (`tickets` en el D1, migración 0002) y manda al
+navegador a la app con `?entrada=`; la app lo canjea por `/s101/auth/canje`
+y la cookie queda en su origen. Sin credenciales, `/auth/google` contesta
+501 y la pantalla lo dice. Las credenciales entran como secretos del
+repositorio `suite101-api` (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`) y
+`desplegar.yml` las lleva a los dos Workers; un chat nunca las ve.
+
+**Las pruebas contra staging ya no se pisan** (dash101 #16): org por corrida,
+entrada con reintento y una corrida a la vez. El 11-sep tres corridas a la
+vez compartían una org y se borraban entre sí.
+
+---
+
 ## Lo que sigue · fase 3, tercera parte, y fase 4
 
 Google en el login con `api` (el `redirect_uri` de `/auth/google` cae fuera

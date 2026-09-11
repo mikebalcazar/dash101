@@ -36,3 +36,6 @@ __pycache__/
 
 # Lo escribe scripts/redirects.mjs al construir, según el contexto
 public/_redirects
+
+# Tambien el enlace simbolico, no solo la carpeta: node_modules/ con diagonal no lo cubre
+node_modules
