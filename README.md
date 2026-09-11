@@ -26,7 +26,7 @@ Stack: Next.js 15 + Firebase (Firestore + Auth) + Tailwind + Netlify.
 
 2. **Conectar Netlify al repo**:
    - https://app.netlify.com → Add new site → Import from GitHub
-   - Seleccionar `conta-master`
+   - Seleccionar `dash101`
    - Netlify detecta Next.js automático
 
 3. **Agregar env vars en Netlify**:

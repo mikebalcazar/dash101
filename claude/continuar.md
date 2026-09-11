@@ -237,31 +237,80 @@ lados; no es el flujo del negocio.
 
 ## Lo que hace falta de Mike (pendiente)
 
-- **M5** cuenta de servicio de Firebase de sólo lectura → sin ella no hay
-  cuadre ni conteo de partidas desde el runner.
+- **M5 hecho el 11-sep**, aunque no como estaba escrito: sin llave JSON, con
+  Workload Identity Federation. Ver arriba.
 - **M6 en pausa, por decisión de Mike (11-sep):** el PAT viejo **no se revoca
   todavía**, hasta estar seguros de que ninguna aplicación de fuera de la suite
   lo usa. Cómo saberlo sin adivinar: GitHub → Settings → Developer settings →
   Personal access tokens → Fine-grained tokens muestra **«Last used»** de cada
-  uno. Si pasan una o dos semanas sin uso, ya nadie lo ocupa. `CONTEXTO.md` ya **no** trae el valor del PAT
-  (medido: 0 coincidencias de `github_pat_`/`ghp_`; §51-53 dicen que vivía en
-  `/tmp`), pero sí trae una llave web de Firebase (patrón `AIza…`). Esa llave es
-  pública por diseño en un SDK de cliente, pero no tiene por qué vivir en un
-  `.md`: se saca en fase 1 y se deja dicho por qué.
+  uno. Si pasan una o dos semanas sin uso, ya nadie lo ocupa.
 
 ---
 
-## Lo que sigue · fase 1 (nombre y limpieza)
+## Fase 1 · hecha el 11-sep
 
-1. Menciones de `conta-master` → `dash101`: `OPERAR.md` (los siete repos),
-   `descargas/venta/LEEME.md`, `suite101-repos.md`, el muro. En este repo:
-   `README.md:29`, `package.json` (`"name"`), y las URL de `api.github.com` en
-   `OPERAR.md`. **No** se toca `verificar-publicado.yml:30`
-   (`conta-master.netlify.app` es el sitio, y el sitio no se renombra).
-2. Sacar de `CONTEXTO.md` el renglón del PAT y la llave `AIza…`.
-3. `OPERAR.md` ×7 (D7): §1 push en seco, §6 depende de la sesión, §8 patrón
-   `/s101/` y org `demo`, más la sección de formato de encargo que está en
-   `suite101-api/claude/formato-de-encargo.md`. Siete copias idénticas en un
-   solo trabajo.
-4. Comprobar que Netlify siga en verde tras el renombre: el push de este PR es
-   la prueba (estado del commit en `main`).
+**El renombre.** `conta-master` → `dash101` en todo lo que nombra al
+repositorio: `OPERAR.md` de los siete, `README.md`, `package.json` y
+`package-lock.json` (con `npm pkg set` y `npm install --package-lock-only`, no
+a mano), `claude/venta/dash101/datos.md`, `claude/venta/peek101/datos.md`,
+`descargas/venta/LEEME.md` y `descargas/sitio/LEEME.md`.
+
+**Lo que deliberadamente no se tocó, y por qué:**
+
+- `conta-master.netlify.app`. El sitio no se renombra (decisión 5, confirmada
+  por Mike): su URL está autorizada en Firebase Auth y cambiarla rompe el login
+  antes del corte.
+- «Conta Master» como nombre de producto en la interfaz, el `README` y el
+  título de `CONTEXTO.md`. Es cambio de producto y lo decide Mike (arranque §4).
+- `lib/negocio-activo-context.tsx:15`, la llave de `localStorage`
+  `conta-master:negocio-activo-id`. **Cambiarla le borraría a cada usuario el
+  negocio que tiene seleccionado.** Es estado vivo, no un nombre.
+- Los recados del muro y los cierres de fase de `suite101-api/claude/`
+  (`CONTINUAR.md`, `COORDINACION.md`, los dos `ENCARGO-*`). Son el registro de
+  lo que era cierto ese día; el muro se corrige con un recado nuevo, no
+  editando el viejo.
+- `suite101-repos.md`, que el arranque manda actualizar: **no existe en ningún
+  repositorio.** Vive en el conocimiento de un proyecto de claude.ai, como pasó
+  con la arquitectura. Queda pendiente de Mike.
+
+**La limpieza de `CONTEXTO.md`:**
+
+- §3.3 ya no manda sacar un PAT: el arranque es el push en seco. Y queda dicho
+  algo que estos documentos repetían mal: **este archivo nunca guardó el valor
+  del token** (medido: cero coincidencias de `github_pat_` en todo el
+  repositorio). Los arranques que dicen «CONTEXTO.md, con el PAT adentro» están
+  equivocados.
+- §3.4: los seis valores de la configuración web de Firebase **se borraron del
+  archivo**. Son públicos por diseño en un SDK de cliente —lo que protege los
+  datos son las reglas—, pero una llave en un `.md` se copia sin pensar. Viven
+  en las variables de Netlify y en `.env.local.example`.
+- §4 y §10: los comandos ya no clonan ni empujan con un token en la línea.
+- §3.2 gana un renglón medido: **ya existía un Workload Identity Federation en
+  este proyecto** —pool `github-pool`, cuenta `firebase-adminsdk-fbsvc`— que es
+  el que usa `firebase-deploy.yml`. El de M5 es **otro pool, a propósito**:
+  `github`, con la cuenta `lector-firestore`, que sólo lee. Medir no debe
+  necesitar una cuenta de administrador.
+
+**`OPERAR.md`, las siete copias.** Se reescribieron desde una plantilla, así
+que salen idénticas por construcción: §1 (push en seco en vez de PAT), §6 (lo
+que alcanza el proxy depende de la sesión, y se mide), §8 (dos reglas nuevas:
+el prefijo `/s101/` y que nunca se captura `forespot`), §9 (el PAT sale de la
+lista de Mike) y una **§10 nueva** con el formato de encargo, que es lo que
+pedía D7. De paso, los `curl` perdieron el `Authorization: Bearer $T`, que se
+había quedado sin origen al irse el PAT.
+
+**Lo que no se pudo integrar:** el recado de roster101 sobre §6 que el arranque
+manda incluir. Está en `claude/roster101-handoff.md` §7 **del proyecto de
+claude.ai**, no en ningún repositorio, y esta sesión no lo alcanza. Si alguien
+lo tiene, es un párrafo en las siete copias.
+
+---
+
+## Lo que sigue · fase 2
+
+`partidas` pasa a tabla propia en `suite101-api`, con `proyecto_id` obligatorio
+e `item_id` nulo (decisión de Mike del 11-sep). Antes de tocar la API va el
+recado del muro que pide el arranque §10.2: qué cambia, qué versión de contrato
+sale y a quién afecta. Con una sola partida y cero productos en `forespot` el
+riesgo es mínimo, pero la migración se mide igual: `sqlite3` en memoria, filas
+antes y después, `PRAGMA foreign_key_check`, y la misma suma al centavo.

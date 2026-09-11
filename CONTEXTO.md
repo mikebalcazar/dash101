@@ -10,7 +10,8 @@ Este documento contiene toda la información necesaria para retomar el desarroll
 **Conta Master** es una plataforma web de gestión financiera multi-negocio para Mike Balcázar + 2-3 socios/familia. Permite llevar contabilidad simple pero completa de varios negocios/empresas simultáneamente, con proyectos, movimientos, cuentas, OPEX recurrentes y proyección de flujo de caja.
 
 - **Live:** https://conta-master.netlify.app
-- **Repo:** https://github.com/mikebalcazar/conta-master
+- **Repo:** https://github.com/mikebalcazar/dash101 (hasta el 11-sep
+  se llamaba `conta-master`; GitHub redirige el nombre viejo)
 - **Firebase project:** `contamaster-fs`
 - **GitHub user:** `mikebalcazar`
 - **Estilo comunicación con Mike:** español, "caveman style" — muy compacto, denso, sin florituras, oraciones cortas.
@@ -46,26 +47,33 @@ Dos pipelines corren **en paralelo** desde push a `main`:
 - Provider: `projects/869991865343/locations/global/workloadIdentityPools/github-pool/providers/github-provider`
 - Service account: `firebase-adminsdk-fbsvc@contamaster-fs.iam.gserviceaccount.com`
 - ~40-60 seg. Índices tardan 2-5 min extras en construirse dentro de Firestore.
+- **Hay un segundo pool, aparte y a propósito:** `github` →
+  `github/providers/github`, con la cuenta `lector-firestore`
+  (`roles/datastore.viewer`), que usa `cuadre-firestore.yml` para contar y
+  sumar lo que hay en Firestore. Se dejó separado del de arriba para que
+  medir no necesite una cuenta de administrador. Sólo se le presta al
+  repositorio `mikebalcazar/dash101`.
 
-### 3.3 Token GitHub
-- Fine-grained PAT en `/tmp/.gh_token` (container-ephemeral — resetea entre chats)
-- **NO tiene permiso `workflow`** → archivos en `.github/workflows/` los creó Mike manualmente en GitHub web
-- **El valor del token NO se guarda aqui.** Nunca escribir un PAT en este repo:
-  queda en el historial de git para siempre. Mike lo genera en GitHub -> Settings ->
-  Developer settings -> Personal access tokens -> Fine-grained, con acceso solo a
-  `mikebalcazar/conta-master`, permiso `Contents: Read and write`, expiracion corta,
-  y lo pega en el chat al inicio de cada sesion.
+### 3.3 Cómo entra una sesión a GitHub
+- **Ya no hace falta ningún PAT.** Desde el 10-sep la GitHub App de Claude está
+  instalada en `mikebalcazar` con escritura en código, actions y workflows: en
+  una sesión de Claude Code el proxy pone la credencial. Lo primero que hace
+  una sesión es `git push --dry-run`; si pasa, publica sola (`OPERAR.md` §1).
+- **Este archivo nunca guardó el valor del token**, y se comprobó el 11-sep:
+  cero coincidencias de `github_pat_` en todo el repositorio. Los documentos de
+  arranque que dicen «CONTEXTO.md, con el PAT adentro» están equivocados.
+- El PAT viejo **sigue sin revocarse** por decisión de Mike (11-sep), hasta
+  saber si alguna aplicación de fuera de la suite lo usa. Se ve en «Last used»
+  de los fine-grained tokens de GitHub.
 
 ### 3.4 Firebase config web
-```
-apiKey: AIzaSyAlyfXN6W4l4tQ0UcWe7KyjGzKGw0R_TX8
-authDomain: contamaster-fs.firebaseapp.com
-projectId: contamaster-fs
-storageBucket: contamaster-fs.firebasestorage.app
-messagingSenderId: 869991865343
-appId: 1:869991865343:web:8e6f928bafa7d390ce65ca
-```
-Dominio `conta-master.netlify.app` autorizado en Firebase Auth.
+Los seis valores viven **sólo** en las variables `NEXT_PUBLIC_FIREBASE_*` de
+Netlify y en `.env.local.example` como plantilla vacía. Antes estaban escritos
+aquí; se sacaron el 11-sep. Son públicas por diseño en un SDK de cliente —lo
+que protege los datos son las reglas de Firestore, no esconderlas—, pero una
+llave en un `.md` se copia sin pensar, y esa es la costumbre que se quiere
+quitar. El proyecto es `contamaster-fs` y el dominio autorizado en Firebase
+Auth es `conta-master.netlify.app`.
 
 ---
 
@@ -74,7 +82,8 @@ Dominio `conta-master.netlify.app` autorizado en Firebase Auth.
 Mike es 100% hands-off en dev. NO quiere instalar nada local.
 
 **Flujo estándar:**
-1. Claude clona repo con el PAT: `git clone https://x-access-token:${PAT}@github.com/mikebalcazar/conta-master.git`
+1. La sesión de Claude Code ya tiene el repo clonado; comprueba que puede
+   empujar con `git push --dry-run` (`OPERAR.md` §1)
 2. Edita archivos con `str_replace` / `create_file` / `bash cat >`
 3. `npm install && npm run build` para validar
 4. `git add . && git commit -m "..." && git push`
@@ -353,25 +362,22 @@ isOwnerUid(negocioId)  → uid == negocio.owner_uid
 ## 10. Comandos útiles
 
 ```bash
-# Clonar (Claude, container fresh)
-GH_TOKEN=$(cat /tmp/.gh_token)
-git clone "https://x-access-token:${GH_TOKEN}@github.com/mikebalcazar/conta-master.git" /home/claude/repo
-
-# Sync + config
-cd /home/claude/repo
-git remote set-url origin "https://github.com/mikebalcazar/conta-master.git"
-git config user.email "mike@conta-master.local"
-git config user.name "Mike Balcázar"
+# Comprobar que esta sesión puede empujar. Va primero, siempre.
+git push --dry-run origin HEAD:refs/heads/claude/prueba-de-acceso
 
 # Build
 npm install
 npm run build
 
-# Push
+# Un cambio: rama, commit en español, PR y merge squash (OPERAR.md §5)
+git checkout -b claude/lo-que-hace
 git add -A
-git commit -m "feat: ..."
-git push "https://x-access-token:${GH_TOKEN}@github.com/mikebalcazar/conta-master.git" main
+git commit -m "Qué se hizo, por qué y cómo se probó"
+git push -u origin claude/lo-que-hace
 ```
+
+Nada de esto lleva un token en la línea: en Claude Code lo pone el proxy. Si
+algo contesta 401 o 403, es la sesión, no el token (`OPERAR.md` §1).
 
 ---
 
