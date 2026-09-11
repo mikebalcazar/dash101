@@ -30,3 +30,6 @@ next-env.d.ts
 # misc
 .DS_Store
 *.pem
+
+# Bytecode de Python, que deja correr scripts/ en local
+__pycache__/
