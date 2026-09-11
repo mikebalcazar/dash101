@@ -14,6 +14,8 @@ import {
   runTransaction,
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { fuente, noEscribeTodavia } from "./fuente";
+import * as leer from "./api/leer";
 import type { Movimiento, TipoMovimiento, TipoContraparte } from "@/types/schema";
 import { recalcularProyecto } from "./proyectos";
 import { getClienteUid } from "./clientes";
@@ -43,6 +45,7 @@ export async function listMovimientos(
   negocioId: string,
   opts?: { max?: number }
 ): Promise<Movimiento[]> {
+  if (fuente() === 'api') return leer.listMovimientos(negocioId, opts);
   const q = query(
     collection(db, "movimientos"),
     where("negocio_id", "==", negocioId),
@@ -54,6 +57,7 @@ export async function listMovimientos(
 }
 
 export async function listMovimientosByProyecto(proyectoId: string): Promise<Movimiento[]> {
+  if (fuente() === 'api') return leer.listMovimientosByProyecto(proyectoId);
   const q = query(
     collection(db, "movimientos"),
     where("proyecto_id", "==", proyectoId),
@@ -64,12 +68,14 @@ export async function listMovimientosByProyecto(proyectoId: string): Promise<Mov
 }
 
 export async function getMovimiento(id: string): Promise<Movimiento | null> {
+  if (fuente() === 'api') return leer.getMovimiento(id);
   const snap = await getDoc(doc(db, "movimientos", id));
   if (!snap.exists()) return null;
   return { id: snap.id, ...snap.data() } as Movimiento;
 }
 
 export async function createMovimiento(uid: string, data: MovimientoInput): Promise<string> {
+  if (fuente() === 'api') throw noEscribeTodavia('movimientos');
   // Ingreso de un cliente con portal → se denormaliza su uid para que lo pueda leer
   const cliente_uid =
     data.tipo === "ingreso" && data.contraparte_tipo === "cliente" && data.contraparte_id
@@ -176,6 +182,7 @@ export async function createTransferencia(
  * también borra el par.
  */
 export async function deleteMovimiento(id: string): Promise<void> {
+  if (fuente() === 'api') throw noEscribeTodavia('movimientos');
   const snap = await getDoc(doc(db, "movimientos", id));
   if (!snap.exists()) return;
   const m = snap.data() as Movimiento;
@@ -214,6 +221,8 @@ export async function deleteMovimiento(id: string): Promise<void> {
  * (Movs con tipo="transferencia" del formato viejo se ignoran silenciosamente.)
  */
 export async function recalcularCuenta(cuentaId: string): Promise<void> {
+  // Con la API el saldo se suma al leer la cuenta; no hay caché que refrescar.
+  if (fuente() === 'api') return;
   const cuentaRef = doc(db, "cuentas", cuentaId);
 
   const q = query(collection(db, "movimientos"), where("cuenta_id", "==", cuentaId));

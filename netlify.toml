@@ -7,3 +7,14 @@
 
 [build.environment]
   NODE_VERSION = "20"
+
+# La API desde el mismo origen (decisión D1): la cookie `s101` es propia y
+# Safari no la bloquea. Netlify reenvía y pone X-App; el navegador nunca ve el
+# Worker. Sólo se usa cuando la construcción lleva NEXT_PUBLIC_FUENTE=api. En
+# la fase 4 esto mismo lo hace el Worker de dash101 en Cloudflare.
+[[redirects]]
+  from = "/s101/*"
+  to = "https://suite101-api.mike-929.workers.dev/:splat"
+  status = 200
+  force = true
+  headers = { X-App = "dash101" }

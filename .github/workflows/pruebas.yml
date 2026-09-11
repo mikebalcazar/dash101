@@ -1,0 +1,35 @@
+# Lo que un cambio tiene que pasar antes de llegar a main.
+#
+# Tres cosas, en este orden: los tipos, la capa de datos contra la API de
+# STAGING (con la org `demo`, nunca producción) y la construcción de Next.
+# La prueba de la API es la que mide que «cada pantalla, con la API, da las
+# mismas cifras» (arranque §4, fase 3): sin ella un cambio en el adaptador
+# podría dividir mal entre 100 y nadie lo vería hasta ver un saldo raro.
+
+name: Pruebas
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'claude/**'
+      - '*.md'
+  workflow_dispatch:
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Los tipos
+        run: npx tsc --noEmit
+      - name: La lectura desde la API, contra la org demo de staging
+        run: npx vitest run --reporter=verbose
+      - name: Que Next construya
+        run: npm run build

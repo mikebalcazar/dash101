@@ -14,6 +14,7 @@ import {
   signOut,
 } from "firebase/auth";
 import { setAccesoPortal } from "./clientes";
+import { fuente, noEscribeTodavia } from "./fuente";
 import type { Cliente } from "@/types/schema";
 import { propagarClienteUid } from "./proyectos";
 
@@ -59,6 +60,7 @@ export async function activarAccesoPortal(
   email: string,
   pin: string
 ): Promise<{ uid: string; proyectos: number; movimientos: number; reactivado: boolean }> {
+  if (fuente() === 'api') throw noEscribeTodavia('el acceso al portal (va contra POST /clientes/:id/acceso, en la siguiente entrega)');
   const clienteId = cliente.id!;
   const correo = email.trim().toLowerCase();
   if (!/^\S+@\S+\.\S+$/.test(correo)) throw new Error("Correo inválido");
@@ -110,6 +112,7 @@ export async function activarAccesoPortal(
  * uid en el cliente se conservan para poder reactivar sin crear otro usuario.
  */
 export async function desactivarAccesoPortal(cliente: Cliente): Promise<void> {
+  if (fuente() === 'api') throw noEscribeTodavia('el acceso al portal');
   await setAccesoPortal(cliente.id!, {
     uid: cliente.uid ?? null,
     portal_email: cliente.portal_email ?? null,
@@ -120,6 +123,7 @@ export async function desactivarAccesoPortal(cliente: Cliente): Promise<void> {
 
 /** Firebase manda un correo al cliente para poner un PIN nuevo. */
 export async function enviarCambioPin(email: string): Promise<void> {
+  if (fuente() === 'api') throw noEscribeTodavia('el cambio de PIN (en la suite es «olvidé mi PIN»: código al correo y /auth/pin)');
   const auth = getAuth(appSecundaria());
   await sendPasswordResetEmail(auth, email.trim().toLowerCase(), { url: PORTAL_URL });
 }

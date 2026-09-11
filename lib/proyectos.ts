@@ -14,6 +14,8 @@ import {
   runTransaction,
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { fuente, noEscribeTodavia } from "./fuente";
+import * as leer from "./api/leer";
 import type {
   Proyecto,
   PartidaProyecto,
@@ -84,6 +86,7 @@ function calcCompromiso(partidas: { monto_acordado: number }[]): number {
 }
 
 export async function listProyectos(negocioId: string): Promise<Proyecto[]> {
+  if (fuente() === 'api') return leer.listProyectos(negocioId);
   const q = query(
     collection(db, "proyectos"),
     where("negocio_id", "==", negocioId),
@@ -94,12 +97,14 @@ export async function listProyectos(negocioId: string): Promise<Proyecto[]> {
 }
 
 export async function getProyecto(id: string): Promise<Proyecto | null> {
+  if (fuente() === 'api') return leer.getProyecto(id);
   const snap = await getDoc(doc(db, "proyectos", id));
   if (!snap.exists()) return null;
   return { id: snap.id, ...snap.data() } as Proyecto;
 }
 
 export async function createProyecto(uid: string, data: ProyectoInput): Promise<string> {
+  if (fuente() === 'api') throw noEscribeTodavia('proyectos');
   const compromiso = calcCompromiso(data.partidas);
   const partidasFull: PartidaProyecto[] = data.partidas.map((p) => ({
     ...p,
@@ -151,6 +156,7 @@ export async function updateProyecto(
     fecha_fin_estimada?: Date | null;
   }
 ): Promise<void> {
+  if (fuente() === 'api') throw noEscribeTodavia('proyectos');
   const ref = doc(db, "proyectos", id);
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);
@@ -217,6 +223,8 @@ export async function propagarClienteUid(
   clienteUid: string | null,
   negocioId: string
 ): Promise<{ proyectos: number; movimientos: number }> {
+  // Con la API no hay nada que propagar: el portal lee por `clientes.usuario_id`.
+  if (fuente() === 'api') return { proyectos: 0, movimientos: 0 };
   const etiqueta = (t: string, e: unknown) => {
     const err = e as { code?: string; message?: string };
     return new Error(`[${t}] ${err.code ?? ""} ${err.message ?? String(e)}`.trim());
@@ -279,6 +287,8 @@ export async function deleteProyecto(id: string): Promise<void> {
  * Usa transacción para lectura+escritura atómica.
  */
 export async function recalcularProyecto(proyectoId: string): Promise<void> {
+  // Con la API los cachés los recalcula ella después de cada movimiento.
+  if (fuente() === 'api') return;
   const proyectoRef = doc(db, "proyectos", proyectoId);
   const movimientosQ = query(
     collection(db, "movimientos"),

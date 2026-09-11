@@ -13,6 +13,7 @@ const ESTADO_STYLE: Record<string, string> = {
   planeando: "bg-cream text-ink-muted",
   activo: "bg-mint-50 text-mint-900",
   pausado: "bg-sky-50 text-sky-900",
+  finiquito: "bg-cream text-ink-muted",
   cerrado: "bg-mauve-50 text-mauve-900",
 };
 

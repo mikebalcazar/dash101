@@ -14,6 +14,7 @@ import {
   arrayUnion,
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { fuente, noEscribeTodavia } from "./fuente";
 import type {
   Invitacion,
   RolMiembro,
@@ -39,6 +40,7 @@ export interface InvitacionInput {
 const EXPIRA_DIAS = 7;
 
 export async function createInvitacion(data: InvitacionInput): Promise<string> {
+  if (fuente() === 'api') throw noEscribeTodavia('invitaciones: en la suite los miembros los da de alta la API por /admin/orgs/:o/miembros');
   const expira = new Date();
   expira.setDate(expira.getDate() + EXPIRA_DIAS);
 
@@ -63,6 +65,8 @@ export async function createInvitacion(data: InvitacionInput): Promise<string> {
 }
 
 export async function listInvitacionesByNegocio(negocioId: string): Promise<Invitacion[]> {
+  // No existen en la suite (arranque §7: el importador no las trae). Vacío, no inventado.
+  if (fuente() === 'api') return [];
   const q = query(
     collection(db, "invitaciones"),
     where("negocio_id", "==", negocioId),
@@ -73,12 +77,14 @@ export async function listInvitacionesByNegocio(negocioId: string): Promise<Invi
 }
 
 export async function getInvitacion(id: string): Promise<Invitacion | null> {
+  if (fuente() === 'api') return null;
   const snap = await getDoc(doc(db, "invitaciones", id));
   if (!snap.exists()) return null;
   return { id: snap.id, ...snap.data() } as Invitacion;
 }
 
 export async function revocarInvitacion(id: string): Promise<void> {
+  if (fuente() === 'api') throw noEscribeTodavia('invitaciones');
   await updateDoc(doc(db, "invitaciones", id), { estado: "revocada" });
 }
 
@@ -95,6 +101,7 @@ export async function aceptarInvitacion(
   uid: string,
   userEmail: string
 ): Promise<{ negocio_id: string; negocio_nombre: string }> {
+  if (fuente() === 'api') throw noEscribeTodavia('invitaciones');
   const invRef = doc(db, "invitaciones", invitacionId);
   const userRef = doc(db, "usuarios", uid);
 
@@ -161,6 +168,7 @@ export async function updateMembership(
   negocioId: string,
   patch: Partial<MembershipInfo>
 ): Promise<void> {
+  if (fuente() === 'api') throw noEscribeTodavia('la membresía (en la suite vive en el D1, por empresa)');
   const userRef = doc(db, "usuarios", uid);
   const snap = await getDoc(userRef);
   if (!snap.exists()) throw new Error("Usuario no encontrado");

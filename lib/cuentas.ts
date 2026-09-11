@@ -12,6 +12,8 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { fuente, noEscribeTodavia } from "./fuente";
+import * as leer from "./api/leer";
 import type { Cuenta, TipoCuenta, Moneda } from "@/types/schema";
 
 export interface CuentaInput {
@@ -25,6 +27,7 @@ export interface CuentaInput {
 }
 
 export async function listCuentas(negocioId: string): Promise<Cuenta[]> {
+  if (fuente() === 'api') return leer.listCuentas(negocioId);
   const q = query(
     collection(db, "cuentas"),
     where("negocio_id", "==", negocioId),
@@ -35,12 +38,14 @@ export async function listCuentas(negocioId: string): Promise<Cuenta[]> {
 }
 
 export async function getCuenta(id: string): Promise<Cuenta | null> {
+  if (fuente() === 'api') return leer.getCuenta(id);
   const snap = await getDoc(doc(db, "cuentas", id));
   if (!snap.exists()) return null;
   return { id: snap.id, ...snap.data() } as Cuenta;
 }
 
 export async function createCuenta(uid: string, data: CuentaInput): Promise<string> {
+  if (fuente() === 'api') throw noEscribeTodavia('cuentas');
   const payload = {
     nombre: data.nombre,
     tipo: data.tipo,
@@ -61,9 +66,11 @@ export async function updateCuenta(
   id: string,
   data: Partial<Omit<CuentaInput, "negocio_id" | "saldo_inicial">>
 ): Promise<void> {
+  if (fuente() === 'api') throw noEscribeTodavia('cuentas');
   await updateDoc(doc(db, "cuentas", id), data);
 }
 
 export async function deleteCuenta(id: string): Promise<void> {
+  if (fuente() === 'api') throw noEscribeTodavia('cuentas');
   await deleteDoc(doc(db, "cuentas", id));
 }

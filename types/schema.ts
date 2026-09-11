@@ -4,10 +4,12 @@ export type Moneda = "MXN" | "USD";
 export type RolMiembro = "owner" | "socio" | "viewer";
 export type ScopeMiembro = "all" | "proyectos";
 export type TipoCuenta = "banco" | "caja" | "credito" | "otro";
-export type EstadoProyecto = "planeando" | "activo" | "pausado" | "cerrado";
+/** `finiquito` lo pone la API sola cuando todos los ítems vendidos llegan a la etapa 7. */
+export type EstadoProyecto = "planeando" | "activo" | "pausado" | "finiquito" | "cerrado";
 export type EstadoPartida = "pendiente" | "parcial" | "pagado";
 export type TipoMovimiento = "ingreso" | "egreso";
-export type TipoContraparte = "cliente" | "proveedor" | "cuenta" | "opex" | "ajuste";
+/** `personal` y `otro` son de la suite; `cuenta`, `opex` y `ajuste` son de Firestore (la API los importa como `otro`). */
+export type TipoContraparte = "cliente" | "proveedor" | "cuenta" | "opex" | "ajuste" | "personal" | "otro";
 export type EstadoInvitacion = "pendiente" | "aceptada" | "revocada" | "expirada";
 
 export type FrecuenciaOpex = "semanal" | "mensual" | "anual";
@@ -229,6 +231,7 @@ export const ESTADO_PROYECTO_LABELS: Record<EstadoProyecto, string> = {
   planeando: "Planeando",
   activo: "Activo",
   pausado: "Pausado",
+  finiquito: "Finiquito",
   cerrado: "Cerrado",
 };
 
