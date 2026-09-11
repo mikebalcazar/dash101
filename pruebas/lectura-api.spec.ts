@@ -12,7 +12,7 @@
 
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Timestamp } from "firebase/firestore";
-import { entrarConCodigo, pedirCodigo, pedir, yo } from "@/lib/api/cliente";
+import { entrarDePrueba, pedir, yo } from "@/lib/api/cliente";
 import { fuente, org } from "@/lib/fuente";
 import { listNegocios, getNegocio } from "@/lib/negocios";
 import { listCuentas } from "@/lib/cuentas";
@@ -36,9 +36,7 @@ beforeAll(async () => {
   // La guarda: esto jamás corre contra producción.
   const salud = await pedir<{ entorno: string; contrato: string }>("/salud");
   expect(salud.entorno).toBe("staging");
-  const c = await pedirCodigo(CORREO);
-  expect(c.codigo_prueba).toMatch(/^\d{6}$/);
-  const u = await entrarConCodigo(CORREO, c.codigo_prueba!);
+  const u = await entrarDePrueba(CORREO);
   uid = u.id;
 });
 
