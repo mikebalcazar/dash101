@@ -114,6 +114,20 @@ export async function entrarDePrueba(correo: string, intentos = 4): Promise<Yo['
   throw ultimo;
 }
 
+/* ─────────────── Google, detrás del proxy ───────────────
+ * El navegador va a /s101/auth/google?volver_a=<esta app>/login; Google
+ * devuelve al Worker, el Worker abre la sesión y regresa a la app con
+ * ?entrada=<boleto>; la app lo canjea aquí y la cookie queda en su origen. */
+
+export function urlGoogle(volverA: string): string {
+  return `${apiBase()}/auth/google?volver_a=${encodeURIComponent(volverA)}`;
+}
+
+/** Canjea el boleto de entrada por la cookie de sesión. Un solo uso. */
+export async function canjear(entrada: string): Promise<void> {
+  await pedir<{ entro: boolean }>('/auth/canje', { method: 'POST', body: { entrada } });
+}
+
 export async function entrarConCodigo(correo: string, codigo: string): Promise<Yo['usuario']> {
   const r = await pedir<{ usuario: Yo['usuario'] }>('/auth/entrar', { method: 'POST', body: { correo, codigo } });
   return r.usuario;
