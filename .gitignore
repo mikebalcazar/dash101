@@ -33,3 +33,6 @@ next-env.d.ts
 
 # Bytecode de Python, que deja correr scripts/ en local
 __pycache__/
+
+# Lo escribe scripts/redirects.mjs al construir, según el contexto
+public/_redirects
