@@ -3,7 +3,9 @@
 
 Es el lado viejo del cuadre: las mismas cifras que `sumarDinero()` y
 `contarFilas()` de `suite101-api/src/org-db.ts` sacan del OrgDB, pero leídas de
-Firestore. Mientras los dos lados no den el mismo número al centavo, el corte
+Firestore. Las llaves del dinero van con los nombres del contrato 0.3.0
+(`partidas.monto_acordado`, no `proyectos.partidas.monto_acordado`), para que
+las dos columnas se puedan poner una junto a la otra sin traducir. Mientras los dos lados no den el mismo número al centavo, el corte
 (fase 5) no se hace.
 
 Tres cosas que conviene tener presentes:
@@ -65,6 +67,12 @@ CACHES = {
     "proyectos.disponible",
     "proyectos.margen_proyectado",
     "proyectos.productos.pagado",
+    # Desde el contrato 0.3.0 (11-sep) la partida es tabla propia en la API:
+    # lo pagado a cada proveedor y el compromiso del proyecto son cachés que
+    # recalcula desde los egresos. Aquí se llaman como en Firestore; en la API
+    # son `partidas.monto_pagado` y `proyectos.compromiso`.
+    "partidas.monto_pagado",
+    "proyectos.compromiso_total",
 }
 
 # Cómo se reconoce que una partida (o un producto) apunta a un ítem. Se buscan
@@ -153,7 +161,7 @@ def main() -> int:
                         partidas_con_ref += 1
                     for campo in ("monto_acordado", "monto_pagado"):
                         c, redondeo, malo = centavos(p.get(campo))
-                        clave = f"proyectos.partidas.{campo}"
+                        clave = f"partidas.{campo}"
                         dinero[clave] = dinero.get(clave, 0) + c
                         if redondeo:
                             redondeos[clave] += 1
