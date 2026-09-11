@@ -306,11 +306,65 @@ lo tiene, es un párrafo en las siete copias.
 
 ---
 
-## Lo que sigue · fase 2
+## Fase 2 · hecha el 11-sep
 
-`partidas` pasa a tabla propia en `suite101-api`, con `proyecto_id` obligatorio
-e `item_id` nulo (decisión de Mike del 11-sep). Antes de tocar la API va el
-recado del muro que pide el arranque §10.2: qué cambia, qué versión de contrato
-sale y a quién afecta. Con una sola partida y cero productos en `forespot` el
-riesgo es mínimo, pero la migración se mide igual: `sqlite3` en memoria, filas
-antes y después, `PRAGMA foreign_key_check`, y la misma suma al centavo.
+**`partidas` ya es tabla propia en `suite101-api`** (PR #32, squash `03a0830`;
+contrato **0.3.0**). Recado previo en el muro:
+`2026-09-11-2230-jr-antes-de-tocar-la-api-partidas.md`.
+
+- `partidas(id, proyecto_id NOT NULL, item_id NULL, proveedor_id,
+  proveedor_nombre, concepto, monto_acordado, monto_pagado, estado, …)`, en
+  centavos. `proyecto_id` obligatorio e `item_id` nulo, como decidió Mike.
+- La migración `0002` la aplica el Durable Object al despertar: mueve cada
+  partida del JSON a un renglón con id `<proyecto>-p<n>`, deja al proyecto el
+  caché **`compromiso`** (Σ acordado; es el `compromiso_total` de aquí) y quita
+  la columna vieja. **El SQLite del DO aceptó `DROP COLUMN`**: el riesgo que
+  dejé dicho no se dio.
+- `monto_pagado` y `estado` de la partida son **cachés** que la API recalcula
+  desde los egresos del proyecto con ese proveedor como contraparte — la
+  misma regla de `lib/proyectos.ts:recalcularProyecto` de esta app, así que
+  las cifras van a coincidir cuando dash101 lea de la API.
+- dash101 es el único que escribe partidas, por el CRUD genérico
+  (`POST/PATCH/DELETE /orgs/:o/partidas`) con `proyecto_id`, `item_id`,
+  `proveedor_id`, `proveedor_nombre`, `concepto`, `monto_acordado`. Mandar
+  `partidas` dentro del proyecto contesta `403 campo_no_permitido`. Quien no
+  tiene `ve_costos` no lee `/partidas` ni ve `compromiso` ni `pagado_prov`.
+- El importador produce las filas con el mismo id determinista, así que
+  reimportar actualiza en vez de duplicar. El cuadre nombra
+  `partidas.monto_acordado`; `partidas.monto_pagado` y `proyectos.compromiso`
+  van entre los recalculados. `scripts/cuadre-firestore.py` ya habla esos
+  nombres (commit `acc09c2` de este PR).
+
+**Cómo se midió**, en este orden:
+
+1. `suite101-api/pruebas/migracion-0002.py`: sqlite3 en memoria, `0001`
+   aplicada, datos que imitan a `forespot`. Mismas filas antes y después en
+   seis tablas; Σ `monto_acordado` 10,350,049 → 10,350,049 y Σ `monto_pagado`
+   250,051 → 250,051 al centavo; `foreign_key_check` e `integrity_check`
+   limpios; aplicarla dos veces truena. Corre en el corredor antes de publicar.
+2. vitest dentro de workerd con el DO de verdad: **94 en verde** (85 + 9
+   nuevas), incluida la que prueba que el DO despierta en versión 2.
+3. `desplegar.yml`: el primer run (`34648868547`) salió **66/67** por una
+   expectativa vieja del humo (pedía versión 1). Se corrigió en #33
+   (`d0f7d2b`) y el run `34649196747` dio **67/67**. Producción y staging
+   contestan `version 0.3.0 · contrato 0.3.0` en `/salud`, medido desde esta
+   sesión.
+
+**No verificado:** que el OrgDB de `forespot` ya haya corrido `0002`. Lo hace
+en la primera petición que reciba después del despliegue, y desde aquí no hay
+sesión para dársela. Se comprueba solo cuando dash101 o Mike entren.
+
+---
+
+## Lo que sigue · fase 3
+
+Que dash101 lea y escriba en la API: una sola capa de datos con la misma
+interfaz que hoy usa para Firestore y un interruptor `FUENTE = firestore | api`;
+primero lectura, comparando cada pantalla contra el cuadre; luego escritura.
+Sesión por `/s101/auth/…` (D1) — hoy se entra con Google, y detrás del proxy
+`/s101/` el `redirect_uri` de `/auth/google` cae fuera del prefijo: se resuelve
+en la API o se queda con correo, código y PIN. La pantalla «abrir portal»
+contra `/clientes/:id/acceso`. Y sembrar la org `demo` en staging (D6):
+negocio, cuenta, «Familia Ramírez», «Cocina Ramírez» con ítems en varias
+etapas, un par de ingresos y egresos, una partida, y un acceso de cliente para
+peek101.
