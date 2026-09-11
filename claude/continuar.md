@@ -21,6 +21,14 @@ no se pudo medir desde aquí y se dice cómo se mide.
 | Muro | Leído completo. Recado de arranque: `suite101-api/muro/2026-09-11-0415-jr-dash101-fase-0-medida.md` |
 | Copia del arranque | `claude/arranque-coordinador.md`, sha256 `ea22b1456ad8956a9c128693245d1f61c3445ee609b0213ca38a474e94be3ffc` (idéntico al de Drive `coordinacion/`) |
 
+**Regla de cierre, pedida por Mike el 11-sep:** cada entrega que se fusiona
+(no cada sesión: cada PR que entra a `main`) deja **un post en `wall101`**
+(`posts/AAAA-MM-DD-HHMM-jr.md`, `python3 armar.py`, commit a `main`), en
+lenguaje de a pie y contando qué cambia para el taller y qué decisión queda
+con Mike. El muro es para los chats; el wall es para Mike, y es donde sigue
+el proceso antes de decidir los pasos siguientes. El 11-sep se pasó por alto
+hasta la noche: cinco entregas sin post. No se repite.
+
 ---
 
 ## Fase 0 · las cuatro mediciones
