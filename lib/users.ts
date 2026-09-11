@@ -12,6 +12,8 @@ import {
 } from "firebase/firestore";
 import type { User } from "firebase/auth";
 import { db } from "./firebase";
+import { fuente } from "./fuente";
+import * as leer from "./api/leer";
 import type { Usuario, MembershipInfo } from "@/types/schema";
 
 /**
@@ -20,6 +22,12 @@ import type { Usuario, MembershipInfo } from "@/types/schema";
  * los agrega (migración perezosa para usuarios anteriores al sistema de roles).
  */
 export async function ensureUserDoc(user: User): Promise<Usuario> {
+  if (fuente() === 'api') {
+    // En la suite el usuario ya existe: lo creó la API al entrar. Se lee, no se asegura.
+    const u = await leer.getUserDoc();
+    if (!u) throw new Error('No hay sesión en la API.');
+    return u;
+  }
   const ref = doc(db, "usuarios", user.uid);
   const snap = await getDoc(ref);
 
@@ -88,6 +96,9 @@ export async function ensureUserDoc(user: User): Promise<Usuario> {
 }
 
 export async function getUserDoc(uid: string): Promise<Usuario | null> {
+  // La API sólo conoce al usuario en sesión: `uid` se acepta por la firma y
+  // se ignora, porque otro usuario no se puede leer desde una app.
+  if (fuente() === 'api') return leer.getUserDoc();
   const snap = await getDoc(doc(db, "usuarios", uid));
   if (!snap.exists()) return null;
   return snap.data() as Usuario;

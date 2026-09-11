@@ -13,6 +13,8 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { fuente, noEscribeTodavia } from "./fuente";
+import * as leer from "./api/leer";
 import type { Opex, TipoOpex, FrecuenciaOpex, Moneda } from "@/types/schema";
 
 export interface OpexInput {
@@ -34,6 +36,7 @@ export interface OpexInput {
 }
 
 export async function listOpex(negocioId: string): Promise<Opex[]> {
+  if (fuente() === 'api') return leer.listOpex(negocioId);
   const q = query(
     collection(db, "opex"),
     where("negocio_id", "==", negocioId),
@@ -44,12 +47,14 @@ export async function listOpex(negocioId: string): Promise<Opex[]> {
 }
 
 export async function getOpex(id: string): Promise<Opex | null> {
+  if (fuente() === 'api') return leer.getOpex(id);
   const snap = await getDoc(doc(db, "opex", id));
   if (!snap.exists()) return null;
   return { id: snap.id, ...snap.data() } as Opex;
 }
 
 export async function createOpex(uid: string, data: OpexInput): Promise<string> {
+  if (fuente() === 'api') throw noEscribeTodavia('opex');
   const payload = {
     nombre: data.nombre,
     tipo: data.tipo,
@@ -77,6 +82,7 @@ export async function updateOpex(
   id: string,
   data: Partial<Omit<OpexInput, "negocio_id">>
 ): Promise<void> {
+  if (fuente() === 'api') throw noEscribeTodavia('opex');
   const patch: Record<string, unknown> = {};
   if (data.nombre !== undefined) patch.nombre = data.nombre;
   if (data.tipo !== undefined) patch.tipo = data.tipo;
@@ -98,6 +104,7 @@ export async function updateOpex(
 }
 
 export async function deleteOpex(id: string): Promise<void> {
+  if (fuente() === 'api') throw noEscribeTodavia('opex');
   await deleteDoc(doc(db, "opex", id));
 }
 

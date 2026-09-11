@@ -12,6 +12,8 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { fuente, noEscribeTodavia } from "./fuente";
+import * as leer from "./api/leer";
 import type { Cliente } from "@/types/schema";
 
 export interface ClienteInput {
@@ -24,6 +26,7 @@ export interface ClienteInput {
 }
 
 export async function listClientes(negocioId: string): Promise<Cliente[]> {
+  if (fuente() === 'api') return leer.listClientes(negocioId);
   const q = query(
     collection(db, "clientes"),
     where("negocio_id", "==", negocioId),
@@ -34,12 +37,14 @@ export async function listClientes(negocioId: string): Promise<Cliente[]> {
 }
 
 export async function getCliente(id: string): Promise<Cliente | null> {
+  if (fuente() === 'api') return leer.getCliente(id);
   const snap = await getDoc(doc(db, "clientes", id));
   if (!snap.exists()) return null;
   return { id: snap.id, ...snap.data() } as Cliente;
 }
 
 export async function createCliente(uid: string, data: ClienteInput): Promise<string> {
+  if (fuente() === 'api') throw noEscribeTodavia('clientes');
   const payload = {
     nombre: data.nombre,
     rfc: data.rfc ?? "",
@@ -58,15 +63,18 @@ export async function updateCliente(
   id: string,
   data: Partial<Omit<ClienteInput, "negocio_id">>
 ): Promise<void> {
+  if (fuente() === 'api') throw noEscribeTodavia('clientes');
   await updateDoc(doc(db, "clientes", id), data);
 }
 
 export async function deleteCliente(id: string): Promise<void> {
+  if (fuente() === 'api') throw noEscribeTodavia('clientes');
   await deleteDoc(doc(db, "clientes", id));
 }
 
 /** uid del portal del cliente (null si no tiene acceso). */
 export async function getClienteUid(clienteId: string): Promise<string | null> {
+  if (fuente() === 'api') return leer.getClienteUid(clienteId);
   if (!clienteId) return null;
   const snap = await getDoc(doc(db, "clientes", clienteId));
   if (!snap.exists()) return null;
@@ -78,5 +86,6 @@ export async function setAccesoPortal(
   clienteId: string,
   data: { uid: string | null; portal_email: string | null; portal_activo: boolean }
 ): Promise<void> {
+  if (fuente() === 'api') throw noEscribeTodavia('el acceso al portal (va contra POST /clientes/:id/acceso, en la siguiente entrega)');
   await updateDoc(doc(db, "clientes", clienteId), data);
 }

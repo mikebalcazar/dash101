@@ -356,15 +356,53 @@ sesión para dársela. Se comprueba solo cuando dash101 o Mike entren.
 
 ---
 
-## Lo que sigue · fase 3
+## Fase 3 · lectura y sesión, hecha el 11-sep
 
-Que dash101 lea y escriba en la API: una sola capa de datos con la misma
-interfaz que hoy usa para Firestore y un interruptor `FUENTE = firestore | api`;
-primero lectura, comparando cada pantalla contra el cuadre; luego escritura.
-Sesión por `/s101/auth/…` (D1) — hoy se entra con Google, y detrás del proxy
-`/s101/` el `redirect_uri` de `/auth/google` cae fuera del prefijo: se resuelve
-en la API o se queda con correo, código y PIN. La pantalla «abrir portal»
-contra `/clientes/:id/acceso`. Y sembrar la org `demo` en staging (D6):
-negocio, cuenta, «Familia Ramírez», «Cocina Ramírez» con ítems en varias
-etapas, un par de ingresos y egresos, una partida, y un acceso de cliente para
-peek101.
+**dash101 ya lee desde `suite101-api`** cuando `NEXT_PUBLIC_FUENTE=api`
+(PR #12). Por omisión sigue en Firestore: en producción no cambia nada hasta
+que se fije la variable en Netlify. Semáforo previo: `eea16fb`.
+
+- `lib/fuente.ts` decide la fuente; `lib/api/cliente.ts` habla con la API
+  (`/s101` en el navegador, `NEXT_PUBLIC_API_ORIGEN` en node, cookie `s101`,
+  `X-App: dash101`); `lib/api/adaptar.ts` convierte centavos → pesos y
+  ISO → `Timestamp`, y arma los cachés que Firestore guardaba (`saldo_actual`,
+  `disponible`, `margen_proyectado`, `productos[].pagado`, `cliente_nombre`…)
+  con un join en memoria; `lib/api/leer.ts` tiene las mismas firmas que los
+  módulos de `lib/`. Las pantallas no se tocaron.
+- Con `api`, toda escritura truena con «todavía no se escribe …» — nada cae a
+  Firestore por debajo. Invitaciones: lista vacía, pues la API no las tiene.
+- Sesión: `lib/auth-context.tsx` sale de `/s101/yo`; `app/login` pide código
+  (en staging la API lo devuelve como `codigo_prueba`) o PIN. Con `firestore`
+  sigue Google, igual que siempre.
+- Proxy `/s101/*`: `netlify.toml` a producción con `X-App: dash101` (status
+  200, force) y `next.config.ts` a staging en `next dev`.
+- Esquema: `finiquito` entre los estados de proyecto y `personal` / `otro`
+  entre las contrapartes, porque la API los tiene. El distintivo de
+  `finiquito` usa `bg-cream text-ink-muted`: no hay paleta «sage».
+- Roles: la API dice `owner|admin|socio|staff`; la app conoce
+  `owner|socio|viewer`. `owner` y `admin` → `owner`, `staff` → `viewer`. El
+  superadmin se ve como owner de todos los negocios de la org.
+
+**Cómo se midió:** `pruebas/lectura-api.spec.ts` (vitest, node) contra la org
+`demo` de staging, con guarda en `/salud`. Banco 365,000 y Caja −3,500;
+Cocina Ramírez 262,000 / 140,000 / 33,500 / 50,500 con `disponible` y `margen`
+por las fórmulas de Firestore; partidas parcial y pagado con lo que calculó
+la API; ítems con lo pagado por ítem (120,000 y 20,000) y Σ montos =
+precio_venta; cuatro movimientos con nombres y ordenados; opex con estimado;
+escribir truena. **15 de 15**, `tsc` limpio, `next build` completo. El mismo
+trío corre en `.github/workflows/pruebas.yml` en cada PR.
+
+**No verificado:** el login por código en un navegador de verdad (solo se
+midió en node), y la app completa con `FUENTE=api` en Netlify — para eso
+hay que fijar las tres variables en el sitio, cosa que decide Mike.
+
+---
+
+## Lo que sigue · fase 3, segunda mitad
+
+La pantalla «abrir portal» contra `POST /orgs/:o/clientes/:id/acceso`; luego
+escritura por la API (los `create*/update*/delete*` de `lib/`, uno por módulo,
+con el mismo interruptor); Google en el login con `api` (el `redirect_uri` de
+`/auth/google` cae fuera de `/s101/`: se resuelve en la API o se queda con
+correo, código y PIN). Después, fase 4: dash101 como Worker (OpenNext o
+`output: 'export'`) y fase 5, el corte.
