@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Nombre** | dash101 (repositorio todavía `conta-master`) |
+| **Nombre** | dash101 |
 | **Versión** | 0.1.0 |
 | **Estado** | En producción, uso interno. Tres usuarios reales |
 | **URL** | https://conta-master.netlify.app |
 | **Portal del cliente** | https://cuenta-taller101.netlify.app |
 | **Stack** | Next.js 15 · React 19 · Tailwind · Firebase (Firestore + Auth) · Recharts · Netlify |
-| **Repositorio** | github.com/mikebalcazar/conta-master (privado) |
+| **Repositorio** | github.com/mikebalcazar/dash101 (privado) |
 
 ## Lo que conviene saber antes de enseñarlo
 

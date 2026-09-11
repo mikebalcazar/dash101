@@ -7,7 +7,7 @@
 | **Estado** | En producción con clientes de prueba |
 | **URL** | https://cuenta-taller101.netlify.app |
 | **Stack** | Un solo `index.html` estático · Firebase (Firestore + Auth) por CDN · Netlify, sin compilación |
-| **Repositorio** | github.com/mikebalcazar/conta-master, carpeta `portal/` (privado) |
+| **Repositorio** | github.com/mikebalcazar/dash101, carpeta `portal/` (privado) |
 
 ## Lo que conviene saber antes de enseñarlo
 
