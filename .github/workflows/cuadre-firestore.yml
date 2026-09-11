@@ -1,0 +1,83 @@
+# El cuadre del lado viejo: cuenta y suma lo que hay en Firestore hoy.
+#
+# Es lo que la fase 0 no pudo medir. El reporte de cuadre de la API
+# (`GET /admin/importar`) pide una sesión de superadmin y depende del navegador
+# de Mike; esto lee Firestore desde el corredor, sin que nadie abra nada.
+#
+# Cómo entra sin llaves (M5, 11-sep): el corredor le enseña a Google su propio
+# token de GitHub y Google le presta por una hora la identidad de la cuenta
+# `lector-firestore`, que sólo tiene `roles/datastore.viewer`. Se llama Workload
+# Identity Federation. **No hay ningún JSON que guardar ni que revocar**, que es
+# justo lo que la política `iam.disableServiceAccountKeyCreation` de la
+# organización impide crear.
+#
+# Los dos valores de abajo NO son secretos: son nombres públicos. El permiso no
+# está en ellos, sino en la regla que quedó del lado de Google, que sólo deja
+# pasar al repositorio `mikebalcazar/dash101`. Por eso van aquí a la vista y no
+# en `secrets`: así se lee de un golpe contra qué proyecto se está midiendo.
+#
+# Se dispara a mano y nunca solo: lee datos reales de clientes reales, y una
+# medición de producción se pide cuando se necesita, no en cada empuje.
+
+name: Cuadre de Firestore
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write      # para dejar los números como comentario del commit
+  id-token: write      # para que Google pueda comprobar quién es el corredor
+
+concurrency: { group: cuadre-firestore, cancel-in-progress: false }
+
+env:
+  GCP_WIF_PROVIDER: projects/869991865343/locations/global/workloadIdentityPools/github/providers/github
+  GCP_SA_LECTURA: lector-firestore@contamaster-fs.iam.gserviceaccount.com
+  GCP_PROYECTO: contamaster-fs
+
+jobs:
+  cuadrar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Entrar a Google con el token del corredor
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.GCP_PROYECTO }}
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
+          service_account: ${{ env.GCP_SA_LECTURA }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar el cliente de Firestore
+        run: pip install --quiet 'google-cloud-firestore==2.*'
+
+      - name: Medir
+        env:
+          GOOGLE_CLOUD_PROJECT: ${{ env.GCP_PROYECTO }}
+        run: |
+          set -o pipefail
+          python scripts/cuadre-firestore.py 2>&1 | tee /tmp/cuadre.txt
+
+      # El canal de vuelta. El chat no alcanza la descarga de logs de Actions,
+      # así que lo único que ve de aquí es este comentario (OPERAR §6).
+      - name: Dejar los números en el commit
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -u
+          [ -f /tmp/cuadre.txt ] || echo "El guion no llegó a escribir nada." > /tmp/cuadre.txt
+          jq -Rs '{body: ("**Cuadre de Firestore**\n\n```\n" + .[-60000:] + "\n```")}' \
+            /tmp/cuadre.txt > /tmp/comentario.json
+          curl -sS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/commits/$SHA/comments" \
+            -d @/tmp/comentario.json -o /tmp/respuesta.json -w 'comentario: %{http_code}\n'
+          head -c 300 /tmp/respuesta.json || true
