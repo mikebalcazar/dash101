@@ -10,6 +10,51 @@ no se pudo medir desde aquí y se dice cómo se mide.
 
 ---
 
+# 12-sep-2026 · Playwright contra staging encontró que los dos Workers se estrellaban en el navegador
+
+Lo pidió el chat de dash101 (muro, 22:45) y Mike lo eligió por botones. La
+primera corrida de `pruebas/navegador.spec.mjs` lo encontró de inmediato:
+
+**`dash101-staging` Y `dash101` en producción morían al cargar `/login`:**
+«Application error: a client-side exception», por `FirebaseError:
+auth/invalid-api-key`. `lib/firebase.ts` inicializaba Firebase al cargar
+aunque `FUENTE=api`, y las construcciones del Worker no llevan
+`NEXT_PUBLIC_FIREBASE_*` (no tienen por qué). **Nadie lo había visto porque el
+corredor medía HTML y JSON, no clics** — la fase 4 pasó 17/17 y 13/13 con las
+dos apps inservibles en un navegador. La gente sigue en Netlify, que sí tiene
+las llaves, así que nadie se lastimó; pero el Worker al que el corte iba a
+mandar a la gente no servía.
+
+Arreglo: `lib/firebase.ts` sólo inicializa Firebase si `fuente() !== 'api'`.
+Netlify construye sin `NEXT_PUBLIC_FUENTE`, o sea en Firestore, y ahí no cambia
+nada.
+
+Lo medido, 5 de 5 contra una construcción local con el arreglo (y desde el
+corredor contra staging en cada publicación, antes de construir producción):
+
+- entra por el propio Worker como `prueba.admin@ejemplo.mx` (admin de `demo`,
+  creado en la master de staging para esto: conciliar exige owner o admin) y
+  la sesión aguanta seis pantallas, comprobada con `/yo` en cada una;
+- el dinero se lee de la API y se calcula como la app: Banco Demo 36 500 000
+  centavos → «$365,000» en el tablero, «$365,000.00» en la conciliación, y
+  nunca «$36,500,000»;
+- la conciliación de punta a punta en un negocio aparte, «Pruebas de
+  navegador», para no mover Taller Demo (de ahí salen las capturas): la que
+  cuadra no deja ajuste; con $800.00 de menos deja exactamente un egreso de
+  80 000 centavos y el saldo termina igual al real;
+- a 390 × 844, cero barrido horizontal y cero errores de JavaScript;
+- un código equivocado no entra.
+
+Dos límites que la prueba respeta: la API no reenvía un código al mismo correo
+antes de 45 s (la primera prueba entra y las demás comparten la sesión), y el
+Chromium de la sesión del chat no hace HTTPS (localmente se corre contra
+`pruebas/relevo.mjs` o contra `next start`; el corredor sí sale solo).
+
+Lo que NO está medido aquí: las capturas de la demo para el escaparate. Mismo
+problema (navegador con internet) y misma solución (un flujo). Pendiente.
+
+---
+
 ## §0 del arranque
 
 | Paso | Resultado |

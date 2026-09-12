@@ -178,6 +178,32 @@ jobs:
         if: steps.medir_staging.outcome == 'failure'
         run: exit 1
 
+      # ── el navegador, contra el staging que se acaba de publicar ──────────
+      # Hasta el 12-sep el corredor medía HTML y JSON, no clics. Con eso los
+      # dos Workers pasaron verdes mientras el login se estrellaba en el
+      # navegador (Firebase inicializado sin llave: «auth/invalid-api-key»).
+      # Esto entra por el propio Worker como admin de `demo`, cambia de
+      # pantalla, comprueba los centavos, concilia de punta a punta en un
+      # negocio de pruebas aparte y revisa el celular. Si algo de eso falla,
+      # producción no se construye.
+      - name: Traer el navegador
+        run: npx playwright install chromium --with-deps
+      - name: Con un navegador, contra staging
+        id: navegador
+        continue-on-error: true
+        env:
+          URL_DASH: ${{ steps.staging.outputs.url }}
+        run: |
+          set -uo pipefail
+          node --test pruebas/navegador.spec.mjs 2>&1 | tee /tmp/navegador.txt
+      - name: Pegar lo del navegador a la medición
+        if: always()
+        run: |
+          { echo; echo "== Navegador contra staging =="; cat /tmp/navegador.txt 2>/dev/null || echo "(no corrió)"; } >> /tmp/medido-staging.txt
+      - name: Que el navegador mande
+        if: steps.navegador.outcome != 'success'
+        run: exit 1
+
       # ── producción ───────────────────────────────────────────────────────
       # Sólo si staging salió bien (los pasos van en orden y sin
       # `continue-on-error`) y sólo si Mike ya dijo qué empresa sirve.
