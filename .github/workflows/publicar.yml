@@ -111,6 +111,8 @@ jobs:
           echo "staging publicado: $url"
 
       - name: Medir staging
+        id: medir_staging
+        continue-on-error: true
         env:
           STAGING: ${{ steps.staging.outputs.url }}
         run: |
@@ -118,6 +120,60 @@ jobs:
           exec > >(tee /tmp/medido-staging.txt) 2>&1
           sleep 10   # un Worker recién publicado tarda unos segundos en servir
           node scripts/medir.mjs
+
+      # Si algo contestó 500, el mensaje de error vive en los logs del Worker,
+      # y ahí sólo llega este corredor: el chat no alcanza api.cloudflare.com.
+      # Se escucha el Worker con `wrangler tail`, se le vuelve a pedir la
+      # portada y una ruta [id] mientras se escucha, y lo que diga se pega a
+      # la medición para que vuelva en el comentario del commit. El 12-sep
+      # esto fue la diferencia entre adivinar y leer.
+      - name: Leer los errores del Worker de staging
+        if: steps.medir_staging.outcome == 'failure'
+        env:
+          STAGING: ${{ steps.staging.outputs.url }}
+        run: |
+          set -u
+          {
+            echo
+            echo "== Lo que dice el Worker de staging (wrangler tail) =="
+            npx wrangler tail dash101-staging --env staging --format json > /tmp/tail.jsonl 2>/tmp/tail.err &
+            TAIL=$!
+            sleep 8
+            curl -s -o /dev/null -w 'GET /  → %{http_code}\n' "$STAGING/"
+            curl -s -o /dev/null -w 'GET /proyectos/no-existe-a-proposito  → %{http_code}\n' "$STAGING/proyectos/no-existe-a-proposito"
+            sleep 6
+            kill $TAIL 2>/dev/null || true
+            wait $TAIL 2>/dev/null || true
+            python3 - <<'PY'
+          import json
+          vistos = 0
+          try:
+              for linea in open('/tmp/tail.jsonl'):
+                  linea = linea.strip()
+                  if not linea: continue
+                  try: e = json.loads(linea)
+                  except Exception: continue
+                  vistos += 1
+                  ev = e.get('event') or {}
+                  print(f"-- {ev.get('request',{}).get('method','?')} {ev.get('request',{}).get('url','?')}  →  {e.get('outcome')}")
+                  for x in e.get('exceptions', []):
+                      print('   EXCEPCION:', x.get('name'), x.get('message'))
+                      if x.get('stack'): print('   ', str(x['stack'])[:1500])
+                  for l in e.get('logs', []):
+                      print('   log', l.get('level'), ' '.join(str(m) for m in l.get('message', []))[:1500])
+          except FileNotFoundError:
+              pass
+          if not vistos:
+              print('(wrangler tail no entregó eventos)')
+              try: print(open('/tmp/tail.err').read()[-1500:])
+              except Exception: pass
+          PY
+          } >> /tmp/medido-staging.txt 2>&1
+          tail -60 /tmp/medido-staging.txt
+
+      - name: Que la medición de staging mande
+        if: steps.medir_staging.outcome == 'failure'
+        run: exit 1
 
       # ── producción ───────────────────────────────────────────────────────
       # Sólo si staging salió bien (los pasos van en orden y sin
