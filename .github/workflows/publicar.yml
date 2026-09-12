@@ -84,6 +84,7 @@ jobs:
         env:
           NEXT_PUBLIC_FUENTE: api
           NEXT_PUBLIC_ORG: demo
+          NEXT_PUBLIC_VERSION: ${{ github.sha }}
           EN_WORKER: '1'
         run: npm run worker:build
 
@@ -115,10 +116,12 @@ jobs:
         continue-on-error: true
         env:
           STAGING: ${{ steps.staging.outputs.url }}
+          VERSION_ESPERADA: ${{ github.sha }}
         run: |
           set -u
           exec > >(tee /tmp/medido-staging.txt) 2>&1
-          sleep 10   # un Worker recién publicado tarda unos segundos en servir
+          # Ya no hay `sleep` a ciegas: el medidor espera hasta ver la versión
+          # que se acaba de construir, y apunta cuántos intentos costó.
           node scripts/medir.mjs
 
       # Si algo contestó 500, el mensaje de error vive en los logs del Worker,
@@ -184,6 +187,7 @@ jobs:
         env:
           NEXT_PUBLIC_FUENTE: api
           NEXT_PUBLIC_ORG: ${{ vars.ORG_PRODUCCION || 'forespot' }}
+          NEXT_PUBLIC_VERSION: ${{ github.sha }}
           EN_WORKER: '1'
         run: npm run worker:build
 
@@ -217,10 +221,10 @@ jobs:
         env:
           PROD: ${{ steps.produccion.outputs.url }}
           ORG_PROD: ${{ vars.ORG_PRODUCCION || 'forespot' }}
+          VERSION_ESPERADA: ${{ github.sha }}
         run: |
           set -u
           exec > >(tee /tmp/medido-prod.txt) 2>&1
-          sleep 10
           node scripts/medir.mjs
 
       # Sólo puede pasar si alguien pone la variable del repositorio en vacío a

@@ -38,6 +38,10 @@ const CORREO = process.env.CORREO_SUPERADMIN || 'mike@forespot.com';
 // La empresa es distinta en cada entorno: `demo` en staging, la de verdad en
 // producción. En producción sólo se usa para pedir sin sesión y comprobar que
 // contesta la API y no Next: no se entra, no se lee nada y no se escribe nada.
+// El commit con el que se construyó lo que se acaba de publicar. Si viene,
+// la portada tiene que traerlo (`<meta name="dash101-version">`); si no lo
+// trae, es que el borde todavía sirve la versión anterior y se espera.
+const VERSION_ESPERADA = process.env.VERSION_ESPERADA || '';
 const ORG_STAGING = process.env.ORG_STAGING || 'demo';
 const ORG_PROD = process.env.ORG_PROD || 'forespot';
 
@@ -96,9 +100,24 @@ async function laCascara(base, quien) {
   linea('');
   linea(`== ${quien} ==  ${base}`);
 
-  const portada = await traer(base, '/');
-  rev(portada.estado === 200, 'la portada contesta', `${portada.estado} en ${portada.ms} ms`);
+  // Un Worker recién publicado tarda en llegar a todos los bordes. Se pide la
+  // portada hasta 12 veces, cada 5 s, hasta que conteste 200 Y traiga la
+  // versión que se acaba de construir. Cuántos intentos costó se apunta: es
+  // la medida de cuánto tarda Cloudflare en soltar la versión vieja.
+  let portada = await traer(base, '/');
+  let intentos = 1;
+  const sirveLaNueva = (r) => r.estado === 200 && (!VERSION_ESPERADA || r.texto.includes(VERSION_ESPERADA));
+  while (!sirveLaNueva(portada) && intentos < 12) {
+    await new Promise((r) => setTimeout(r, 5000));
+    portada = await traer(base, '/');
+    intentos++;
+  }
+  rev(portada.estado === 200, 'la portada contesta', `${portada.estado} en ${portada.ms} ms · ${intentos} intento${intentos === 1 ? '' : 's'}`);
   rev(portada.texto.includes('Conta Master'), 'la portada trae la marca');
+  if (VERSION_ESPERADA) {
+    const m = portada.texto.match(/name="dash101-version" content="([^"]*)"/);
+    rev(m?.[1] === VERSION_ESPERADA, 'la portada es la versión que se acaba de construir', `sirve ${m?.[1]?.slice(0, 8) ?? '(sin versión)'}, se esperaba ${VERSION_ESPERADA.slice(0, 8)}`);
+  }
 
   for (const f of FUENTES) {
     const r = await traer(base, f);
