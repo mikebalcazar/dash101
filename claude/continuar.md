@@ -1,6 +1,6 @@
 # Continuar — dash101
 
-Estado al **2026-09-11 04:15 UTC**. Lo escribe la sesión de Claude Code «jr»
+Estado al **2026-09-12 16:40 UTC**. Lo escribe la sesión de Claude Code «jr»
 (sesión de respaldo, tarea T3 de `jr-programmer-arranque.md`), que ejecuta el
 arranque de `claude/arranque-coordinador.md`. **La fase 0 (medir) está hecha**;
 lo que sigue es la fase 1. Todo lo de abajo se leyó de `main` = `0743541`.
@@ -545,11 +545,91 @@ ella llama), y que `transactionSync` deshaga una caída a media escritura.
 
 ---
 
-## Lo que sigue · fase 3, tercera parte, y fase 4
+## Fase 4 · dash101 como Worker de Cloudflare, hecha el 12-sep
 
-Google en el login con `api` (el `redirect_uri` de `/auth/google` cae fuera
-de `/s101/`: se resuelve en la API o se queda con correo, código y PIN).
-Probar las pantallas en el navegador con las tres variables puestas en
-`next dev` o en un deploy preview de Netlify. El importador con la regla del
-precio (arriba). Después, fase 4: dash101 como Worker (OpenNext o
-`output: 'export'`) y fase 5, el corte.
+Cuatro PR el mismo día: #20 (el Worker), #21 (el 500), #22 (leer los errores
+del Worker desde el corredor) y #23 (la versión servida). Todo en `main`.
+
+### Las dos direcciones
+
+| | Worker | Habla con | Empresa | Medido |
+|---|---|---|---|---|
+| staging | `dash101-staging.mike-929.workers.dev` | `suite101-api-staging` | `demo` | 17 de 17 |
+| producción | `dash101.mike-929.workers.dev` | `suite101-api` | **`forespot`** | 13 de 13 |
+
+**Netlify sigue vivo** (D3). Hasta el corte la app de verdad es
+`conta-master.netlify.app` contra Firestore. Producción apunta a `forespot`
+por **decisión de Mike del 12-sep**, tomada con la consecuencia enfrente:
+dos direcciones sirviendo la misma empresa contra dos bases distintas, y lo
+que se capture en una no aparece en la otra. Está escrito en la cabecera de
+`.github/workflows/publicar.yml`; la variable `ORG_PRODUCCION` del
+repositorio lo cambia sin tocar código.
+
+### Cómo está armado
+
+- **OpenNext para Cloudflare**, no exportación estática: siete rutas `[id]`
+  con identificadores que salen de la base. Un sitio estático las habría
+  dejado en 404 o habría obligado a `?id=`, que rompe las direcciones
+  guardadas. `open-next.config.ts` es la configuración mínima.
+- `worker/index.ts` reparte: `/s101/*` va a la API por **service binding**
+  (`env.API`), de Worker a Worker sin salir a internet, con `X-App: dash101`
+  puesto por el Worker —y sobrescrito si la app manda otro—. Lo demás lo
+  atiende el Worker que genera OpenNext. `pruebas/worker.spec.ts` mide el
+  reparto con un doble (6 pruebas, entre ellas que `/s101cosas` NO se
+  desvía).
+- `wrangler.toml` con los dos entornos. `EN_WORKER=1` en la construcción
+  apaga el `rewrite` de `/s101` en `next.config.ts`: sin eso, si el Worker
+  dejara de reconocer el prefijo, producción le hablaría a STAGING en
+  silencio.
+- `worker/open-next.d.ts` declara lo que OpenNext genera, y
+  `tsconfig.worker.json` tiene `allowJs` apagado: `npm run tipos:worker` da
+  lo mismo con `.open-next/` presente o borrado (se midió de las dos
+  maneras).
+- `scripts/medir.mjs` corre en el corredor (el chat no alcanza
+  `workers.dev`): portada, fuentes, una ruta `[id]`, `/s101/salud` y a QUÉ
+  API va, y en staging entra y comprueba la galleta en el origen de dash101,
+  `/s101/yo`, que `X-App` se sobrescribe y las cifras de la demo. En
+  producción **no entra y no escribe**: ahí hay dinero real.
+
+### Lo que salió mal y qué se aprendió
+
+1. **500 en todas las pantallas (PR #21).** `firebase/firestore` publica una
+   construcción de Node que trae protobufjs, y protobufjs fabrica funciones
+   con `new Function` al cargar el módulo; un Worker no lo permite. Era
+   código que nunca se ejecuta con `FUENTE=api` y tiraba la página por
+   existir. Arreglo en `next.config.ts` (`FIREBASE_NAVEGADOR`): apuntar
+   Firebase a su construcción de navegador **sólo en el paquete del
+   servidor del Worker**, y en **los dos niveles** (`firebase/*` y
+   `@firebase/*`), porque el primero es un envoltorio de una línea sobre el
+   segundo. El flujo lo comprueba con un `grep` antes de publicar.
+2. **Cuatro «fallas» que eran del medidor**, no del Worker: no desenvolvía
+   `{ok, data}` (`suite101-api/src/http.ts`). Corregido en el mismo PR.
+3. **Un 500 que se fue solo** entre la segunda y la tercera publicación, sin
+   tocar la app. Lo más probable: el corredor medía a los 10 s y el borde
+   de Cloudflare todavía servía la versión anterior. Por eso PR #23: la app
+   escribe `<meta name="dash101-version">` con el commit de la
+   construcción, y el medidor espera hasta verlo (hasta 12 × 5 s) y apunta
+   cuántos intentos costó. Un borde con la versión vieja ya no puede pasar
+   por verde. Medido en la publicación de `3cc5bf8c`: las dos direcciones
+   sirvieron esa versión al **primer intento**.
+4. **Cuando algo contesta 500, el error vive en los logs del Worker**, a
+   los que el chat no llega. PR #22: si la medición de staging falla, el
+   flujo escucha con `wrangler tail`, vuelve a pedir la portada y pega las
+   excepciones al comentario del commit. No hizo falta esta vez; queda para
+   la próxima.
+
+### Lo que NO está medido
+
+- Las pantallas **en un navegador** contra el Worker: el corredor mide HTML
+  y JSON, no clics. Se hace igual que con roster101 (Playwright contra la
+  dirección de staging), y es lo primero que conviene antes del corte.
+- Que la empresa `forespot` tenga a dash101 encendida en la API de
+  producción: el medidor no entra ahí a propósito. Se sabe que la API
+  contesta `401 sin_sesion` por el Worker, nada más.
+
+## Lo que sigue
+
+Por orden del coordinador (muro `2026-09-12-0240`): **T4 peek101**
+(`peek101-arranque.md` en Drive, id `1xs_um3hElgthYpT93pHhzuNze9wImkh2`),
+**T5 quote101** (`quote101-arranque.md`, `1dJXYuiYybnCB7kGEqE7RU9BJPn5JgTA9`),
+T6 material de venta. **Fase 5, el corte**, la decide Mike.
