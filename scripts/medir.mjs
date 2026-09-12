@@ -35,7 +35,11 @@
 const PROD = process.env.PROD;
 const STAGING = process.env.STAGING;
 const CORREO = process.env.CORREO_SUPERADMIN || 'mike@forespot.com';
-const ORG = process.env.ORG_DEMO || 'demo';
+// La empresa es distinta en cada entorno: `demo` en staging, la de verdad en
+// producción. En producción sólo se usa para pedir sin sesión y comprobar que
+// contesta la API y no Next: no se entra, no se lee nada y no se escribe nada.
+const ORG_STAGING = process.env.ORG_STAGING || 'demo';
+const ORG_PROD = process.env.ORG_PROD || 'forespot';
 
 const FUENTES = [
   '/fonts/fira-cifras-400.woff2',
@@ -125,7 +129,7 @@ async function produccion() {
 
   // Sin galleta la API contesta 401 y no filtra nada. Que conteste JSON de la
   // API (y no el HTML de Next) es la prueba de que /s101/* no lo atiende Next.
-  const sinSesion = await traer(PROD, `/s101/orgs/${ORG}/cuentas`);
+  const sinSesion = await traer(PROD, `/s101/orgs/${ORG_PROD}/cuentas`);
   rev(
     sinSesion.estado === 401 && sinSesion.cuerpo?.error === 'sin_sesion',
     'producción: sin sesión, la API contesta 401 y no Next',
@@ -169,19 +173,19 @@ async function staging() {
 
   // El Worker pone X-App: dash101. Se le manda una basura a propósito: si la
   // pusiera el navegador, la API contestaría 400 app_desconocida.
-  const conBasura = await traer(STAGING, `/s101/orgs/${ORG}/negocios`, { galleta, cabeceras: { 'X-App': 'basura-a-proposito' } });
+  const conBasura = await traer(STAGING, `/s101/orgs/${ORG_STAGING}/negocios`, { galleta, cabeceras: { 'X-App': 'basura-a-proposito' } });
   rev(
     conBasura.estado === 200,
     'el Worker sobrescribe X-App: dash101 (se mandó basura y contestó bien)',
     `${conBasura.estado} ${conBasura.cuerpo?.error ?? ''}`,
   );
 
-  const negocios = await traer(STAGING, `/s101/orgs/${ORG}/negocios`, { galleta });
-  const cuentas = await traer(STAGING, `/s101/orgs/${ORG}/cuentas`, { galleta });
+  const negocios = await traer(STAGING, `/s101/orgs/${ORG_STAGING}/negocios`, { galleta });
+  const cuentas = await traer(STAGING, `/s101/orgs/${ORG_STAGING}/cuentas`, { galleta });
   const n = negocios.cuerpo?.filas?.length ?? negocios.cuerpo?.length;
   const c = cuentas.cuerpo?.filas?.length ?? cuentas.cuerpo?.length;
-  rev(typeof n === 'number' && n > 0, `la org ${ORG} contesta negocios por el Worker`, `${n} negocios`);
-  rev(typeof c === 'number' && c > 0, `la org ${ORG} contesta cuentas por el Worker`, `${c} cuentas`);
+  rev(typeof n === 'number' && n > 0, `la org ${ORG_STAGING} contesta negocios por el Worker`, `${n} negocios`);
+  rev(typeof c === 'number' && c > 0, `la org ${ORG_STAGING} contesta cuentas por el Worker`, `${c} cuentas`);
 }
 
 /* ─────────────── ─────────────── */

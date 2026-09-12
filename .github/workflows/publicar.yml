@@ -14,13 +14,18 @@
 #                           User Details:Read
 #   CLOUDFLARE_ACCOUNT_ID
 #
-# Variable del repositorio (no secreto, es un nombre de empresa):
-#   ORG_PRODUCCION          qué empresa sirve el Worker de producción. Mientras
-#                           no esté puesta, SÓLO se publica staging. Es a
-#                           propósito: apuntar producción a la empresa real
-#                           antes del corte pondría a dos aplicaciones
-#                           escribiendo en dos bases distintas, y esa es una
-#                           decisión de Mike, no de este flujo.
+# Qué empresa sirve el Worker de producción: `forespot`, la de verdad.
+#
+# **Es una decisión de Mike, tomada el 12-sep-2026**, y se le planteó con su
+# consecuencia enfrente: hasta el corte la app de verdad sigue siendo la de
+# Netlify contra Firestore (D3), así que desde hoy hay DOS direcciones de
+# dash101 sirviendo la misma empresa contra DOS bases distintas. Lo que se
+# capture en una no aparece en la otra. Mike lo sabe y así lo quiere: lo que
+# gana es ver la app real corriendo sobre la suite antes de decidir el corte.
+#
+# La variable del repositorio `ORG_PRODUCCION` puede cambiarlo sin tocar
+# código (Settings ▸ Secrets and variables ▸ Actions ▸ Variables). Si no
+# está, manda lo que dice aquí abajo, que es la decisión escrita.
 
 name: Publicar el Worker
 
@@ -42,7 +47,8 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      ORG_PRODUCCION: ${{ vars.ORG_PRODUCCION }}
+      # La decisión escrita; la variable del repositorio manda si existe.
+      ORG_PRODUCCION: ${{ vars.ORG_PRODUCCION || 'forespot' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -50,6 +56,20 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+
+      # Sin esto, wrangler falla con un error de autenticación que no dice qué
+      # hacer. Este paso sí lo dice, y el chat lo puede leer en el comentario
+      # del commit: el chat no lista ni lee secretos, sólo pregunta si están.
+      - name: Comprobar que hay con qué publicar
+        run: |
+          falta=""
+          [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || falta="$falta CLOUDFLARE_API_TOKEN"
+          [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ] || falta="$falta CLOUDFLARE_ACCOUNT_ID"
+          if [ -n "$falta" ]; then
+            echo "::error::Faltan secretos del repositorio dash101:$falta. Los pone Mike en Settings ▸ Secrets and variables ▸ Actions. El token necesita Workers Scripts:Edit, Account Settings:Read y User Details:Read; son los mismos que ya tiene suite101-api."
+            exit 1
+          fi
+          echo "los dos secretos están puestos"
 
       - name: Los tipos, los de la app y los del Worker
         run: |
@@ -94,7 +114,7 @@ jobs:
         if: env.ORG_PRODUCCION != ''
         env:
           NEXT_PUBLIC_FUENTE: api
-          NEXT_PUBLIC_ORG: ${{ vars.ORG_PRODUCCION }}
+          NEXT_PUBLIC_ORG: ${{ vars.ORG_PRODUCCION || 'forespot' }}
           EN_WORKER: '1'
         run: npm run worker:build
 
@@ -113,17 +133,21 @@ jobs:
         if: env.ORG_PRODUCCION != ''
         env:
           PROD: ${{ steps.produccion.outputs.url }}
+          ORG_PROD: ${{ vars.ORG_PRODUCCION || 'forespot' }}
         run: |
           set -u
           exec > >(tee /tmp/medido-prod.txt) 2>&1
           sleep 10
           node scripts/medir.mjs
 
+      # Sólo puede pasar si alguien pone la variable del repositorio en vacío a
+      # propósito. Se deja el camino para que se pueda apagar producción sin
+      # tocar código, y para que el comentario del commit diga qué pasó.
       - name: Decir que producción no se publicó, y por qué
         if: env.ORG_PRODUCCION == ''
         run: |
-          echo "::notice::Sólo se publicó staging. El Worker de producción espera a que Mike decida qué empresa sirve (variable ORG_PRODUCCION del repositorio)."
-          echo "Producción: no se publicó. Falta la variable ORG_PRODUCCION." > /tmp/medido-prod.txt
+          echo "::notice::Sólo se publicó staging: la variable ORG_PRODUCCION del repositorio está en vacío."
+          echo "Producción: no se publicó. La variable ORG_PRODUCCION está en vacío." > /tmp/medido-prod.txt
 
       # Aquí está el canal de vuelta. El log de Actions no sirve: descargarlo
       # redirige a un host que el proxy del chat también rechaza.
