@@ -11,6 +11,7 @@ import {
   recalcularCuenta,
 } from "@/lib/movimientos";
 import type { Movimiento, TipoMovimiento } from "@/types/schema";
+import { CATEGORIA_AJUSTE } from "@/types/schema";
 import { formatMonto, formatDateShort } from "@/lib/format";
 import { Timestamp } from "firebase/firestore";
 import {
@@ -129,6 +130,10 @@ export default function MovimientosPage() {
   const filtrados =
     filtroTipo === "todos" ? movimientos : movimientos.filter((m) => m.tipo === filtroTipo);
 
+  // El ajuste por conciliación es dinero que se movió sin que nadie lo
+  // registrara: va aparte de los ingresos y gastos de verdad, no mezclado.
+  const esAjuste = (m: Movimiento) => m.categoria === CATEGORIA_AJUSTE;
+
   // Totales del mes actual
   const now = new Date();
   const mesActual = now.getMonth();
@@ -139,11 +144,15 @@ export default function MovimientosPage() {
       if (!f || typeof f.toDate !== "function") return acc;
       const d = f.toDate();
       if (d.getMonth() !== mesActual || d.getFullYear() !== anoActual) return acc;
+      if (esAjuste(m)) {
+        acc.sin_identificar += m.tipo === "egreso" ? m.monto : -m.monto;
+        return acc;
+      }
       if (m.tipo === "ingreso") acc.ingresos += m.monto;
       else if (m.tipo === "egreso") acc.egresos += m.monto;
       return acc;
     },
-    { ingresos: 0, egresos: 0 }
+    { ingresos: 0, egresos: 0, sin_identificar: 0 }
   );
 
   return (
@@ -161,6 +170,14 @@ export default function MovimientosPage() {
               −{formatMonto(totalesMes.egresos, activo.moneda, { short: true })}
             </span>
           </p>
+          {totalesMes.sin_identificar !== 0 && (
+            <p className="text-[11px] text-ink-muted mt-0.5">
+              Sin identificar (conciliación):{" "}
+              <span className="text-mauve-900">
+                {formatMonto(totalesMes.sin_identificar, activo.moneda, { short: true })}
+              </span>
+            </p>
+          )}
         </div>
         <Link
           href="/movimientos/nuevo"
@@ -245,6 +262,11 @@ export default function MovimientosPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-ink-dim truncate">
+                    {esAjuste(m) && (
+                      <span className="text-[10px] uppercase tracking-wide bg-cream text-ink-muted rounded px-1.5 py-0.5 mr-1.5">
+                        sin identificar
+                      </span>
+                    )}
                     {m.descripcion || m.contraparte_nombre}
                     {m.descripcion && (
                       <span className="text-ink-muted font-normal">

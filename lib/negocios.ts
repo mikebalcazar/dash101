@@ -25,6 +25,8 @@ export interface NegocioInput {
   descripcion?: string;
   rfc?: string;
   moneda: Moneda;
+  /** Día en que toca conciliar: 0 domingo … 6 sábado. Sólo con FUENTE=api. */
+  dia_conciliacion?: number;
 }
 
 export async function listNegocios(uid: string): Promise<Negocio[]> {
