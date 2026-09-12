@@ -87,6 +87,19 @@ jobs:
           EN_WORKER: '1'
         run: npm run worker:build
 
+      # El 12-sep la primera publicación contestó 500 en todas las pantallas:
+      # el paquete del servidor traía la construcción de Node de Firestore, y
+      # con ella protobufjs, que fabrica funciones con `new Function` al
+      # cargar. Un Worker no lo permite. El arreglo está en next.config.ts; el
+      # que no vuelva, se comprueba aquí. Es una sola línea y no cuesta nada.
+      - name: Que el Worker no traiga el codegen de protobufjs (staging)
+        run: |
+          if grep -q 'codegen: ' .open-next/worker.js; then
+            echo "::error::El paquete del Worker trae el codegen de protobufjs. Eso da 500 en todas las pantallas en cuanto se publique. Revisa el alias de Firebase en next.config.ts (FIREBASE_NAVEGADOR): hay que apuntar los dos niveles, `firebase/*` y `@firebase/*`."
+            exit 1
+          fi
+          echo "limpio: sin generación de código en el paquete del servidor"
+
       - name: Publicar staging
         id: staging
         run: |
@@ -117,6 +130,20 @@ jobs:
           NEXT_PUBLIC_ORG: ${{ vars.ORG_PRODUCCION || 'forespot' }}
           EN_WORKER: '1'
         run: npm run worker:build
+
+      # El 12-sep la primera publicación contestó 500 en todas las pantallas:
+      # el paquete del servidor traía la construcción de Node de Firestore, y
+      # con ella protobufjs, que fabrica funciones con `new Function` al
+      # cargar. Un Worker no lo permite. El arreglo está en next.config.ts; el
+      # que no vuelva, se comprueba aquí. Es una sola línea y no cuesta nada.
+      - name: Que el Worker no traiga el codegen de protobufjs (producción)
+        run: |
+          if grep -q 'codegen: ' .open-next/worker.js; then
+            echo "::error::El paquete del Worker trae el codegen de protobufjs. Eso da 500 en todas las pantallas en cuanto se publique. Revisa el alias de Firebase en next.config.ts (FIREBASE_NAVEGADOR): hay que apuntar los dos niveles, `firebase/*` y `@firebase/*`."
+            exit 1
+          fi
+          echo "limpio: sin generación de código en el paquete del servidor"
+        if: env.ORG_PRODUCCION != ''
 
       - name: Publicar producción
         id: produccion

@@ -72,8 +72,15 @@ async function traer(base, ruta, { method = 'GET', body, cabeceras = {}, galleta
     redirect: 'manual',
   });
   const texto = await r.text();
-  let cuerpo = null;
-  try { cuerpo = JSON.parse(texto); } catch { /* HTML, no JSON */ }
+  let crudo = null;
+  try { crudo = JSON.parse(texto); } catch { /* HTML, no JSON */ }
+  // Toda respuesta de la API viene envuelta: {ok:true,data} o {ok:false,error}
+  // (suite101-api/src/http.ts). Sin desenvolverla, `cuerpo.entorno` sale
+  // `undefined` y la medición acusa al Worker de algo que no hizo — que es
+  // exactamente lo que pasó en la primera corrida del 12-sep.
+  const cuerpo = crudo && typeof crudo === 'object' && 'ok' in crudo
+    ? (crudo.ok ? crudo.data : { error: crudo.error, detalle: crudo.detalle })
+    : crudo;
   return {
     estado: r.status,
     ms: Date.now() - t0,
