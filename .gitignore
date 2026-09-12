@@ -39,3 +39,8 @@ public/_redirects
 
 # Tambien el enlace simbolico, no solo la carpeta: node_modules/ con diagonal no lo cubre
 node_modules
+
+# Lo que construye OpenNext para Cloudflare (fase 4): se regenera con
+# `npm run worker:build`.
+.open-next/
+.wrangler/
