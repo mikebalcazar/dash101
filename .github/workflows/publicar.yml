@@ -1,0 +1,149 @@
+# Publica dash101 como Worker de Cloudflare y luego mide lo que publicó.
+#
+# Esto NO apaga Netlify. Hasta el corte la app de verdad sigue siendo la de
+# Netlify contra Firestore (decisión D3); aquí nace la misma app hablando con
+# la suite, en su propia dirección, para poder compararlas lado a lado.
+#
+# El chat que escribe el código no alcanza api.cloudflare.com ni *.workers.dev:
+# el proxy de salida se lo rechaza. Aquí sí hay internet, así que todo lo que
+# hay que saber se mide aquí y se devuelve por el comentario del commit, que es
+# el único canal de vuelta que el chat puede leer (OPERAR.md §6).
+#
+# Secretos del repositorio:
+#   CLOUDFLARE_API_TOKEN    Workers Scripts:Edit, Account Settings:Read,
+#                           User Details:Read
+#   CLOUDFLARE_ACCOUNT_ID
+#
+# Variable del repositorio (no secreto, es un nombre de empresa):
+#   ORG_PRODUCCION          qué empresa sirve el Worker de producción. Mientras
+#                           no esté puesta, SÓLO se publica staging. Es a
+#                           propósito: apuntar producción a la empresa real
+#                           antes del corte pondría a dos aplicaciones
+#                           escribiendo en dos bases distintas, y esa es una
+#                           decisión de Mike, no de este flujo.
+
+name: Publicar el Worker
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'claude/**'
+      - '**.md'
+  workflow_dispatch:
+
+concurrency:
+  group: despliegue-dash101
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      ORG_PRODUCCION: ${{ vars.ORG_PRODUCCION }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+
+      - name: Los tipos, los de la app y los del Worker
+        run: |
+          npm run tipos
+          npm run tipos:worker
+
+      # ── staging ──────────────────────────────────────────────────────────
+      # La empresa se decide al construir (lib/fuente.ts), así que hay que
+      # construir una vez por entorno: el nombre queda dentro del paquete.
+
+      - name: Construir para staging (org demo)
+        env:
+          NEXT_PUBLIC_FUENTE: api
+          NEXT_PUBLIC_ORG: demo
+          EN_WORKER: '1'
+        run: npm run worker:build
+
+      - name: Publicar staging
+        id: staging
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --env staging | tee /tmp/staging.txt
+          url=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' /tmp/staging.txt | head -1)
+          [ -n "$url" ] || { echo 'no pude sacar la liga de la salida de wrangler' >&2; exit 1; }
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "staging publicado: $url"
+
+      - name: Medir staging
+        env:
+          STAGING: ${{ steps.staging.outputs.url }}
+        run: |
+          set -u
+          exec > >(tee /tmp/medido-staging.txt) 2>&1
+          sleep 10   # un Worker recién publicado tarda unos segundos en servir
+          node scripts/medir.mjs
+
+      # ── producción ───────────────────────────────────────────────────────
+      # Sólo si staging salió bien (los pasos van en orden y sin
+      # `continue-on-error`) y sólo si Mike ya dijo qué empresa sirve.
+
+      - name: Construir para producción
+        if: env.ORG_PRODUCCION != ''
+        env:
+          NEXT_PUBLIC_FUENTE: api
+          NEXT_PUBLIC_ORG: ${{ vars.ORG_PRODUCCION }}
+          EN_WORKER: '1'
+        run: npm run worker:build
+
+      - name: Publicar producción
+        id: produccion
+        if: env.ORG_PRODUCCION != ''
+        run: |
+          set -euo pipefail
+          npx wrangler deploy | tee /tmp/prod.txt
+          url=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' /tmp/prod.txt | head -1)
+          [ -n "$url" ] || { echo 'no pude sacar la liga de la salida de wrangler' >&2; exit 1; }
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "producción publicada: $url"
+
+      - name: Medir producción
+        if: env.ORG_PRODUCCION != ''
+        env:
+          PROD: ${{ steps.produccion.outputs.url }}
+        run: |
+          set -u
+          exec > >(tee /tmp/medido-prod.txt) 2>&1
+          sleep 10
+          node scripts/medir.mjs
+
+      - name: Decir que producción no se publicó, y por qué
+        if: env.ORG_PRODUCCION == ''
+        run: |
+          echo "::notice::Sólo se publicó staging. El Worker de producción espera a que Mike decida qué empresa sirve (variable ORG_PRODUCCION del repositorio)."
+          echo "Producción: no se publicó. Falta la variable ORG_PRODUCCION." > /tmp/medido-prod.txt
+
+      # Aquí está el canal de vuelta. El log de Actions no sirve: descargarlo
+      # redirige a un host que el proxy del chat también rechaza.
+      - name: Dejar lo medido en el commit
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -u
+          : > /tmp/salida.txt
+          for f in /tmp/medido-staging.txt /tmp/medido-prod.txt; do
+            [ -f "$f" ] && cat "$f" >> /tmp/salida.txt
+          done
+          [ -s /tmp/salida.txt ] || echo "No hubo salida que reportar: el flujo se cayó antes de medir." > /tmp/salida.txt
+          jq -Rs '{body: ("**dash101 como Worker**\n\n```\n" + .[-60000:] + "\n```")}' /tmp/salida.txt > /tmp/comentario.json
+          curl -sS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/commits/$SHA/comments" \
+            -d @/tmp/comentario.json -o /tmp/respuesta.json -w 'comentario: %{http_code}\n'
+          head -c 200 /tmp/respuesta.json || true

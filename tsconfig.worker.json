@@ -1,0 +1,23 @@
+{
+  "_comentario": "Los tipos del Worker, aparte de los de Next: aqui manda Cloudflare, no el navegador. Se revisa con `npm run tipos:worker`, y da lo mismo antes o despues de construir: lo generado se declara en worker/open-next.d.ts y aqui `allowJs` esta apagado para que TypeScript no lea el archivo de verdad si por casualidad esta. La prueba del reparto vive aqui y no en el proyecto de la app: usa tipos de Cloudflare (ExecutionContext) que en el navegador no existen.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": [
+      "@cloudflare/workers-types"
+    ],
+    "lib": [
+      "esnext"
+    ],
+    "noEmit": true,
+    "allowJs": false,
+    "checkJs": false
+  },
+  "include": [
+    "worker/**/*.ts",
+    "pruebas/worker.spec.ts",
+    "pruebas/doble-open-next.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

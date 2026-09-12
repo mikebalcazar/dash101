@@ -7,7 +7,13 @@ import { defineConfig } from "vitest/config";
  * el código, así que se entra sin buzón. Nunca contra producción. */
 export default defineConfig({
   resolve: {
-    alias: { "@": path.resolve(__dirname) },
+    alias: [
+      { find: "@", replacement: path.resolve(__dirname) },
+      // Lo que OpenNext genera no está en el repositorio y las pruebas corren
+      // sin construir. Se sustituye por un doble que sólo dice «me tocó a mí»:
+      // lo que se mide en `worker.spec.ts` es el reparto, no Next.
+      { find: /^\.\.\/\.open-next\/worker\.js$/, replacement: path.resolve(__dirname, "pruebas/doble-open-next.ts") },
+    ],
   },
   test: {
     include: ["pruebas/**/*.spec.ts"],
