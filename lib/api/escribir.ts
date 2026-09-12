@@ -111,7 +111,10 @@ export async function createNegocio(_uid: string, d: NegocioInput): Promise<stri
 }
 
 export async function updateNegocio(id: string, d: Partial<NegocioInput>): Promise<void> {
-  await cambiar('negocios', id, { nombre: d.nombre, rfc: d.rfc === undefined ? undefined : oNulo(d.rfc), moneda: d.moneda });
+  await cambiar('negocios', id, {
+    nombre: d.nombre, rfc: d.rfc === undefined ? undefined : oNulo(d.rfc), moneda: d.moneda,
+    dia_conciliacion: d.dia_conciliacion,
+  });
 }
 
 export async function deleteNegocio(id: string): Promise<void> {

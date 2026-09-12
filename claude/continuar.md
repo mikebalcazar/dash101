@@ -498,6 +498,53 @@ vez compartían una org y se borraban entre sí.
 
 ---
 
+## B1 · la conciliación semanal, hecha el 12-sep
+
+Lo pidió Mike el 11-sep; la tarea la dejó el chat de dash101 en Drive
+(`suite101/dash101/2026-09-11-tarea-conciliacion-semanal.md`, copiada aquí
+como `claude/backlog.md`). Iba **después de la fase 3**, y la fase 3 cerró
+anoche. API: `suite101-api` #38, contrato **0.4.0**. Pantalla: este PR.
+
+- **La API** (migración `0003`): `conciliaciones`, `conciliacion_cuentas` y
+  `negocios.dia_conciliacion` (0–6, lunes por omisión). `POST
+  /orgs/:o/conciliaciones` calcula el saldo registrado de cada cuenta al
+  corte, guarda la diferencia contra el real y crea los ajustes dentro de
+  `transactionSync`. `GET …/conciliaciones/estadistica` da por corte, por
+  cuenta y acumulado. Las dos tablas son append-only.
+- **El ajuste** es un movimiento con `categoria = 'ajuste_conciliacion'`, sin
+  proyecto y con contraparte «Sin identificar»: por eso no mueve `cobrado`,
+  `pagado_prov` ni el compromiso de ningún proyecto.
+- **La pantalla** `/conciliacion`: aviso cuando toca, la lista de cuentas con
+  el registrado, el hueco para el real y la diferencia en vivo, el selector
+  del día, y abajo lo que se ha escapado por semana y por cuenta. En
+  `/movimientos`, el ajuste sale marcado «sin identificar» y **fuera** de los
+  totales de ingresos y gastos del mes, en su propio renglón.
+- **Las cinco decisiones de Mike quedaron tal cual**: dash101 refleja la
+  realidad; la diferencia queda registrada; el día se configura (lunes por
+  omisión); concilian owner y admin, comprobado en el servidor; y se
+  concilian todas las cuentas de una vez (si falta una, la API rechaza el
+  corte entero y no escribe nada).
+- Si se saltó el día, sigue pendiente: `tocaConciliar` mira desde la última
+  vez que cayó el día configurado, no sólo hoy.
+
+**Cómo se midió.** En la API: `pruebas/migracion-0003.py` con sqlite3 (ninguna
+tabla pierde filas, las cuatro sumas de dinero idénticas al centavo,
+`foreign_key_check` limpio, aplicarla dos veces truena) y ocho pruebas en
+workerd; 113 de 113. En dash101: `pruebas/conciliacion-api.spec.ts` contra una
+org propia de staging, por los módulos de `lib/`, en pesos: banco 345,000
+registrado contra 344,200 real da ajuste de 800 y deja la cuenta en 344,200;
+la caja cuadra y no recibe ajuste; la tarjeta queda en −30,500; la cuenta con
+300 de más recibe ingreso; la segunda semana mide 200 y el acumulado da 1,200
+(faltante 1,500, sobrante 300); un gasto capturado después con fecha vieja no
+cambia el corte pasado; y un corte al que le falta una cuenta no escribe nada.
+**38 de 38** con las de lectura y escritura, `tsc` limpio, `next build`
+completo.
+
+**No verificado:** la pantalla en un navegador (se midió por los módulos que
+ella llama), y que `transactionSync` deshaga una caída a media escritura.
+
+---
+
 ## Lo que sigue · fase 3, tercera parte, y fase 4
 
 Google en el login con `api` (el `redirect_uri` de `/auth/google` cae fuera

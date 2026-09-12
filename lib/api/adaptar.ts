@@ -19,8 +19,8 @@
 
 import { Timestamp } from 'firebase/firestore';
 import type {
-  Cliente, Cuenta, Movimiento, Negocio, Opex, PartidaProyecto, ProductoProyecto, Proveedor, Proyecto,
-  RolMiembro, TipoContraparte, Usuario,
+  Cliente, Conciliacion, ConciliacionCuenta, Cuenta, EstadisticaConciliacion, Movimiento, Negocio, Opex,
+  PartidaProyecto, ProductoProyecto, Proveedor, Proyecto, RolMiembro, TipoContraparte, Usuario,
 } from '@/types/schema';
 
 /* ─────────────── dinero ─────────────── */
@@ -59,7 +59,7 @@ export function aDia(d: Date): string {
 
 /* ─────────────── las filas de la API, con sus nombres ─────────────── */
 
-export interface FilaNegocio { id: string; nombre: string; rfc: string | null; moneda: 'MXN' | 'USD'; creado_at: string }
+export interface FilaNegocio { id: string; nombre: string; rfc: string | null; moneda: 'MXN' | 'USD'; dia_conciliacion: number; creado_at: string }
 export interface FilaCuenta { id: string; negocio_id: string; nombre: string; tipo: string; banco: string | null; moneda: 'MXN' | 'USD'; saldo_inicial: number; creado_at: string }
 export interface FilaCliente { id: string; negocio_id: string; nombre: string; correo: string | null; telefono: string | null; rfc: string | null; notas: string | null; usuario_id: string | null; portal_activo: boolean; creado_at: string }
 export interface FilaProveedor { id: string; nombre: string; rfc: string | null; categoria: string | null; correo: string | null; telefono: string | null; terminos_pago: string | null; notas: string | null; creado_at: string }
@@ -89,6 +89,8 @@ export interface FilaOpex {
 export function negocio(f: FilaNegocio, uid: string): Negocio {
   return {
     id: f.id, nombre: f.nombre, descripcion: '', rfc: f.rfc ?? '', moneda: f.moneda,
+    // 1 es lunes, que es lo que la API pone por omisión.
+    dia_conciliacion: f.dia_conciliacion ?? 1,
     // La suite lleva la membresía en el D1, por empresa, no por negocio: aquí
     // quien pregunta es miembro, y con eso basta para leer.
     owner_uid: uid, miembros_uids: [uid], creado_at: ts(f.creado_at), creado_por: '',
@@ -200,6 +202,55 @@ export function opex(f: FilaOpex, cuentas: Map<string, FilaCuenta>): Opex {
     cuenta_id: f.cuenta_id, cuenta_nombre: f.cuenta_id ? cuentas.get(f.cuenta_id)?.nombre ?? null : null,
     categoria: f.categoria ?? '', activo: !!f.activo, negocio_id: f.negocio_id, descripcion: '',
     creado_at: ts(f.creado_at), creado_por: '',
+  };
+}
+
+/* ─────────────── la conciliación semanal ─────────────── */
+
+export interface FilaConciliacion { id: string; negocio_id: string; corte_at: string; hecha_por: string; creado_at: string }
+export interface FilaConciliacionCuenta {
+  id: string; conciliacion_id: string; cuenta_id: string; saldo_registrado: number; saldo_real: number;
+  diferencia: number; movimiento_id: string | null; creado_at: string;
+}
+
+export function conciliacionCuenta(f: FilaConciliacionCuenta, nombres?: Map<string, string>): ConciliacionCuenta {
+  return {
+    id: f.id, cuenta_id: f.cuenta_id, cuenta_nombre: nombres?.get(f.cuenta_id),
+    saldo_registrado: aPesos(f.saldo_registrado), saldo_real: aPesos(f.saldo_real),
+    diferencia: aPesos(f.diferencia), movimiento_id: f.movimiento_id,
+  };
+}
+
+export function conciliacion(f: FilaConciliacion, cuentas: FilaConciliacionCuenta[], nombres?: Map<string, string>): Conciliacion {
+  const mias = cuentas.filter((c) => c.conciliacion_id === f.id);
+  return {
+    id: f.id, negocio_id: f.negocio_id, corte_at: ts(f.corte_at), hecha_por: f.hecha_por,
+    cuentas: mias.map((c) => conciliacionCuenta(c, nombres)),
+    diferencia_total: aPesos(mias.reduce((t, c) => t + c.diferencia, 0)),
+  };
+}
+
+/** La estadística viene de la API en centavos; aquí sale en pesos. */
+export function estadistica(
+  d: {
+    cortes: Array<{ id: string; corte_at: string; cuentas: number; diferencia_total: number; faltante: number; sobrante: number }>;
+    por_cuenta: Array<{ cuenta_id: string; nombre: string | null; cortes: number; diferencia_total: number }>;
+    acumulado: { cortes: number; diferencia_total: number; faltante: number; sobrante: number };
+  },
+): EstadisticaConciliacion {
+  return {
+    cortes: d.cortes.map((c) => ({
+      id: c.id, corte_at: ts(c.corte_at), cuentas: Number(c.cuentas ?? 0),
+      diferencia_total: aPesos(c.diferencia_total), faltante: aPesos(c.faltante), sobrante: aPesos(c.sobrante),
+    })),
+    por_cuenta: d.por_cuenta.map((c) => ({
+      cuenta_id: c.cuenta_id, nombre: c.nombre ?? '(cuenta borrada)', cortes: Number(c.cortes ?? 0),
+      diferencia_total: aPesos(c.diferencia_total),
+    })),
+    acumulado: {
+      cortes: d.acumulado.cortes, diferencia_total: aPesos(d.acumulado.diferencia_total),
+      faltante: aPesos(d.acumulado.faltante), sobrante: aPesos(d.acumulado.sobrante),
+    },
   };
 }
 

@@ -37,6 +37,8 @@ export interface Negocio {
   descripcion?: string;
   rfc?: string;
   moneda: Moneda;
+  /** Día en que toca conciliar: 0 domingo … 6 sábado. Por omisión, lunes. */
+  dia_conciliacion?: number;
   owner_uid: string;
   miembros_uids: string[];
   creado_at: Timestamp | FieldValue;
@@ -166,6 +168,42 @@ export interface Movimiento {
   categoria?: string;
   creado_por: string;
   creado_at: Timestamp | FieldValue;
+}
+
+/** La categoría con la que la API marca el ajuste de una conciliación. En los
+ *  reportes sale aparte: es dinero que se movió sin que nadie lo registrara. */
+export const CATEGORIA_AJUSTE = "ajuste_conciliacion";
+
+/** Una conciliación: la foto de un corte. No se edita nunca. */
+export interface Conciliacion {
+  id: string;
+  negocio_id: string;
+  corte_at: Timestamp;
+  hecha_por: string;
+  cuentas: ConciliacionCuenta[];
+  /** Σ diferencias del corte, en pesos. Positiva: se escapó dinero. */
+  diferencia_total: number;
+}
+
+export interface ConciliacionCuenta {
+  id: string;
+  cuenta_id: string;
+  cuenta_nombre?: string;
+  /** pesos */
+  saldo_registrado: number;
+  /** pesos */
+  saldo_real: number;
+  /** registrado − real, en pesos. Positiva: salidas que nadie registró. */
+  diferencia: number;
+  /** El ajuste que dejó la cuenta igual al real; null si cuadró. */
+  movimiento_id: string | null;
+}
+
+/** Lo que se escapó: por corte, por cuenta y el acumulado. Todo en pesos. */
+export interface EstadisticaConciliacion {
+  cortes: Array<{ id: string; corte_at: Timestamp; cuentas: number; diferencia_total: number; faltante: number; sobrante: number }>;
+  por_cuenta: Array<{ cuenta_id: string; nombre: string; cortes: number; diferencia_total: number }>;
+  acumulado: { cortes: number; diferencia_total: number; faltante: number; sobrante: number };
 }
 
 export interface Invitacion {

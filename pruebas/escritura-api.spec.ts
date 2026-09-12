@@ -59,7 +59,8 @@ beforeAll(async () => {
     /* no existía */
   }
   const alta = await pedir<{ org_db_version: number }>("/admin/orgs", { method: "POST", body: { id: ORG, nombre: "Prueba de escritura" } });
-  expect(alta.org_db_version).toBe(2);
+  // Las tres migraciones corren solas al nacer el Durable Object.
+  expect(alta.org_db_version).toBe(3);
 }, 60000);
 
 afterAll(async () => {
