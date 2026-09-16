@@ -9,7 +9,10 @@ Este documento contiene toda la información necesaria para retomar el desarroll
 
 **Conta Master** es una plataforma web de gestión financiera multi-negocio para Mike Balcázar + 2-3 socios/familia. Permite llevar contabilidad simple pero completa de varios negocios/empresas simultáneamente, con proyectos, movimientos, cuentas, OPEX recurrentes y proyección de flujo de caja.
 
-- **Live:** https://conta-master.netlify.app
+- **Live:** https://dash101.mike-929.workers.dev — el Worker de Cloudflare
+  contra `suite101-api`. Desde el corte del **16-sep-2026**,
+  `conta-master.netlify.app` ya no sirve la app: manda aquí con un 302 (ver
+  `netlify.toml`). El sitio de Netlify no se apagó; dejó de construir.
 - **Repo:** https://github.com/mikebalcazar/dash101 (hasta el 11-sep
   se llamaba `conta-master`; GitHub redirige el nombre viejo)
 - **Firebase project:** `contamaster-fs`
@@ -74,6 +77,11 @@ que protege los datos son las reglas de Firestore, no esconderlas—, pero una
 llave en un `.md` se copia sin pensar, y esa es la costumbre que se quiere
 quitar. El proyecto es `contamaster-fs` y el dominio autorizado en Firebase
 Auth es `conta-master.netlify.app`.
+
+Desde el corte del **16-sep-2026** esas variables ya no las usa nada
+publicado: Netlify no construye la app y el Worker nunca las llevó. Siguen
+en Netlify porque apagar o borrar algo ahí es de Mike, no del chat; el día
+que él quiera, se van sin que nada se rompa.
 
 ---
 
