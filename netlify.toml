@@ -35,12 +35,28 @@
 #    dirección seguía siendo una entrada de cuerpo entero a la suite de
 #    producción. Una puerta en una de dos entradas no es una puerta.
 
+# 4. LA CARPETA ES LA BASE, no nada más lo publicado. El primer intento dejó
+#    `base` en la raíz y el despliegue FALLÓ: `framework: "next"`,
+#    `plugin_state: "failed_build"`, «Build script returned non-zero exit code:
+#    2». Netlify detecta el framework por el `package.json` que encuentra en la
+#    base, ve Next, instala su complemento por su cuenta y el complemento
+#    truena porque nadie construyó `.next` — el comando de aquí es un `echo`.
+#    Quitar el complemento de este archivo no lo evita: lo pone Netlify solo.
+#
+#    Con `base = "netlify-publica"` la base no tiene `package.json`, así que no
+#    hay framework que detectar ni complemento que instalar. Es exactamente por
+#    lo que `portal/` sí desplegó a la primera: es una carpeta con dos archivos
+#    y nada más. `NETLIFY_NEXT_PLUGIN_SKIP` va de cinturón, por si algún día la
+#    detección mira la raíz del repositorio en vez de la base.
+
 [build]
-  command = "echo 'dash101 ya no se construye en Netlify: el corte del 16-sep-2026. Ver netlify.toml.'"
-  publish = "netlify-publica"
+  base = "netlify-publica"
+  publish = "."
+  command = ""
 
 [build.environment]
   NODE_VERSION = "20"
+  NETLIFY_NEXT_PLUGIN_SKIP = "true"
 
 # La misma regla está en `netlify-publica/_redirects`, y ésa es la que de
 # verdad manda: un `_redirects` en la carpeta publicada pesa más que

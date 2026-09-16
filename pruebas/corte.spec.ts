@@ -71,8 +71,24 @@ describe('netlify.toml, después del corte', () => {
   });
 
   it('publica la carpeta mínima, no `.next`', () => {
-    expect(toml).toMatch(/publish\s*=\s*"netlify-publica"/);
+    expect(directivas).toMatch(/base\s*=\s*"netlify-publica"/);
+    expect(directivas).toMatch(/publish\s*=\s*"\."/);
     expect(directivas).not.toMatch(/publish\s*=\s*"\.next"/);
+  });
+
+  /* Esto es lo que hizo fallar el primer despliegue del corte, y no se ve
+   * leyendo el `.toml`: Netlify detecta el framework por el `package.json` de
+   * la carpeta base. Con la base en la raíz ve Next, instala su complemento
+   * solo —quitarlo de este archivo no sirve— y truena porque nadie construyó
+   * `.next`. Lo que sostiene el corte es que la base NO tenga `package.json`.
+   * Si alguien mueve la base a la raíz otra vez, esto lo dice antes de que el
+   * despliegue lo diga. */
+  it('la carpeta base no parece una app de Next', () => {
+    const base = toml.match(/base\s*=\s*"([^"]+)"/)?.[1];
+    expect(base).toBeTruthy();
+    const dentro = readdirSync(base as string);
+    expect(dentro, `${base} no debe traer package.json`).not.toContain('package.json');
+    expect(dentro).not.toContain('next.config.ts');
   });
 
   it('no queda el proxy a la API de producción', () => {
