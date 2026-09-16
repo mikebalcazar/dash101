@@ -208,13 +208,16 @@ de Netlify se renombra.
 > **Nada se apagó ni se borró en Netlify**: eso sigue siendo de Mike. Lo mide
 > el trabajo `corte` de `verificar-publicado.yml` y `pruebas/corte.spec.ts`.
 >
-> Queda fuera de este corte el **portal de clientes**
-> (`cuenta-taller101.netlify.app`, carpeta `portal/`), que este mismo
-> repositorio publica como segundo sitio y que sigue leyendo Firestore con
-> una llave a la vista en su `index.html`. Su relevo es peek101, ya en la
-> suite. Cerrarlo le quita el estado de cuenta a los clientes de Mike
-> mientras no se los cambie de dirección, así que es decisión suya y está
-> puesta a su consideración.
+> **El portal de clientes se cortó el mismo día.**
+> `cuenta-taller101.netlify.app` (carpeta `portal/`), el segundo sitio que
+> este repositorio publica, era un `index.html` que leía Firestore con una
+> llave `AIza…` a la vista. Mike decidió cerrarlo **ya**, sin esperar a probar
+> peek101 primero, con la consecuencia dicha: si peek101 le falla a un
+> cliente, nos enteramos por el cliente. Ahora manda a peek101 con un 302 y la
+> página se reemplazó por un aviso sin llaves — eso último es lo que de verdad
+> lo cierra, porque una redirección se puede quitar y un archivo sin llave no
+> vuelve solo. `lib/portal.ts` también cambió: la liga que la app le entrega
+> al cliente es la de peek101, no la vieja que rebota.
 
 **D4 · Ninguna app toca una base directo.**
 

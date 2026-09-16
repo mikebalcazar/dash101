@@ -21,8 +21,15 @@ import * as escribir from "./api/escribir";
 import { listar } from "./api/cliente";
 import type { FilaMovimiento, FilaProyecto } from "./api/adaptar";
 
+/* La dirección que la app le entrega al cliente cuando se le abre el portal.
+ *
+ * Apuntaba a `cuenta-taller101.netlify.app`, el portal viejo. Desde el corte
+ * del 16-sep-2026 esa dirección redirige a peek101, así que la liga seguiría
+ * funcionando — pero seguiría siendo la liga vieja: rebota, y el día que se
+ * quite la redirección deja de llevar a ninguna parte. Una liga que se le
+ * manda a un cliente por correo dura años, así que se le manda la buena. */
 export const PORTAL_URL =
-  process.env.NEXT_PUBLIC_PORTAL_URL ?? "https://cuenta-taller101.netlify.app";
+  process.env.NEXT_PUBLIC_PORTAL_URL ?? "https://peek101.mike-929.workers.dev";
 
 const SECUNDARIA = "portal-clientes";
 

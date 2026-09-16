@@ -6,7 +6,7 @@
 | **Versión** | 0.1.0 |
 | **Estado** | En producción, uso interno. Tres usuarios reales |
 | **URL** | https://conta-master.netlify.app |
-| **Portal del cliente** | https://cuenta-taller101.netlify.app |
+| **Portal del cliente** | https://peek101.mike-929.workers.dev |
 | **Stack** | Next.js 15 · React 19 · Tailwind · Firebase (Firestore + Auth) · Recharts · Netlify |
 | **Repositorio** | github.com/mikebalcazar/dash101 (privado) |
 

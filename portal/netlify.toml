@@ -1,6 +1,40 @@
+# El portal viejo ya no sirve estados de cuenta: manda a peek101.
+#
+# ── 16-sep-2026 · el corte del portal ────────────────────────────────────
+# Este sitio era un `index.html` de 438 renglones que leía el Firestore de la
+# contabilidad con Firebase Auth, y traía la llave `AIza…` escrita dentro de la
+# página. Cualquiera que abriera el código fuente se la llevaba.
+#
+# Su relevo, peek101, ya está en la suite y entra con la sesión de la suite:
+# `https://peek101.mike-929.workers.dev`. Medido el 16-sep: contesta 200, se
+# titula «Estado de cuenta · Taller 101» y no trae ninguna llave.
+#
+# Mike decidió el 16-sep cerrarlo ya, sin esperar a probar peek101 primero, con
+# la consecuencia dicha: si peek101 le falla a un cliente, nos enteramos por el
+# cliente. Se cierra por las dos vías a la vez, y las dos hacen falta:
+#
+#   1. LA REDIRECCIÓN, para que nadie llegue a la página vieja.
+#   2. LA PÁGINA, que se reemplazó por un aviso. Una redirección que alguien
+#      quite el año que viene volvería a publicar la llave. Quitarla del
+#      archivo es lo que de verdad la cierra; la redirección nada más evita
+#      que la gente se topa con una pared.
+#
+# NO SE APAGA NI SE BORRA NADA EN NETLIFY: eso es de Mike (OPERAR §8).
+#
+# `302` y no `301`: un 301 se queda pegado en el navegador de los clientes y
+# sobreviviría a que quitáramos la regla.
+
 [build]
   publish = "."
   command = ""
+
+# La misma regla vive en `_redirects`, que es la que gana sobre este archivo.
+# Aquí se repite para que la vea quien abra esto preguntándose qué pasó.
+[[redirects]]
+  from = "/*"
+  to = "https://peek101.mike-929.workers.dev/:splat"
+  status = 302
+  force = true
 
 [[headers]]
   for = "/*"

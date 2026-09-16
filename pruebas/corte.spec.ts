@@ -119,3 +119,51 @@ describe('la carpeta que Netlify publica', () => {
     expect(html).not.toMatch(/<script/i);
   });
 });
+
+describe('el portal de clientes, después de su corte', () => {
+  const toml = readFileSync('portal/netlify.toml', 'utf8');
+  const directivas = toml
+    .split('\n')
+    .filter((l) => !l.trimStart().startsWith('#'))
+    .join('\n');
+
+  it('manda a peek101 con 302 y `force`', () => {
+    expect(directivas).toContain('https://peek101.mike-929.workers.dev/:splat');
+    expect(directivas).toMatch(/status\s*=\s*302/);
+    expect(directivas).toMatch(/force\s*=\s*true/);
+    const red = readFileSync('portal/_redirects', 'utf8');
+    expect(red).toMatch(/^\/\*\s+https:\/\/peek101\.mike-929\.workers\.dev\/:splat\s+302!$/m);
+  });
+
+  it('conserva las cabeceras de seguridad que ya traía', () => {
+    // Iban en este archivo desde antes. Un corte no es razón para perderlas.
+    expect(directivas).toContain('X-Frame-Options');
+    expect(directivas).toContain('X-Content-Type-Options');
+    expect(directivas).toContain('Referrer-Policy');
+  });
+
+  /* Lo que de verdad cierra el portal NO es la redirección: es que la llave ya
+   * no esté en el archivo. Una redirección que alguien quite el año que viene
+   * volvería a publicar la llave; un archivo sin llave, no. Por eso esto se
+   * mide sobre TODO lo que la carpeta publica —`publish = "."` significa que
+   * cada archivo del directorio queda en internet—, no sólo sobre index.html. */
+  it('ni un archivo del portal lleva llave ni dirección de Firebase', () => {
+    const paraCadaArchivo = (dir: string) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const ruta = `${dir}/${e.name}`;
+        if (e.isDirectory()) { paraCadaArchivo(ruta); continue; }
+        if (/\.(woff2?|ttf|otf|png|jpe?g|webp|ico)$/i.test(e.name)) continue;
+        const texto = readFileSync(ruta, 'utf8');
+        expect(texto, ruta).not.toMatch(/AIza[0-9A-Za-z_-]{10}/);
+        expect(texto, ruta).not.toContain('firebaseapp.com');
+        expect(texto, ruta).not.toContain('firestore.googleapis.com');
+        expect(texto, ruta).not.toContain('googleapis.com/identitytoolkit');
+      }
+    };
+    paraCadaArchivo('portal');
+  });
+
+  it('la página que queda no ejecuta nada', () => {
+    expect(readFileSync('portal/index.html', 'utf8')).not.toMatch(/<script/i);
+  });
+});

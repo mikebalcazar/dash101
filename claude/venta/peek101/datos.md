@@ -5,7 +5,7 @@
 | **Nombre** | peek101 (en el repositorio es la carpeta `portal/`) |
 | **Versión** | v0 — lo publicado el 7 de septiembre |
 | **Estado** | En producción con clientes de prueba |
-| **URL** | https://cuenta-taller101.netlify.app |
+| **URL** | https://peek101.mike-929.workers.dev |
 | **Stack** | Un solo `index.html` estático · Firebase (Firestore + Auth) por CDN · Netlify, sin compilación |
 | **Repositorio** | github.com/mikebalcazar/dash101, carpeta `portal/` (privado) |
 
