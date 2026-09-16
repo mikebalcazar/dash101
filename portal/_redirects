@@ -1,0 +1,4 @@
+# Un `_redirects` en la carpeta publicada manda sobre `netlify.toml`. El `!` es
+# el `force`: sin él Netlify sirve `index.html` cuando existe —y existe, al
+# lado— y la regla no se aplica nunca.
+/*  https://peek101.mike-929.workers.dev/:splat  302!

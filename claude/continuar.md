@@ -139,14 +139,22 @@ hasta la noche: cinco entregas sin post. No se repite.
 - **`invitaciones`:** sí se usa (`lib/invitaciones.ts`, `app/(app)/equipo/invitar`,
   `app/invite/[id]`). El importador de la API no la trae (arranque §7): sigue
   abierto qué pasa con ella en el corte.
-- **El portal de estados de cuenta** es `portal/index.html`: una página plana,
-  **no es Next.js**, con Firebase cargado desde `gstatic` (Auth por
-  correo/contraseña, Firestore). Lee `clientes` (`portal_activo == true`,
-  `uid`), `proyectos` y `movimientos` por `cliente_uid`. Se publica aparte en
-  Netlify `cuenta-taller101` (deploy `6aa04303…`, commit `3af9c8a`, sin
-  funciones; su `netlify.toml` publica `.` con `command = ""`).
-  **Mike (11-sep): es de prueba, nadie lo usa.** peek101 arranca sin
-  compatibilidad hacia atrás.
+- **El portal de estados de cuenta se cortó el 16-sep-2026.**
+  `cuenta-taller101.netlify.app` manda a peek101 con un 302, y
+  `portal/index.html` es ahora un aviso sin llaves ni scripts. Lo decidió Mike
+  ese día: cerrarlo ya, sin esperar a probar peek101 primero.
+
+  Lo que era: una página plana, **no Next.js**, con Firebase cargado desde
+  `gstatic` (Auth por correo/contraseña, Firestore) y la llave `AIza…` escrita
+  dentro del HTML. Leía `clientes` (`portal_activo == true`, `uid`),
+  `proyectos` y `movimientos` por `cliente_uid`. **Mike (11-sep): es de
+  prueba, nadie lo usa** — por eso cerrarlo no le quitó el estado de cuenta a
+  nadie, aunque el 16-sep se le advirtió lo contrario antes de que decidiera.
+  peek101 arranca sin compatibilidad hacia atrás.
+
+  `lib/portal.ts` entrega ahora la liga de peek101. La vieja seguiría
+  sirviendo por la redirección, pero una liga que se le manda a un cliente
+  dura años y no conviene que sea una que rebota.
 
 ### 3. Qué hace Next.js — **medido**
 
@@ -286,7 +294,7 @@ lados; no es el flujo del negocio.
   se mueve por `POST /orgs/:o/items/:id/etapa`, `clave` que nace en la etapa 4
   (`suite101-api/migrations/org/0001_inicial.sql:71-91`), un escritor por campo
   (`src/permisos.ts`). Los nombres de las siete etapas son los de la v1.
-- El portal `cuenta-taller101` es de prueba (arriba).
+- El portal `cuenta-taller101` era de prueba y quedó cortado el 16-sep (arriba).
 
 ## Lo que hace falta de Mike (pendiente)
 

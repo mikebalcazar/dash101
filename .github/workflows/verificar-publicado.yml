@@ -5,9 +5,13 @@
 # de lo normal, el run sale rojo y hay que volver a dispararlo a mano.
 #
 # Este repositorio publica DOS sitios distintos desde un solo push, cada uno con
-# su propio netlify.toml, así que los dos se comprueban por separado. Cuidado con
-# la marca: se busca en el HTML tal como llega, y si el nombre está dibujado en un
-# SVG o en un <img> no aparece como texto y sale rojo con el sitio perfecto.
+# su propio netlify.toml, así que los dos se comprueban por separado.
+#
+# Desde el 16-sep-2026 los dos están cortados: ninguno sirve ya su app, los dos
+# mandan a la dirección con puerta. Así que aquí ya no se busca una marca en el
+# HTML —eso medía que el sitio sirviera— sino lo contrario: que redirija y que
+# no publique una llave. Si algún día uno de los dos vuelve a servir algo, es
+# aquí donde tiene que volver la comprobación de la marca.
 
 name: Verificar lo publicado
 
@@ -85,15 +89,50 @@ jobs:
           fi
           echo "corte verificado: la dirección vieja no sirve la app y no reenvía a la API"
 
+  # ── el corte del portal, 16-sep-2026 ──────────────────────────────────────
+  # Mismo caso que el de arriba, y más engañoso: este trabajo buscaba la marca
+  # «Estado de cuenta» y las cinco fuentes. peek101 se titula «Estado de cuenta
+  # · Taller 101» y trae las mismas fuentes, así que siguiendo la redirección
+  # habría pasado en verde para siempre sin volver a mirar el portal viejo.
   portal:
     needs: esperar
-    uses: ./.github/workflows/verificar.yml
-    with:
-      url: https://cuenta-taller101.netlify.app
-      marca: Estado de cuenta
-      rutas: >-
-        /fonts/fira-cifras-400.woff2
-        /fonts/fira-cifras-600.woff2
-        /fonts/raleway-400.woff2
-        /fonts/raleway-700.woff2
-        /fonts/sansation-700.woff2
+    runs-on: ubuntu-latest
+    steps:
+      - name: El portal viejo manda a peek101 y ya no trae la llave
+        run: |
+          set -uo pipefail
+          VIEJO=https://cuenta-taller101.netlify.app
+          NUEVO=https://peek101.mike-929.workers.dev
+
+          ok=0
+          for i in $(seq 1 12); do
+            codigo=$(curl -s -o /dev/null -w '%{http_code}' "$VIEJO/")
+            donde=$(curl -s -o /dev/null -w '%{redirect_url}' "$VIEJO/")
+            echo "vuelta $i: / → $codigo  Location: ${donde:-(ninguna)}"
+            case "$codigo" in
+              301|302|303|307|308)
+                case "$donde" in
+                  "$NUEVO"/*|"$NUEVO") ok=1; break ;;
+                esac ;;
+            esac
+            sleep 10
+          done
+          [ "$ok" = 1 ] || { echo "::error::$VIEJO no manda a peek101. Revisa portal/netlify.toml y portal/_redirects."; exit 1; }
+
+          # Y la parte que de verdad cierra el portal: la llave. Se mide sin
+          # seguir la redirección, porque con `-L` el cuerpo sería el de
+          # peek101 y la comprobación se engañaría sola. `publish = "."`
+          # significa que TODO archivo de portal/ queda en internet, así que se
+          # revisa también la página directo por su nombre, que es el camino
+          # que se salta la regla si algún día la regla se cae.
+          for ruta in / /index.html; do
+            cuerpo=$(curl -s "$VIEJO$ruta")
+            for prohibido in 'AIzaSy' 'firebaseapp.com' 'firestore.googleapis.com' 'identitytoolkit'; do
+              if printf '%s' "$cuerpo" | grep -q "$prohibido"; then
+                echo "::error::$VIEJO$ruta está sirviendo «$prohibido». La llave del portal volvió a quedar publicada."
+                exit 1
+              fi
+            done
+            echo "$ruta: sin llave ni dirección de Firebase"
+          done
+          echo "corte del portal verificado"
