@@ -1,20 +1,54 @@
-[build]
-  command = "npm run build"
-  publish = ".next"
+# Netlify ya no construye ni sirve dash101: manda a la dirección con puerta.
+#
+# ── 16-sep-2026 · el corte (D3) ──────────────────────────────────────────
+# Hasta hoy esta dirección servía la app **en modo Firestore**: se construía
+# sin `NEXT_PUBLIC_FUENTE`, y ése era el valor por omisión. O sea que la misma
+# empresa estaba viéndose desde dos direcciones contra dos bases distintas, y
+# la llave pública de Firebase viajaba dentro de la página. Quien la leyera
+# alcanzaba la contabilidad sin pasar por ninguna puerta.
+#
+# Mike decidió el 16-sep arrancar limpio, sin mudar lo viejo: la app de verdad
+# es el Worker de Cloudflare contra la suite, y la contabilidad que vive en
+# Firestore se queda ahí, alcanzable sólo por Mike desde la consola de
+# Firebase, no por internet.
+#
+# NO SE APAGA NI SE BORRA NADA EN NETLIFY. Eso es de Mike y es irreversible
+# (OPERAR §8 y D3). Esto es una regla del repositorio: se deshace quitándola.
+#
+# Tres cosas a propósito:
+#
+# 1. LA CONSTRUCCIÓN SE VA. Aquí no basta con poner una redirección encima,
+#    como en quote101: quote101 es estático, y esto construye Next y deja una
+#    función que atiende `/*`. Dejar la función publicada y taparla con una
+#    regla es apostarle a un orden de evaluación. Sin construcción no hay
+#    función que tapar, y lo que se sirve es la carpeta `netlify-publica/`,
+#    que no trae ni una llave.
+#
+# 2. `status = 302`, no 301. Un 301 se queda pegado en el caché del navegador
+#    de la gente y sobreviviría a que quitáramos esta regla. Mientras la
+#    mudanza no termine, conviene poder deshacerla sin pedirle a nadie que
+#    limpie su navegador.
+#
+# 3. SE VA EL PROXY `/s101/*`. Apuntaba a la API de PRODUCCIÓN con
+#    `X-App: dash101` puesto por Netlify. Era para los deploy previews, y sin
+#    construcción ya no hay previews; pero mientras estuviera aquí, esta
+#    dirección seguía siendo una entrada de cuerpo entero a la suite de
+#    producción. Una puerta en una de dos entradas no es una puerta.
 
-[[plugins]]
-  package = "@netlify/plugin-nextjs"
+[build]
+  command = "echo 'dash101 ya no se construye en Netlify: el corte del 16-sep-2026. Ver netlify.toml.'"
+  publish = "netlify-publica"
 
 [build.environment]
   NODE_VERSION = "20"
 
-# La API desde el mismo origen (decisión D1): la cookie `s101` es propia y
-# Safari no la bloquea. Netlify reenvía y pone X-App; el navegador nunca ve el
-# Worker. Sólo se usa cuando la construcción lleva NEXT_PUBLIC_FUENTE=api. En
-# la fase 4 esto mismo lo hace el Worker de dash101 en Cloudflare.
+# La misma regla está en `netlify-publica/_redirects`, y ésa es la que de
+# verdad manda: un `_redirects` en la carpeta publicada pesa más que
+# `netlify.toml` (lo dice la documentación de Netlify, y por eso existía
+# `scripts/redirects.mjs`). Aquí se repite para que quede a la vista de quien
+# abra este archivo buscando por qué esta dirección no sirve la app.
 [[redirects]]
-  from = "/s101/*"
-  to = "https://suite101-api.mike-929.workers.dev/:splat"
-  status = 200
+  from = "/*"
+  to = "https://dash101.mike-929.workers.dev/:splat"
+  status = 302
   force = true
-  headers = { X-App = "dash101" }

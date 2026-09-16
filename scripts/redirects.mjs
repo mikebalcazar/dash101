@@ -16,7 +16,16 @@ import { fileURLToPath } from "node:url";
 
 const ruta = fileURLToPath(new URL("../public/_redirects", import.meta.url));
 const origen = (process.env.NEXT_PUBLIC_API_ORIGEN ?? "").replace(/\/$/, "");
-const conApi = process.env.NEXT_PUBLIC_FUENTE === "api";
+/* La misma regla que `lib/fuente.ts`, que el 16-sep-2026 invirtió su valor
+ * por omisión: sin variable se va a la suite, y para Firestore hay que
+ * escribirlo. Si aquí se quedara el `=== "api"` de antes, los dos archivos
+ * dirían cosas distintas sobre la misma variable — y el que se lee al depurar
+ * casi nunca es el que manda.
+ *
+ * Después del corte esto ya no corre en Netlify (ahí no se construye) ni en la
+ * construcción del Worker (`worker:build` no pasa por `npm run build`). Queda
+ * para quien construya a mano. */
+const conApi = process.env.NEXT_PUBLIC_FUENTE !== "firestore";
 
 if (conApi && origen) {
   mkdirSync(fileURLToPath(new URL("../public", import.meta.url)), { recursive: true });

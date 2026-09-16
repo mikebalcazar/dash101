@@ -602,11 +602,24 @@ del Worker desde el corredor) y #23 (la versión servida). Todo en `main`.
 | staging | `dash101-staging.mike-929.workers.dev` | `suite101-api-staging` | `demo` | 17 de 17 |
 | producción | `dash101.mike-929.workers.dev` | `suite101-api` | **`forespot`** | 13 de 13 |
 
-**Netlify sigue vivo** (D3). Hasta el corte la app de verdad es
-`conta-master.netlify.app` contra Firestore. Producción apunta a `forespot`
-por **decisión de Mike del 12-sep**, tomada con la consecuencia enfrente:
-dos direcciones sirviendo la misma empresa contra dos bases distintas, y lo
-que se capture en una no aparece en la otra. Está escrito en la cabecera de
+**El corte ya se hizo, el 16-sep-2026.** La app de verdad es el Worker, y
+`conta-master.netlify.app` ya no la sirve: manda al Worker con un 302 y
+publica una carpeta de dos archivos sin una sola llave. Netlify no se apagó
+—eso es de Mike y es irreversible (D3)—, dejó de construir.
+
+Mike decidió **arrancar limpio, sin mudar lo viejo**: la contabilidad que
+vive en Firestore se queda ahí, alcanzable desde la consola de Firebase y ya
+no por internet. En la suite, `forespot` empieza vacía; la app aguanta ese
+vacío (enseña «Sin negocio activo» y tiene pantalla para crear el primero).
+
+Hasta el 16-sep esto decía «Netlify sigue vivo, hasta el corte la app de
+verdad es `conta-master.netlify.app` contra Firestore», y era cierto: se
+construía sin `NEXT_PUBLIC_FUENTE` y ése era el valor por omisión. Ahora el
+valor por omisión es `api`, así que ese olvido ya no manda a nadie a
+Firebase. Producción apunta a `forespot` por **decisión de Mike del 12-sep**,
+tomada con la consecuencia enfrente: entonces eran dos direcciones sirviendo
+la misma empresa contra dos bases distintas, y lo que se capturara en una no
+aparecía en la otra. Con el corte ya es una sola. Está escrito en la cabecera de
 `.github/workflows/publicar.yml`; la variable `ORG_PRODUCCION` del
 repositorio lo cambia sin tocar código.
 

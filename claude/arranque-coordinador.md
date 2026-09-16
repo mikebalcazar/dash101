@@ -78,7 +78,7 @@ portada de `suite101.pages.dev`, donde sale como tarjeta apagada.
 | | |
 | --- | --- |
 | Repo | `github.com/mikebalcazar/conta-master` (privado). **Según** `suite101-repos.md`: Next.js, Firebase y Netlify; trae `CONTEXTO.md`, **con el PAT adentro** (ver §4, fase 1) |
-| Sitio vivo | Netlify `conta-master` → `https://conta-master.netlify.app`. **Medido:** deploy `ready` |
+| Sitio vivo | Netlify `conta-master` → `https://conta-master.netlify.app`. **Medido:** deploy `ready`. **Ya no**: el corte del 16-sep-2026 lo dejó redirigiendo al Worker (ver D3) |
 | Datos de hoy | Firestore, en modelo plano: `negocios`, `cuentas`, `clientes`, `proyectos`, `movimientos`, `opex`, `proveedores`, `invitaciones`, `usuarios` y los productos, que en la suite se llaman ítems |
 | Datos de mañana | OrgDB de `forespot`. **Según** el coordinador anterior (9-sep), ya se importó y cuadró. **No se pudo medir hoy**: un Durable Object no se lee desde el conector |
 | En la API | `X-App: dash101`; en `orgs.apps` es la llave `dash`. **Medido:** encendida en `forespot` |
@@ -198,6 +198,23 @@ mientras el nuevo se mide a su lado. El corte llega cuando el nuevo pasa la
 misma verificación que el viejo, con números. Apagar o borrar un sitio de
 Netlify lo hace Mike, porque es irreversible y un chat no borra. Ningún sitio
 de Netlify se renombra.
+
+> **El corte se hizo el 16-sep-2026.** Lo decidió Mike: arrancar limpio, sin
+> mudar lo viejo. `conta-master.netlify.app` dejó de construir y manda al
+> Worker con un 302; se le quitó también el proxy `/s101/*`, que era una
+> segunda entrada a la API de producción. El valor por omisión de
+> `lib/fuente.ts` se invirtió a `api`, para que a una construcción que olvide
+> la variable el olvido le caiga del lado de la suite y no de Firebase.
+> **Nada se apagó ni se borró en Netlify**: eso sigue siendo de Mike. Lo mide
+> el trabajo `corte` de `verificar-publicado.yml` y `pruebas/corte.spec.ts`.
+>
+> Queda fuera de este corte el **portal de clientes**
+> (`cuenta-taller101.netlify.app`, carpeta `portal/`), que este mismo
+> repositorio publica como segundo sitio y que sigue leyendo Firestore con
+> una llave a la vista en su `index.html`. Su relevo es peek101, ya en la
+> suite. Cerrarlo le quita el estado de cuenta a los clientes de Mike
+> mientras no se los cambie de dirección, así que es decisión suya y está
+> puesta a su consideración.
 
 **D4 · Ninguna app toca una base directo.**
 
