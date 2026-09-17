@@ -71,6 +71,10 @@ export async function obtener<T>(tabla: string, id: string): Promise<T | null> {
 /* ─────────────── la sesión ─────────────── */
 
 export interface Yo {
+  /** Si la persona ya tiene contraseña puesta, y con qué entró (contrato 0.7.0).
+   *  La pantalla los usa para pedir la contraseña a quien entró con código. */
+  tiene_clave?: boolean;
+  entro_con?: 'codigo' | 'pin' | 'clave' | 'google';
   usuario: { id: string; correo: string; nombre: string | null; creado_at: string };
   superadmin: boolean;
   orgs: Array<{ id: string; nombre: string; rol: 'owner' | 'admin' | 'socio' | 'staff'; apps: string[]; negocios: string[] }>;
@@ -85,6 +89,30 @@ export async function yo(): Promise<Yo | null> {
     if (e instanceof ErrorApi && e.error === 'sin_sesion') return null;
     throw e;
   }
+}
+
+/** Entra con correo y contraseña (contrato 0.7.0). Desde el 16-sep-2026 es la
+ *  forma normal de entrar sin Google, en todas las apps de la suite. */
+export async function entrarConClave(correo: string, clave: string): Promise<Yo['usuario']> {
+  const r = await pedir<{ usuario: Yo['usuario'] }>('/auth/entrar', { method: 'POST', body: { correo, clave } });
+  return r.usuario;
+}
+
+/** Pone o cambia la contraseña. Si la sesión se abrió con código o con
+ *  Google, la suite no pide la anterior: así «olvidé mi contraseña» es entrar
+ *  con un código y poner otra. */
+export async function ponerClave(clave: string, actual?: string): Promise<void> {
+  await pedir<{ puesta: boolean }>('/auth/clave', { method: 'POST', body: actual ? { clave, actual } : { clave } });
+}
+
+export async function entrarConCodigo(correo: string, codigo: string): Promise<Yo['usuario']> {
+  const r = await pedir<{ usuario: Yo['usuario'] }>('/auth/entrar', { method: 'POST', body: { correo, codigo } });
+  return r.usuario;
+}
+
+/** Canjea el boleto de entrada por la cookie de sesión. Un solo uso. */
+export async function canjear(entrada: string): Promise<void> {
+  await pedir<{ entro: boolean }>('/auth/canje', { method: 'POST', body: { entrada } });
 }
 
 /** Manda el código de seis dígitos al correo. En staging lo devuelve también,
@@ -123,20 +151,6 @@ export function urlGoogle(volverA: string): string {
   return `${apiBase()}/auth/google?volver_a=${encodeURIComponent(volverA)}`;
 }
 
-/** Canjea el boleto de entrada por la cookie de sesión. Un solo uso. */
-export async function canjear(entrada: string): Promise<void> {
-  await pedir<{ entro: boolean }>('/auth/canje', { method: 'POST', body: { entrada } });
-}
-
-export async function entrarConCodigo(correo: string, codigo: string): Promise<Yo['usuario']> {
-  const r = await pedir<{ usuario: Yo['usuario'] }>('/auth/entrar', { method: 'POST', body: { correo, codigo } });
-  return r.usuario;
-}
-
-export async function entrarConPin(correo: string, pin: string): Promise<Yo['usuario']> {
-  const r = await pedir<{ usuario: Yo['usuario'] }>('/auth/entrar', { method: 'POST', body: { correo, pin } });
-  return r.usuario;
-}
 
 export async function fijarPin(pin: string): Promise<void> {
   await pedir('/auth/pin', { method: 'POST', body: { pin } });
