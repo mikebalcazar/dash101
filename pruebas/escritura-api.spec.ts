@@ -59,8 +59,12 @@ beforeAll(async () => {
     /* no existía */
   }
   const alta = await pedir<{ org_db_version: number }>("/admin/orgs", { method: "POST", body: { id: ORG, nombre: "Prueba de escritura" } });
-  // Las tres migraciones corren solas al nacer el Durable Object.
-  expect(alta.org_db_version).toBe(3);
+  /* Las migraciones corren solas al nacer el Durable Object. Lo que esta
+   * prueba necesita es que ya estén la 0002 (partidas) y la 0003
+   * (conciliaciones); la API sigue agregando (0004 folios, 0005 ajustes) y
+   * `toBe(3)` se rompía con cada una sin que dash101 hubiera cambiado
+   * (run 35294156632, 18-sep-2026: «expected 5 to be 3»). */
+  expect(alta.org_db_version).toBeGreaterThanOrEqual(3);
 }, 60000);
 
 afterAll(async () => {
