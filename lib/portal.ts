@@ -1,6 +1,7 @@
 /**
  * Acceso de clientes al portal de estados de cuenta (app aparte que lee
- * este mismo Firestore). El cliente entra con correo + PIN de 6 dígitos.
+ * este mismo Firestore). Hoy el portal es peek101 y el cliente entra con
+ * Google o con correo y contraseña, como en toda la suite (16-sep-2026).
  *
  * El usuario de Firebase Auth se crea desde el navegador del socio usando una
  * instancia SECUNDARIA de Firebase: crear un usuario en la instancia principal

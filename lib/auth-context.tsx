@@ -45,8 +45,14 @@ type AuthContextValue = {
   /** FUENTE=api: manda el código de seis dígitos al correo. */
   /** Devuelve `codigo_prueba` sólo fuera de producción (staging): la pantalla lo rellena. */
   pedirCodigo: (correo: string) => Promise<{ codigo_prueba?: string }>;
-  entrarConCodigo: (correo: string, codigo: string) => Promise<void>;
-  entrarConPin: (correo: string, pin: string) => Promise<void>;
+  /** Entra con el código. Si esa persona no tiene contraseña, NO deja la
+   *  sesión puesta en `user` —se pondría en /dashboard antes de tiempo— y
+   *  devuelve `necesitaClave: true` para que la pantalla la pida primero. */
+  entrarConCodigo: (correo: string, codigo: string) => Promise<{ necesitaClave: boolean }>;
+  entrarConClave: (correo: string, clave: string) => Promise<void>;
+  ponerClave: (clave: string, actual?: string) => Promise<void>;
+  /** Vuelve a leer /yo y actualiza `user`: después de poner la contraseña. */
+  refrescar: () => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -143,11 +149,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
   const entrarConCodigo = async (correo: string, codigo: string) => {
     soloApi();
-    setUser(desdeApi(await api.entrarConCodigo(correo.trim().toLowerCase(), codigo.trim())));
+    await api.entrarConCodigo(correo.trim().toLowerCase(), codigo.trim());
+    /* Quien entra con un código y no tiene contraseña no tiene por dónde
+     * volver mañana: el código es de un solo uso y de diez minutos. La sesión
+     * ya está abierta en la suite, pero `user` no se pone hasta que la ponga,
+     * porque en cuanto se pone, el login lo manda a /dashboard. */
+    const yo = await api.yo();
+    if (yo && !yo.tiene_clave) return { necesitaClave: true };
+    if (yo) setUser(desdeApi(yo.usuario));
+    return { necesitaClave: false };
   };
-  const entrarConPin = async (correo: string, pin: string) => {
+  /* La contraseña NO se recorta: un espacio al borde es parte de ella —la
+   * suite rechaza esas al ponerlas, no al usarlas— y recortarla haría que una
+   * buena no entrara sin explicación. El correo sí se normaliza. */
+  const entrarConClave = async (correo: string, clave: string) => {
     soloApi();
-    setUser(desdeApi(await api.entrarConPin(correo.trim().toLowerCase(), pin.trim())));
+    setUser(desdeApi(await api.entrarConClave(correo.trim().toLowerCase(), clave)));
+  };
+  const ponerClave = async (clave: string, actual?: string) => {
+    soloApi();
+    await api.ponerClave(clave, actual);
+  };
+  const refrescar = async () => {
+    soloApi();
+    const yo = await api.yo();
+    if (yo) setUser(desdeApi(yo.usuario));
   };
 
   const signOut = async () => {
@@ -161,7 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, fuente: modo, signInGoogle, signInEmail, signUpEmail, pedirCodigo, entrarConCodigo, entrarConPin, signOut }}
+      value={{ user, loading, fuente: modo, signInGoogle, signInEmail, signUpEmail, pedirCodigo, entrarConCodigo, entrarConClave, ponerClave, refrescar, signOut }}
     >
       {children}
     </AuthContext.Provider>

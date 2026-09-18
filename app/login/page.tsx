@@ -16,11 +16,14 @@ export default function LoginPage() {
 
 function LoginApi() {
   const router = useRouter();
-  const { user, pedirCodigo, entrarConCodigo, entrarConPin, signInGoogle } = useAuth();
+  const { user, pedirCodigo, entrarConCodigo, entrarConClave, ponerClave, refrescar, signInGoogle } = useAuth();
   const [correo, setCorreo] = useState("");
-  const [pin, setPin] = useState("");
+  const [clave, setClave] = useState("");
   const [codigo, setCodigo] = useState("");
-  const [codigoPedido, setCodigoPedido] = useState(false);
+  const [nueva1, setNueva1] = useState("");
+  const [nueva2, setNueva2] = useState("");
+  // correo → clave → (olvidé) codigo → nueva → adentro
+  const [paso, setPaso] = useState<"correo" | "clave" | "codigo" | "nueva">("correo");
   const [dePrueba, setDePrueba] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -41,57 +44,104 @@ function LoginApi() {
     }
   };
 
+  /* «Olvidé mi contraseña», que es la misma puerta para quien nunca tuvo una:
+   * manda el código y pasa a teclearlo. */
+  const mandarCodigo = () => intenta(async () => {
+    const r = await pedirCodigo(correo);
+    // Staging devuelve el código en la respuesta para poder entrar sin buzón;
+    // producción nunca lo hace. Se rellena y se dice.
+    if (r.codigo_prueba) { setCodigo(r.codigo_prueba); setDePrueba(true); } else { setCodigo(""); setDePrueba(false); }
+    setPaso("codigo");
+  });
+
+  /* Quien entra con un código y no tiene contraseña no puede seguir sin
+   * ponerla: el código es de un solo uso y de diez minutos. Con Google no se
+   * le pide nada —Google ya es una forma de entrar—, y por eso esto sólo se
+   * decide aquí, en el camino del código. `user` no se pone hasta que haya
+   * contraseña, para que el `useEffect` de arriba no lo mande a /dashboard
+   * antes de tiempo. */
+  const entrarConElCodigo = () => intenta(async () => {
+    const r = await entrarConCodigo(correo, codigo);
+    if (r.necesitaClave) { setNueva1(""); setNueva2(""); setPaso("nueva"); }
+  });
+
+  const guardarClave = () => intenta(async () => {
+    if (nueva1 !== nueva2) {
+      // No se dice cuál falló ni se deja la primera puesta: si no
+      // coincidieron, una de las dos está mal y no hay forma de saber cuál.
+      setNueva1(""); setNueva2("");
+      throw new Error("No coincidieron. Vamos otra vez, desde el principio.");
+    }
+    await ponerClave(nueva1);
+    await refrescar();
+  });
+
+  const volverAlCorreo = () => { setPaso("correo"); setClave(""); setCodigo(""); setError(""); };
+
   return (
-    <Marco pie="Entra con el PIN que fijaste, o pide un código a tu correo.">
-      <form onSubmit={(e) => { e.preventDefault(); void intenta(() => entrarConPin(correo, pin)); }} className="space-y-3">
-        <input type="email" required value={correo} onChange={(e) => setCorreo(e.target.value)} placeholder="tu@correo.mx" className={caja} />
-        <input type="password" inputMode="numeric" pattern="\d{6}" maxLength={6} value={pin} onChange={(e) => setPin(e.target.value)} placeholder="PIN de 6 dígitos" className={caja} />
-        <button type="submit" disabled={loading || pin.length !== 6} className={boton}>
-          {loading ? "Entrando…" : "Entrar con PIN"}
-        </button>
-      </form>
+    <Marco pie="Con tu cuenta de la suite 101: la misma de las demás aplicaciones.">
+      {paso === "correo" && (
+        <form onSubmit={(e) => { e.preventDefault(); if (correo) setPaso("clave"); }} className="space-y-3">
+          <input type="email" required autoComplete="username" value={correo} onChange={(e) => setCorreo(e.target.value)} placeholder="tu@correo.mx" className={caja} />
+          <button type="submit" disabled={loading || !correo} className={boton}>Continuar</button>
+        </form>
+      )}
 
-      <div className="flex items-center gap-3 text-xs text-ink-muted my-4">
-        <div className="flex-1 h-px bg-black/10" />
-        o con un código al correo
-        <div className="flex-1 h-px bg-black/10" />
-      </div>
+      {paso === "clave" && (
+        <form onSubmit={(e) => { e.preventDefault(); void intenta(() => entrarConClave(correo, clave)); }} className="space-y-3">
+          <p className="text-xs text-ink-muted">La contraseña de {correo}.</p>
+          {/* `name` y `autoComplete` van puestos para que el administrador de
+              contraseñas la guarde y la vuelva a poner. */}
+          <input type="password" name="password" autoComplete="current-password" required autoFocus value={clave} onChange={(e) => setClave(e.target.value)} placeholder="contraseña" className={caja} />
+          <button type="submit" disabled={loading || !clave} className={boton}>
+            {loading ? "Entrando…" : "Entrar"}
+          </button>
+          <button type="button" disabled={loading} onClick={mandarCodigo} className={botonSuave}>
+            Olvidé mi contraseña
+          </button>
+          <p className="text-xs text-ink-muted">Si es tu primera vez y todavía no tienes una, pícale ahí mismo: te mandamos un código al correo y la pones.</p>
+          <button type="button" onClick={volverAlCorreo} className={botonSuave}>Usar otro correo</button>
+        </form>
+      )}
 
-      {!codigoPedido ? (
-        <button
-          type="button"
-          disabled={loading || !correo}
-          onClick={() => intenta(async () => {
-            const r = await pedirCodigo(correo);
-            // Staging devuelve el código en la respuesta para poder entrar sin
-            // buzón; producción nunca lo hace. Se rellena y se dice.
-            if (r.codigo_prueba) { setCodigo(r.codigo_prueba); setDePrueba(true); }
-            setCodigoPedido(true);
-          })}
-          className={botonSuave}
-        >
-          Mandarme un código
-        </button>
-      ) : (
-        <form onSubmit={(e) => { e.preventDefault(); void intenta(() => entrarConCodigo(correo, codigo)); }} className="space-y-3">
+      {paso === "codigo" && (
+        <form onSubmit={(e) => { e.preventDefault(); void entrarConElCodigo(); }} className="space-y-3">
           <p className="text-xs text-ink-muted">
-            {dePrueba ? "Ambiente de pruebas: el código se rellenó solo. Sólo falta entrar." : `Te mandamos seis dígitos a ${correo}. Vencen en diez minutos.`}
+            {dePrueba ? "Ambiente de pruebas: el código se rellenó solo. Sólo falta continuar." : `Te mandamos seis dígitos a ${correo}. Vencen en diez minutos.`}
           </p>
-          <input inputMode="numeric" pattern="\d{6}" maxLength={6} value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="código de 6 dígitos" className={caja} autoFocus />
+          <input inputMode="numeric" pattern="\d{6}" maxLength={6} autoComplete="one-time-code" value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="código de 6 dígitos" className={caja} autoFocus />
           <button type="submit" disabled={loading || codigo.length !== 6} className={boton}>
-            {loading ? "Entrando…" : "Entrar con el código"}
+            {loading ? "Entrando…" : "Continuar"}
+          </button>
+          <button type="button" disabled={loading} onClick={mandarCodigo} className={botonSuave}>Mándame otro</button>
+          <button type="button" onClick={volverAlCorreo} className={botonSuave}>Usar otro correo</button>
+        </form>
+      )}
+
+      {paso === "nueva" && (
+        <form onSubmit={(e) => { e.preventDefault(); void guardarClave(); }} className="space-y-3">
+          <p className="text-xs text-ink-muted">Ponle una contraseña a tu cuenta. Con ella entras de ahora en adelante, aquí y en las demás apps de la suite.</p>
+          <input type="password" name="new-password" autoComplete="new-password" required autoFocus value={nueva1} onChange={(e) => setNueva1(e.target.value)} placeholder="contraseña nueva" className={caja} />
+          <input type="password" name="new-password" autoComplete="new-password" required value={nueva2} onChange={(e) => setNueva2(e.target.value)} placeholder="otra vez, de memoria" className={caja} />
+          <p className="text-xs text-ink-muted">Al menos diez caracteres. Que no lleve tu correo adentro ni sea de las que cualquiera prueba primero.</p>
+          <button type="submit" disabled={loading || nueva1.length < 10 || nueva2.length < 10} className={boton}>
+            {loading ? "Guardando…" : "Guardar y entrar"}
           </button>
         </form>
       )}
 
-      <div className="flex items-center gap-3 text-xs text-ink-muted my-4">
-        <div className="flex-1 h-px bg-black/10" />
-        o con tu cuenta de Google
-        <div className="flex-1 h-px bg-black/10" />
-      </div>
-      <button type="button" disabled={loading} onClick={() => intenta(signInGoogle)} className={botonSuave}>
-        Entrar con Google
-      </button>
+      {paso !== "nueva" && (
+        <>
+          <div className="flex items-center gap-3 text-xs text-ink-muted my-4">
+            <div className="flex-1 h-px bg-black/10" />
+            o con tu cuenta de Google
+            <div className="flex-1 h-px bg-black/10" />
+          </div>
+          <button type="button" disabled={loading} onClick={() => intenta(signInGoogle)} className={botonSuave}>
+            Entrar con Google
+          </button>
+        </>
+      )}
 
       {error && <p className="mt-4 text-xs text-mauve-900 bg-mauve-50 px-3 py-2 rounded-lg">{error}</p>}
     </Marco>
@@ -171,14 +221,20 @@ const botonSuave = "w-full flex items-center justify-center gap-2 bg-cream hover
 
 const ERRORES: Record<string, string> = {
   codigo_invalido: "Ese código no es, o ya venció. Pide otro.",
-  pin_invalido: "Correo o PIN equivocados.",
+  // `sin_permiso` es el correo sin cuenta y `clave_invalida` la contraseña
+  // equivocada. Se dicen IGUAL a propósito: distinguirlos le diría a
+  // cualquiera qué correos tienen cuenta aquí.
+  clave_invalida: "Ese correo y esa contraseña no coinciden.",
+  sin_permiso: "Ese correo y esa contraseña no coinciden.",
   demasiados_intentos: "Demasiados intentos. Espera unos minutos.",
-  correo_no_configurado: "El servidor no puede mandar correos ahora mismo. Entra con tu PIN.",
+  correo_no_configurado: "El servidor no puede mandar correos ahora mismo. Intenta más tarde.",
   sin_sesion: "La sesión no quedó puesta. Vuelve a intentar.",
 };
 
 function mensaje(e: unknown): string {
-  const err = e as { error?: string; message?: string };
+  const err = e as { error?: string; message?: string; detalle?: { porque?: string } };
+  // La suite dice con palabras por qué una contraseña no pasa; se enseña tal cual.
+  if (err?.error === "clave_debil" && err.detalle?.porque) return err.detalle.porque;
   if (err?.error && ERRORES[err.error]) return ERRORES[err.error];
   return err?.message ?? "Error desconocido";
 }

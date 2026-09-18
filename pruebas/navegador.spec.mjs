@@ -99,13 +99,23 @@ async function pestana(viewport = { width: 1440, height: 900 }, conSesion = fals
   return { ctx, pag, errores };
 }
 
-/** Pide el código y espera el formulario. Si la API pide esperar para
- *  reenviar (`demasiados_intentos`, 45 s), espera y vuelve a pedir una vez. */
+/* La contraseña que esta prueba le pone a la cuenta de staging si no tiene.
+ * Lleva el número de la corrida para que dos corridas no se peleen. Nunca
+ * corre contra producción. */
+const CLAVE = `dash-${process.env.GITHUB_RUN_ID || Date.now()}-sauce`;
+
+/** Desde el 16-sep-2026 la pantalla entra con Google o con contraseña, y el
+ *  código quedó como recuperación. Esta prueba entra por ahí —«Olvidé mi
+ *  contraseña»— porque es lo único que puede hacer sola: no sabe la contraseña
+ *  de nadie, y en staging el código se rellena solo. Si la API pide esperar
+ *  para reenviar (`demasiados_intentos`, 45 s), espera y vuelve a pedir una vez. */
 async function pedirCodigoConPaciencia(pag, correo) {
   await pag.goto(`${URL}/login`, { waitUntil: 'load' });
   await pag.getByPlaceholder('tu@correo.mx').fill(correo);
+  await pag.getByRole('button', { name: 'Continuar' }).click();
+  await pag.getByPlaceholder('contraseña').waitFor({ timeout: 15000 });
   for (let intento = 1; intento <= 2; intento++) {
-    await pag.getByRole('button', { name: 'Mandarme un código' }).click();
+    await pag.getByRole('button', { name: 'Olvidé mi contraseña' }).click();
     const llego = await pag.getByText('Ambiente de pruebas: el código se rellenó solo')
       .waitFor({ timeout: 15000 }).then(() => true).catch(() => false);
     if (llego) return;
@@ -119,11 +129,20 @@ async function pedirCodigoConPaciencia(pag, correo) {
   }
 }
 
-/** Entra por el propio Worker: correo → «Mandarme un código» → en staging el
- *  código se rellena solo → «Entrar con el código» → /dashboard. */
+/** Entra por el propio Worker: correo → contraseña → «Olvidé mi contraseña»
+ *  → en staging el código se rellena solo → «Continuar» → si esa cuenta no
+ *  tiene contraseña, la pantalla la pide y se pone → /dashboard. Caben las dos
+ *  salidas en vez de suponer una: suponerla haría que la prueba fallara o no
+ *  según lo que dejó la corrida anterior. */
 async function entrar(pag, correo = CORREO) {
   await pedirCodigoConPaciencia(pag, correo);
-  await pag.getByRole('button', { name: 'Entrar con el código' }).click();
+  await pag.getByRole('button', { name: 'Continuar' }).click();
+  const pide = await pag.getByPlaceholder('contraseña nueva').waitFor({ timeout: 8000 }).then(() => true, () => false);
+  if (pide) {
+    await pag.getByPlaceholder('contraseña nueva').fill(CLAVE);
+    await pag.getByPlaceholder('otra vez, de memoria').fill(CLAVE);
+    await pag.getByRole('button', { name: 'Guardar y entrar' }).click();
+  }
   await pag.waitForURL(/\/dashboard/, { timeout: 30000 });
 }
 
@@ -311,7 +330,7 @@ test('un código equivocado NO entra', async () => {
   const { ctx, pag } = await pestana();
   await pedirCodigoConPaciencia(pag, CORREO);
   await pag.getByPlaceholder('código de 6 dígitos').fill('000000');
-  await pag.getByRole('button', { name: 'Entrar con el código' }).click();
+  await pag.getByRole('button', { name: 'Continuar' }).click();
   await pag.waitForTimeout(3000);
   assert.ok(pag.url().includes('/login'), 'sigue en el login');
   assert.ok(/c[oó]digo/i.test(await texto(pag)), 'y dice algo del código');
