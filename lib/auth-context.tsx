@@ -150,12 +150,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const entrarConCodigo = async (correo: string, codigo: string) => {
     soloApi();
     await api.entrarConCodigo(correo.trim().toLowerCase(), codigo.trim());
-    /* Quien entra con un código y no tiene contraseña no tiene por dónde
-     * volver mañana: el código es de un solo uso y de diez minutos. La sesión
-     * ya está abierta en la suite, pero `user` no se pone hasta que la ponga,
-     * porque en cuanto se pone, el login lo manda a /dashboard. */
+    /* Quien entra con un código y no tiene contraseña NI cuenta de Google
+     * ligada no tiene por dónde volver mañana: el código es de un solo uso y
+     * de diez minutos. La sesión ya está abierta en la suite, pero `user` no
+     * se pone hasta que la ponga, porque en cuanto se pone, el login lo manda
+     * a /dashboard.
+     *
+     * Con Google ligado no se le pide: Google ya es una forma de volver.
+     * `tiene_google` llegó con el contrato 0.17.2; una API vieja no lo manda
+     * y entonces esto se comporta como antes. */
     const yo = await api.yo();
-    if (yo && !yo.tiene_clave) return { necesitaClave: true };
+    if (yo && !yo.tiene_clave && !yo.tiene_google) return { necesitaClave: true };
     if (yo) setUser(desdeApi(yo.usuario));
     return { necesitaClave: false };
   };

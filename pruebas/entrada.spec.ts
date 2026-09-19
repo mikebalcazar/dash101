@@ -37,11 +37,14 @@ describe('la pantalla de entrada, después de la homologación', () => {
     expect(cliente).not.toContain('entrarConPin');
   });
 
-  it('a quien entró con código y no tiene contraseña se le pide ponerla, sin mandarlo antes al panel', () => {
+  it('a quien entró con código y no tiene contraseña ni Google se le pide ponerla, sin mandarlo antes al panel', () => {
     /* `entrarConCodigo` no pone `user` si falta contraseña: en cuanto se pone,
      * el `useEffect` del login manda a /dashboard y la pantalla de poner
-     * contraseña nunca aparecería. Es la trampa de esta pantalla en concreto. */
-    expect(contexto).toMatch(/if \(yo && !yo\.tiene_clave\) return \{ necesitaClave: true \};/);
+     * contraseña nunca aparecería. Es la trampa de esta pantalla en concreto.
+     *
+     * Y con Google ligado no se le pide nada (contrato 0.17.2): Google ya es
+     * una forma de volver mañana, que es lo único que esta pantalla cuida. */
+    expect(contexto).toMatch(/if \(yo && !yo\.tiene_clave && !yo\.tiene_google\) return \{ necesitaClave: true \};/);
     expect(pagina).toMatch(/if \(r\.necesitaClave\) \{[^}]*setPaso\("nueva"\)/);
   });
 
