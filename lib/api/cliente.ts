@@ -74,6 +74,8 @@ export interface Yo {
   /** Si la persona ya tiene contraseña puesta, y con qué entró (contrato 0.7.0).
    *  La pantalla los usa para pedir la contraseña a quien entró con código. */
   tiene_clave?: boolean;
+  /** Si la cuenta tiene una de Google ligada (contrato 0.17.2). */
+  tiene_google?: boolean;
   entro_con?: 'codigo' | 'pin' | 'clave' | 'google';
   usuario: { id: string; correo: string; nombre: string | null; creado_at: string };
   superadmin: boolean;
