@@ -215,8 +215,13 @@ test('entra por el propio Worker y la sesión aguanta al cambiar de pantalla', a
     await pag.goto(`${URL}${ruta}`, { waitUntil: 'load' });
     // El marco de la app cargó cuando la barra de arriba ya dice qué negocio
     // está activo: eso sólo pasa con sesión y con la API contestando.
+    /* La lista de negocios de la demo crece: cada prueba que escribe se hace
+     * su propio negocio para no mover Taller Demo, y el que sale activo en un
+     * perfil nuevo es el primero que devuelva la API. Por eso se acepta
+     * cualquier «Pruebas de …» en vez de nombrarlos uno por uno: el 20-sep
+     * esto dejó el flujo en rojo cuando supply101 creó el suyo. */
     await pag.waitForFunction(
-      () => /Taller Demo|Pruebas de navegador|Sin negocios/.test(document.body.innerText),
+      () => /Taller Demo|Pruebas de |Sin negocios/.test(document.body.innerText),
       null, { timeout: 20000 },
     );
     assert.ok(!pag.url().includes('/login'), `${ruta} no devolvió al login`);
