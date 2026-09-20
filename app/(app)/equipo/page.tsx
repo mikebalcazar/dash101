@@ -15,6 +15,7 @@ import { ROL_LABELS } from "@/types/schema";
 import { Timestamp } from "firebase/firestore";
 import { formatDateShort } from "@/lib/format";
 import { Contadores } from "@/components/contadores";
+import { EncargadosDeRaya } from "@/components/encargados-raya";
 import {
   IconUsers,
   IconPlus,
@@ -171,6 +172,7 @@ export default function EquipoPage() {
       )}
 
       <Contadores />
+      <EncargadosDeRaya />
 
       {/* Miembros */}
       <section className="mb-6">

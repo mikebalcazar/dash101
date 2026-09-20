@@ -18,7 +18,7 @@ import {
   IconScale,
   IconShoppingCart,
   IconReceiptTax,
-} from "@tabler/icons-react";
+  IconCash,} from "@tabler/icons-react";
 
 /* El menú lleva el nombre al lado del ícono desde el 20-sep (lo pidió Mike):
  * un ícono sin texto se adivina, y adivinar cuesta. En el teléfono el texto se
@@ -36,6 +36,7 @@ const items: NavItem[] = [
   { href: "/proveedores", icon: IconTruck, label: "Proveedores" },
   { href: "/opex", icon: IconReceipt, label: "OPEX" },
   { href: "/ordenes", icon: IconShoppingCart, label: "Compras" },
+  { href: "/nomina", icon: IconCash, label: "Raya" },
   { href: "/fiscal", icon: IconReceiptTax, label: "Fiscal" },
   { href: "/conciliacion", icon: IconScale, label: "Conciliación" },
   { href: "/flujo", icon: IconChartLine, label: "Flujo" },
