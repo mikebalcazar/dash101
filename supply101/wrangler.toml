@@ -1,0 +1,62 @@
+# supply101 — la app de quien pide una compra.
+#
+# POR QUÉ ES OTRA APP Y NO UNA PANTALLA MÁS DE dash101
+#
+# Lo pidió Mike el 20-sep, y cambia su propia decisión 1 del 19: quien pide
+# una compra es del taller o de la obra, no tiene por qué entrar al tablero
+# del dinero, y necesita una dirección corta que se pueda repartir. Aquí sólo
+# se pide una compra, se ve en qué va y se abre el comprobante para reclamarle
+# al proveedor. **Pagar se queda en dash101**, que es donde están las cuentas.
+#
+# POR QUÉ VIVE EN EL REPOSITORIO DE dash101
+#
+# Porque es su otra cara: comparte el módulo de órdenes y el mismo contrato de
+# la API. Y porque un repositorio nuevo necesita que Mike pegue a mano los
+# secretos de Cloudflare en Actions, y eso es trabajo suyo, no mío. Si el
+# coordinador quiere repositorio propio más adelante, esto se mueve tal cual:
+# son cuatro archivos y un paso del flujo.
+#
+# Las llaves no están aquí ni pueden estarlo: el despliegue lo hace el
+# corredor con los secretos de Actions del repositorio.
+
+name = "supply101"
+main = "worker/index.js"
+compatibility_date = "2026-09-01"
+
+# La interfaz, tal cual: un HTML, un JS y un CSS. Sin empaquetador.
+# `run_worker_first` deja que `/s101/*` llegue al Worker antes de que los
+# archivos contesten con un 404.
+[assets]
+directory = "./publico"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/s101/*"]
+
+# La API, desde el mismo origen. No hay URL: es un *service binding*, o sea
+# una llamada de Worker a Worker que nunca sale a internet. Así la galleta
+# `s101` es propia y no hay CORS que configurar.
+[[services]]
+binding = "API"
+service = "suite101-api"
+
+[observability]
+enabled = true
+
+# ─────────────── staging ───────────────
+# Todo se prueba aquí primero (D5), contra la org `demo` (D6).
+
+[env.staging]
+name = "supply101-staging"
+
+[env.staging.assets]
+directory = "./publico"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/s101/*"]
+
+[[env.staging.services]]
+binding = "API"
+service = "suite101-api-staging"
+
+[env.staging.observability]
+enabled = true
