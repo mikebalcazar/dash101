@@ -115,6 +115,13 @@ export interface ProductoProyecto {
   pagado: number;
   fecha_entrega?: Timestamp | null;
   quell_id?: string | null;
+  /** El capítulo bajo el que va el ítem —Cocina, Recámaras— (contrato
+   *  0.30.0). Vacío es «sin partida». OJO: no es `partidas`, que en esta
+   *  app son los compromisos con proveedores. */
+  partida?: string;
+  /** Su lugar dentro de la partida. Con todos en cero manda el orden en que
+   *  se capturaron. */
+  orden?: number;
 }
 
 export interface Proyecto {

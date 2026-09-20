@@ -1,4 +1,4 @@
-/* Las obras de quell101, del lado de dash101 · contrato 0.28.0 de la suite.
+/* Las obras de quell101, del lado de dash101 · contrato 0.30.0 de la suite.
  *
  * Mike, 20-sep: la obra que se abre en quell101 y el proyecto que se abre
  * aquí son la misma casa. Este módulo habla con `/orgs/:o/obras/*`, que la
@@ -148,6 +148,21 @@ export interface LigaDeItem {
   item_id: string;
   clave?: 'quell' | 'dash';
   nombre?: 'quell' | 'dash';
+  /** «Una puerta más a las 14 del mismo modelo» (Mike, 20-sep). Cuando la
+   *  pieza ya no cabe, sube en uno la cantidad del concepto y le agrega el
+   *  precio de una pieza. Mueve dinero, así que va sólo si alguien lo pide:
+   *  sin esto, la API contesta 409 `sin_cupo`. */
+  sumar?: boolean;
+}
+
+/** Una pieza a la que se le hace su propio ítem. Con `monto` nace VENDIDO y
+ *  ya se suma al proyecto; sin él, cotizado y en cero, que es lo correcto
+ *  cuando nadie le ha puesto precio. El monto va en CENTAVOS. */
+export interface AltaDeItem {
+  element_id: string;
+  monto?: number;
+  nombre?: string;
+  descripcion?: string;
 }
 
 /** Qué se emparejaría con qué. NO escribe nada. */
@@ -159,11 +174,11 @@ export async function itemsDeLaObra(obra_id: string): Promise<PropuestaDeItems> 
 /** Aplicar lo que se aceptó. Lo que no se mande, no se toca. */
 export async function fusionarItemsDeLaObra(
   obra_id: string,
-  plan: { ligar?: LigaDeItem[]; crear?: string[] },
-): Promise<{ ligados: number; creados: number; renombrados: number }> {
-  const r = await pedir<{ ligados: number; creados: number; renombrados: number }>(
+  plan: { ligar?: LigaDeItem[]; crear?: Array<string | AltaDeItem> },
+): Promise<{ ligados: number; creados: number; renombrados: number; sumados: number }> {
+  const r = await pedir<{ ligados: number; creados: number; renombrados: number; sumados: number }>(
     `${base()}/${encodeURIComponent(obra_id)}/items`,
     { method: 'POST', body: plan },
   );
-  return { ligados: r.ligados, creados: r.creados, renombrados: r.renombrados ?? 0 };
+  return { ligados: r.ligados, creados: r.creados, renombrados: r.renombrados ?? 0, sumados: r.sumados ?? 0 };
 }

@@ -792,6 +792,68 @@ test('corregir un movimiento SIN contraparte: el botón no se queda apagado', as
   await ctx.close();
 });
 
+test('juntar dos renglones iguales en un concepto: queda uno de dos piezas y la venta no se mueve', async () => {
+  /* Mike, 20-sep: «son varias puertas iguales en diferente ubicación pero
+   * el producto es el mismo, y no tiene caso tener 21 ítems idénticos
+   * enlistados en dash».
+   *
+   * Lo que este paso mide y ninguna prueba de API alcanza: que el botón
+   * exista, que la propuesta se pinte, y que al juntarlos desde la PANTALLA
+   * el precio de venta quede igual. Se espera por condición, nunca por
+   * instante: esta pantalla se arma en partes y una aserción a destiempo
+   * acusa a código que sí sirve. */
+  const { ctx, pag, errores } = await pestana();
+  await entrar(pag, CORREO);
+
+  const neg = (await api(pag, `/orgs/${ORG}/negocios`)).filas[0];
+  const cliente = filas(await api(pag, `/orgs/${ORG}/clientes`)).find((c) => c.nombre === CLIENTE_PRUEBAS)
+    ?? await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS, negocio_id: neg.id } });
+  const proyecto = await api(pag, `/orgs/${ORG}/proyectos`, {
+    method: 'POST',
+    body: { nombre: `Juntar ${Date.now().toString(36).slice(-5)}`, cliente_id: cliente.id, negocio_id: neg.id, estado: 'activo' },
+  });
+  for (let i = 0; i < 2; i++) {
+    await api(pag, `/orgs/${ORG}/items`, {
+      method: 'POST',
+      body: { nombre: 'Puerta igualita', monto: 3_000_00, cantidad: 1, estado: 'vendido',
+              proyecto_id: proyecto.id, cliente_id: cliente.id, negocio_id: neg.id },
+    });
+  }
+  const antes = (await api(pag, `/orgs/${ORG}/proyectos/${proyecto.id}`)).precio_venta;
+
+  await pag.goto(`${URL}/proyectos/${proyecto.id}`, { waitUntil: 'load' });
+  /* Si no aparece, se dice QUÉ había en pantalla. Sin eso, un timeout aquí
+   * acusa a la pantalla sin decir de qué se murió —la lección del 20-sep—. */
+  try {
+    await pag.getByText('Ítems del proyecto').first().waitFor({ timeout: 30000 });
+  } catch {
+    assert.fail(`no cargó el proyecto. La pantalla decía: ${(await texto(pag)).replace(/\s+/g, ' ').slice(0, 400)}`);
+  }
+
+  await pag.getByRole('button', { name: /Juntar los iguales/ }).click();
+  const juntar = pag.getByRole('button', { name: /^Juntar 2$/ });
+  await juntar.waitFor({ timeout: 20000 });
+  await juntar.click();
+
+  /* Se espera a que la lista de verdad diga lo que tiene que decir, en vez
+   * de mirar la pantalla en un instante cualquiera. */
+  let quedaron = [];
+  for (let i = 0; i < 40; i++) {
+    quedaron = filas(await api(pag, `/orgs/${ORG}/items?proyecto_id=${proyecto.id}`)).filter((x) => x.estado !== 'cancelado');
+    if (quedaron.length === 1) break;
+    await pag.waitForTimeout(500);
+  }
+  assert.equal(quedaron.length, 1, 'quedó un solo renglón');
+  assert.equal(quedaron[0].cantidad, 2, 'que dice ser dos piezas');
+  assert.equal(quedaron[0].monto, 6_000_00, 'y vale la suma');
+
+  const p = await api(pag, `/orgs/${ORG}/proyectos/${proyecto.id}`);
+  assert.equal(p.precio_venta, antes, 'acomodar la lista no cambia lo que se cobra');
+
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
 /* ═══════════════ 7 · el otro sentido de la puerta, al final ═══════════════ */
 
 test('un código equivocado NO entra', async () => {

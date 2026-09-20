@@ -1,0 +1,420 @@
+"use client";
+
+/* Los ítems del proyecto: en su orden, por partidas, y sin repetidos.
+ *
+ * Tres encargos de Mike del 20-sep, todos sobre esta misma lista:
+ *
+ *   «Necesito poder agrupar varios ítems en un solo concepto. Son varias
+ *   puertas iguales en diferente ubicación —quell las ubica en plano y cada
+ *   una tiene su seguimiento— pero el producto es el mismo, y no tiene caso
+ *   tener 21 ítems idénticos enlistados en dash.»
+ *
+ *   «Quiero también poder ordenar los ítems y agrupar por partidas. Incluso
+ *   podría ser por pestañas (como folders) para cambiar entre partidas.»
+ *
+ * Cómo está resuelto, y por qué así:
+ *
+ *   · las PESTAÑAS son las partidas, más «Todas» al principio. Una partida
+ *     es texto libre: no hay catálogo que dar de alta antes de poder
+ *     teclear «Cocina», y renombrarla es escribir el nombre nuevo en sus
+ *     ítems, que se manda de un golpe;
+ *   · ACOMODAR es un modo aparte, con su botón de guardar. Mientras se
+ *     mueve un renglón no se guarda nada: subir y bajar tres veces no son
+ *     tres guardados, y equivocarse no cuesta;
+ *   · JUNTAR propone y espera. Es irreversible —los renglones que se van se
+ *     borran—, así que enseña exactamente qué va a pasar con el dinero
+ *     antes de que alguien le pique.
+ */
+
+import { useEffect, useMemo, useState } from "react";
+import { IconArrowUp, IconArrowDown, IconCheck, IconX, IconArrowsSort, IconLayersSubtract } from "@tabler/icons-react";
+import { acomodar, agrupables, agrupar, type GrupoDeItems } from "@/lib/items-grupo";
+import { formatDateShort, formatMonto } from "@/lib/format";
+import type { ProductoProyecto, Proyecto } from "@/types/schema";
+import type { Timestamp } from "firebase/firestore";
+
+const SIN = "__sin__";
+/** El dinero de la API viaja en CENTAVOS; el de `productos` ya viene en
+ *  pesos. Esta es la única conversión de esta pantalla, y es de ida. */
+const pesos = (centavos: number) => formatMonto(Math.round(centavos) / 100, "MXN");
+
+type Fila = ProductoProyecto & { partida: string; orden: number };
+
+export function ItemsDelProyecto({ proyecto, alCambiar }: { proyecto: Proyecto; alCambiar: () => void }) {
+  const productos: ProductoProyecto[] = useMemo(() => proyecto.productos ?? [], [proyecto.productos]);
+  const [pestana, setPestana] = useState<string>("");
+  const [modo, setModo] = useState<"ver" | "acomodar" | "juntar">("ver");
+  const [error, setError] = useState("");
+  const [hecho, setHecho] = useState("");
+
+  /** La lista con su partida y su orden resueltos, ya ordenada. El orden es
+   *  partida, después `orden`, después como se capturaron: con todo en cero
+   *  —que es como queda lo viejo— se ve igual que antes. */
+  const filas: Fila[] = useMemo(() => {
+    const puestas = productos.map((p, i) => ({
+      ...p, partida: (p.partida ?? "").trim(), orden: Number(p.orden ?? 0) || 0, _i: i,
+    }));
+    return puestas
+      .sort((a, b) => a.partida.localeCompare(b.partida, "es") || a.orden - b.orden || a._i - b._i)
+      .map(({ _i, ...f }) => { void _i; return f; });
+  }, [productos]);
+
+  /** Las pestañas: «Todas» y una por partida, en el orden en que salen. */
+  const partidas = useMemo(() => {
+    const vistas: string[] = [];
+    for (const f of filas) if (!vistas.includes(f.partida)) vistas.push(f.partida);
+    return vistas;
+  }, [filas]);
+
+  const visibles = pestana === "" ? filas : filas.filter((f) => f.partida === (pestana === SIN ? "" : pestana));
+  const suma = visibles.reduce((s, f) => s + f.monto, 0);
+  const sumaTodo = filas.reduce((s, f) => s + f.monto, 0);
+
+  if (filas.length === 0) {
+    return (
+      <div className="mb-4">
+        <h3 className="text-sm font-medium text-ink-dim mb-2">Ítems del proyecto</h3>
+        <div className="bg-white border border-black/5 rounded-2xl p-6 text-center text-xs text-ink-muted">
+          Sin ítems. Edita el proyecto para agregarlos: es lo que el cliente ve en su portal.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-4">
+      <div className="flex justify-between items-baseline mb-2 gap-2">
+        <h3 className="text-sm font-medium text-ink-dim">Ítems del proyecto</h3>
+        <span className="text-[11px] text-ink-muted">
+          {pestana !== "" && <>{formatMonto(suma, "MXN")} de </>}
+          {formatMonto(sumaTodo, "MXN")}
+          {proyecto.precio_venta > 0 && Math.abs(sumaTodo - proyecto.precio_venta) > 0.5 && (
+            <span className="text-mauve-900 ml-1">≠ precio venta</span>
+          )}
+        </span>
+      </div>
+
+      {/* Las pestañas. Se enseñan siempre que haya más de una partida: con
+          una sola, una fila de pestañas es un adorno que ocupa alto. */}
+      {partidas.length > 1 && (
+        <div className="flex gap-1 overflow-x-auto pb-2 -mx-1 px-1" role="tablist" aria-label="Partidas">
+          {[{ v: "", t: `Todas (${filas.length})` },
+            ...partidas.map((pa) => ({
+              v: pa === "" ? SIN : pa,
+              t: `${pa === "" ? "Sin partida" : pa} (${filas.filter((f) => f.partida === pa).length})`,
+            }))].map((op) => (
+            <button
+              key={op.v}
+              type="button"
+              role="tab"
+              aria-selected={pestana === op.v}
+              onClick={() => setPestana(op.v)}
+              className={`whitespace-nowrap text-xs px-3 py-1.5 rounded-xl border ${
+                pestana === op.v ? "bg-ink text-cream border-ink" : "bg-white border-black/10 text-ink-dim"
+              }`}
+            >
+              {op.t}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="flex gap-2 mb-2">
+        <button
+          type="button"
+          onClick={() => { setModo(modo === "acomodar" ? "ver" : "acomodar"); setHecho(""); setError(""); }}
+          className="text-xs px-2.5 py-1.5 rounded-xl border border-black/10 bg-white text-ink-dim inline-flex items-center gap-1"
+        >
+          <IconArrowsSort size={13} /> {modo === "acomodar" ? "Dejar de acomodar" : "Acomodar y poner partidas"}
+        </button>
+        <button
+          type="button"
+          onClick={() => { setModo(modo === "juntar" ? "ver" : "juntar"); setHecho(""); setError(""); }}
+          className="text-xs px-2.5 py-1.5 rounded-xl border border-black/10 bg-white text-ink-dim inline-flex items-center gap-1"
+        >
+          <IconLayersSubtract size={13} /> {modo === "juntar" ? "Cerrar" : "Juntar los iguales"}
+        </button>
+      </div>
+
+      {modo === "acomodar" && (
+        <Acomodador
+          proyectoId={proyecto.id!}
+          filas={filas}
+          partidas={partidas.filter(Boolean)}
+          alGuardar={() => { setModo("ver"); alCambiar(); }}
+        />
+      )}
+
+      {modo === "juntar" && (
+        <Juntador proyectoId={proyecto.id!} alJuntar={() => { setModo("ver"); alCambiar(); }} />
+      )}
+
+      {modo === "ver" && (
+        <div className="bg-white border border-black/5 rounded-2xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-cream/50 text-xs text-ink-muted uppercase tracking-wide">
+              <tr>
+                <th className="text-left px-4 py-2 font-medium">Ítem</th>
+                <th className="text-right px-4 py-2 font-medium">Cant.</th>
+                <th className="text-left px-4 py-2 font-medium">Entrega</th>
+                <th className="text-right px-4 py-2 font-medium">Importe</th>
+                <th className="text-right px-4 py-2 font-medium">Cobrado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibles.map((pr) => {
+                const pct = pr.monto > 0 ? Math.min(100, (pr.pagado / pr.monto) * 100) : 0;
+                const fe = pr.fecha_entrega as Timestamp | null | undefined;
+                return (
+                  <tr key={pr.id} className="border-t border-black/5">
+                    <td className="px-4 py-3">
+                      <p className="text-sm font-medium text-ink-dim">{pr.nombre}</p>
+                      {pr.descripcion && <p className="text-[11px] text-ink-muted">{pr.descripcion}</p>}
+                      {pestana === "" && pr.partida && (
+                        <p className="text-[10px] text-ink-muted uppercase tracking-wide mt-0.5">{pr.partida}</p>
+                      )}
+                    </td>
+                    <td className="text-right px-4 py-3 text-sm text-ink-dim tabular-nums">{pr.cantidad ?? 1}</td>
+                    <td className="px-4 py-3 text-xs text-ink-muted whitespace-nowrap">
+                      {fe && typeof fe.toDate === "function" ? formatDateShort(fe.toDate()) : "—"}
+                    </td>
+                    <td className="text-right px-4 py-3 text-sm text-ink-dim">
+                      {formatMonto(pr.monto, "MXN")}
+                      {(pr.cantidad ?? 1) > 1 && (
+                        <span className="block text-[10px] text-ink-muted">
+                          {formatMonto(pr.monto / (pr.cantidad ?? 1), "MXN")} c/u
+                        </span>
+                      )}
+                    </td>
+                    <td className="text-right px-4 py-3">
+                      <p className="text-sm text-ink-dim">{formatMonto(pr.pagado ?? 0, "MXN")}</p>
+                      <div className="flex items-center gap-1.5 justify-end mt-1">
+                        <div className="w-16 h-1 bg-cream rounded-full overflow-hidden">
+                          <div className="h-full bg-mint-900" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-[10px] text-ink-muted w-7 text-right">{pct.toFixed(0)}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {hecho && <p className="text-xs text-mint-900 mt-2">{hecho}</p>}
+      {error && <p className="text-xs text-mauve-900 mt-2">{error}</p>}
+    </div>
+  );
+}
+
+/* ─────────────── acomodar ─────────────── */
+
+function Acomodador({
+  proyectoId, filas, partidas, alGuardar,
+}: { proyectoId: string; filas: Fila[]; partidas: string[]; alGuardar: () => void }) {
+  const [lista, setLista] = useState<Fila[]>(filas);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState("");
+
+  const mover = (i: number, d: -1 | 1) => {
+    const j = i + d;
+    if (j < 0 || j >= lista.length) return;
+    const copia = [...lista];
+    [copia[i], copia[j]] = [copia[j], copia[i]];
+    setLista(copia);
+  };
+  const ponerPartida = (id: string, partida: string) =>
+    setLista((p) => p.map((f) => (f.id === id ? { ...f, partida } : f)));
+
+  const guardar = async () => {
+    setGuardando(true); setError("");
+    try {
+      /* El orden se manda por posición dentro de su partida, empezando en 1:
+       * así dos partidas no comparten numeración y mover una no toca la
+       * otra. Se mandan TODOS los renglones, porque acomodar uno cambia el
+       * lugar de los que quedan debajo. */
+      const cuenta: Record<string, number> = {};
+      const items = lista.map((f) => {
+        cuenta[f.partida] = (cuenta[f.partida] ?? 0) + 1;
+        return { id: f.id, partida: f.partida, orden: cuenta[f.partida] };
+      });
+      await acomodar(proyectoId, items);
+      alGuardar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo guardar el acomodo.");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="bg-white border border-black/5 rounded-2xl p-3">
+      <p className="text-xs text-ink-muted mb-2">
+        Súbelos y bájalos, y escribe en qué partida va cada uno. <b>Nada se guarda hasta que le
+        piques a guardar</b>, y acomodar no cambia ningún precio.
+      </p>
+      <datalist id="partidas-del-proyecto">
+        {partidas.map((pa) => <option key={pa} value={pa} />)}
+      </datalist>
+
+      <ul className="space-y-1.5">
+        {lista.map((f, i) => (
+          <li key={f.id} className="flex items-center gap-1.5 bg-cream/40 rounded-xl p-1.5">
+            <div className="flex flex-col">
+              <button type="button" aria-label={`Subir ${f.nombre}`} onClick={() => mover(i, -1)}
+                disabled={i === 0}
+                className="p-0.5 text-ink-muted disabled:opacity-25"><IconArrowUp size={13} /></button>
+              <button type="button" aria-label={`Bajar ${f.nombre}`} onClick={() => mover(i, 1)}
+                disabled={i === lista.length - 1}
+                className="p-0.5 text-ink-muted disabled:opacity-25"><IconArrowDown size={13} /></button>
+            </div>
+            <span className="text-xs text-ink-dim flex-1 min-w-0 truncate">{f.nombre}</span>
+            <input
+              type="text"
+              list="partidas-del-proyecto"
+              value={f.partida}
+              onChange={(e) => ponerPartida(f.id, e.target.value)}
+              placeholder="Partida"
+              aria-label={`Partida de ${f.nombre}`}
+              className="w-28 bg-white border border-black/10 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-ink/40"
+            />
+          </li>
+        ))}
+      </ul>
+
+      <div className="flex items-center gap-2 mt-3">
+        <button type="button" onClick={guardar} disabled={guardando}
+          className="bg-ink text-white text-xs px-3 py-2 rounded-xl inline-flex items-center gap-1 disabled:opacity-40">
+          <IconCheck size={13} /> {guardando ? "Guardando…" : "Guardar el acomodo"}
+        </button>
+        <button type="button" onClick={() => setLista(filas)} className="text-xs text-ink-muted px-2 py-2">
+          Deshacer
+        </button>
+      </div>
+      {error && <p className="text-xs text-mauve-900 mt-2">{error}</p>}
+    </div>
+  );
+}
+
+/* ─────────────── juntar los iguales ─────────────── */
+
+function Juntador({ proyectoId, alJuntar }: { proyectoId: string; alJuntar: () => void }) {
+  const [grupos, setGrupos] = useState<GrupoDeItems[] | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState("");
+  const [fuera, setFuera] = useState<Record<string, boolean>>({});
+  const [nombres, setNombres] = useState<Record<string, string>>({});
+  const [juntando, setJuntando] = useState("");
+
+  const traer = async () => {
+    setCargando(true); setError("");
+    try { setGrupos(await agrupables(proyectoId)); }
+    catch (e) { setError(e instanceof Error ? e.message : "No se pudo ver qué se parece."); }
+    finally { setCargando(false); }
+  };
+  useEffect(() => { void traer(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [proyectoId]);
+
+  const juntar = async (g: GrupoDeItems) => {
+    const escogidos = g.items.filter((i) => !fuera[i.id]);
+    if (escogidos.length < 2) return;
+    setJuntando(g.items[0].id); setError("");
+    try {
+      await agrupar(proyectoId, {
+        queda_id: escogidos[0].id,
+        se_van: escogidos.slice(1).map((i) => i.id),
+        nombre: nombres[g.items[0].id]?.trim() || undefined,
+      });
+      alJuntar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudieron juntar.");
+    } finally {
+      setJuntando("");
+    }
+  };
+
+  if (cargando) return <p className="text-xs text-ink-muted">Viendo cuáles son el mismo producto…</p>;
+  if (error && !grupos) return <p className="text-xs text-mauve-900">{error}</p>;
+  if (!grupos?.length) {
+    return (
+      <p className="text-xs text-ink-muted bg-white border border-black/5 rounded-2xl p-4">
+        No hay renglones repetidos: cada ítem se llama distinto o cuesta distinto. Dos que se
+        llaman igual y cuestan distinto no se ofrecen a propósito —o no son lo mismo, o hay un
+        precio mal, y juntarlos escondería el error en un promedio—.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {grupos.map((g) => {
+        const llave = g.items[0].id;
+        const escogidos = g.items.filter((i) => !fuera[i.id]);
+        const piezas = escogidos.reduce((s, i) => s + i.cantidad, 0);
+        const monto = escogidos.reduce((s, i) => s + i.monto, 0);
+        return (
+          <div key={llave} className="bg-white border border-black/5 rounded-2xl p-3">
+            <p className="text-xs text-ink-dim">
+              <b>{g.renglones} renglones</b> de «{g.nombre}», a {pesos(g.precio_pieza)} la pieza.
+            </p>
+            <ul className="mt-2 space-y-1">
+              {g.items.map((i) => (
+                <li key={i.id} className="flex items-center gap-2 text-xs text-ink-dim">
+                  <input
+                    type="checkbox"
+                    checked={!fuera[i.id]}
+                    onChange={() => setFuera((p) => ({ ...p, [i.id]: !p[i.id] }))}
+                    aria-label={`Juntar ${i.clave ?? ""} ${i.nombre}`}
+                  />
+                  <span className="flex-1 min-w-0 truncate">
+                    {i.clave ? `${i.clave} · ` : ""}{i.nombre}
+                    {i.cantidad > 1 ? ` · ${i.cantidad} piezas` : ""}
+                  </span>
+                  <span className="text-ink-muted tabular-nums">{pesos(i.monto)}</span>
+                  {i.ubicados > 0 && (
+                    <span className="text-[10px] text-ink-muted">{i.ubicados} en plano</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+
+            <input
+              type="text"
+              value={nombres[llave] ?? ""}
+              onChange={(e) => setNombres((p) => ({ ...p, [llave]: e.target.value }))}
+              placeholder={`Cómo se va a llamar (hoy: ${g.nombre})`}
+              aria-label="Nombre del concepto"
+              className="w-full mt-2 bg-white border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-ink/40"
+            />
+
+            <p className="text-[11px] text-ink-muted mt-2">
+              Queda <b>un renglón de {piezas} pieza{piezas === 1 ? "" : "s"}</b> por {pesos(monto)}.
+              El precio de venta del proyecto no se mueve. Las piezas que estén en el plano de la
+              obra se pasan al concepto y siguen con su bitácora, cada una por su lado.
+              <b> No se puede deshacer.</b>
+            </p>
+
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                type="button"
+                onClick={() => juntar(g)}
+                disabled={escogidos.length < 2 || juntando === llave}
+                className="bg-ink text-white text-xs px-3 py-2 rounded-xl inline-flex items-center gap-1 disabled:opacity-40"
+              >
+                <IconCheck size={13} />
+                {juntando === llave ? "Juntando…" : `Juntar ${escogidos.length}`}
+              </button>
+              {escogidos.length < 2 && (
+                <span className="text-[11px] text-ink-muted inline-flex items-center gap-1">
+                  <IconX size={12} /> Hacen falta dos.
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+      {error && <p className="text-xs text-mauve-900">{error}</p>}
+    </div>
+  );
+}
