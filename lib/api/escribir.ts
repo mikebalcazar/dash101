@@ -222,9 +222,19 @@ function filaPartida(p: PartidaProyectoInput, proyectoId: string): Record<string
   };
 }
 
-/** Regla 1: sin productos, el precio es un solo ítem con el nombre del proyecto. */
+/** Regla 1: si NO se dicen productos, el precio es un solo ítem con el nombre
+ *  del proyecto. Así un proyecto capturado «a precio cerrado» tiene algo que
+ *  enseñarle al cliente en su portal.
+ *
+ *  UNA LISTA VACÍA NO ES «NO SE DIJERON»: es «no hay ninguno», y hay que
+ *  respetarla. Hasta el 20-sep las dos cosas se trataban igual, y por eso
+ *  borrar todos los ítems de un proyecto y guardar los revivía como uno solo
+ *  con el precio entero. Mike lo reportó con las palabras exactas: «no hay
+ *  manera de borrar ítems», y «al guardar los duplica y los suma» —porque
+ *  después de revivir ese ítem fantasma, al volver a capturar los suyos
+ *  quedaban los suyos MÁS el fantasma, y el precio contaba doble—. */
 function productosOPrecio(nombre: string, precio: number, productos: ProductoProyectoInput[] | undefined): ProductoProyectoInput[] {
-  if (productos && productos.length) return productos;
+  if (productos !== undefined) return productos;
   if (precio > 0) return [{ nombre, monto: precio }];
   return [];
 }
