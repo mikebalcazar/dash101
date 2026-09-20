@@ -44,7 +44,10 @@ export interface ProductoProyectoInput {
   id?: string; // vacío → se genera
   nombre: string;
   descripcion?: string;
+  /** El importe de la línea. La pantalla lo calcula: cantidad × precio pieza. */
   monto: number;
+  /** Cuántas piezas iguales. Sin decir nada, 1. */
+  cantidad?: number;
   fecha_entrega?: Date | null;
   quell_id?: string | null;
 }
@@ -68,6 +71,7 @@ function armarProductos(
       nombre: p.nombre,
       descripcion: p.descripcion ?? "",
       monto: p.monto,
+      cantidad: p.cantidad && p.cantidad > 0 ? Math.trunc(p.cantidad) : 1,
       pagado: prevById.get(id)?.pagado ?? 0,
       fecha_entrega: p.fecha_entrega ? Timestamp.fromDate(p.fecha_entrega) : null,
       quell_id: p.quell_id ?? null,

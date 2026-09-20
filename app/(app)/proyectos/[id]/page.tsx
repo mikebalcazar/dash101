@@ -44,8 +44,24 @@ interface ProductoForm {
   id: string;
   nombre: string;
   descripcion: string;
+  /** Cuántas piezas iguales. «20 puertas del mismo acabado y precio». */
+  cantidad: string;
+  /** Lo que cuesta UNA pieza. Es lo que se captura. */
+  unitario: string;
+  /** cantidad × unitario. No se teclea: se calcula, y es lo que se guarda,
+   *  porque `precio_venta` es la suma de los importes de las líneas. */
   monto: string;
   fecha_entrega: string; // yyyy-mm-dd | ""
+}
+
+/** El importe de la línea a partir de lo que se capturó. Se redondea al
+ *  centavo aquí y no al guardar: lo que se ve en pantalla y lo que se manda
+ *  tienen que ser el mismo número. */
+function importe(cantidad: string, unitario: string): string {
+  const c = Math.trunc(parseFloat(cantidad) || 0);
+  const u = parseFloat(unitario) || 0;
+  if (c <= 0 || u <= 0) return "0";
+  return (Math.round(c * u * 100) / 100).toFixed(2);
 }
 
 function tsToInput(t: unknown): string {
@@ -101,13 +117,20 @@ export default function ProyectoDetallePage() {
         }))
       );
       setProductosEdit(
-        (p.productos ?? []).map((pr) => ({
-          id: pr.id,
-          nombre: pr.nombre,
-          descripcion: pr.descripcion ?? "",
-          monto: String(pr.monto),
-          fecha_entrega: tsToInput(pr.fecha_entrega),
-        }))
+        (p.productos ?? []).map((pr) => {
+          // El precio por pieza sale de dividir: lo que se guarda es el
+          // importe de la línea. Con cantidad 1 son el mismo número.
+          const cant = pr.cantidad && pr.cantidad > 0 ? pr.cantidad : 1;
+          return {
+            id: pr.id,
+            nombre: pr.nombre,
+            descripcion: pr.descripcion ?? "",
+            cantidad: String(cant),
+            unitario: (Math.round((pr.monto / cant) * 100) / 100).toFixed(2),
+            monto: String(pr.monto),
+            fecha_entrega: tsToInput(pr.fecha_entrega),
+          };
+        })
       );
     });
   };
@@ -157,6 +180,7 @@ export default function ProyectoDetallePage() {
             id: pr.id || undefined,
             nombre: pr.nombre.trim(),
             descripcion: pr.descripcion.trim() || undefined,
+            cantidad: Math.trunc(parseFloat(pr.cantidad) || 1) || 1,
             monto: parseFloat(pr.monto) || 0,
             fecha_entrega: pr.fecha_entrega ? new Date(pr.fecha_entrega + "T12:00:00") : null,
           })),
@@ -326,7 +350,7 @@ export default function ProyectoDetallePage() {
           {/* La obra de quell101, si la hay (contrato 0.22.0). */}
           <ObraDelProyecto proyectoId={p.id!} />
 
-          {/* Productos del cliente */}
+          {/* Los ítems del proyecto */}
           <ProductosVista proyecto={p} />
 
           {/* Partidas table */}
@@ -495,10 +519,22 @@ function ProyectoEditForm(props: EditFormProps) {
   const addProducto = () =>
     props.setProductos((prev) => [
       ...prev,
-      { id: "", nombre: "", descripcion: "", monto: "", fecha_entrega: "" },
+      { id: "", nombre: "", descripcion: "", cantidad: "1", unitario: "", monto: "", fecha_entrega: "" },
     ]);
+  /** Tocar la cantidad o el precio por pieza recalcula el importe en el
+   *  momento: si se guardara con el importe viejo, el precio de venta diría
+   *  una cosa y la pantalla otra. */
   const updateProducto = (i: number, patch: Partial<ProductoForm>) =>
-    props.setProductos((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+    props.setProductos((prev) =>
+      prev.map((p, idx) => {
+        if (idx !== i) return p;
+        const nuevo = { ...p, ...patch };
+        if (patch.cantidad !== undefined || patch.unitario !== undefined) {
+          nuevo.monto = importe(nuevo.cantidad, nuevo.unitario);
+        }
+        return nuevo;
+      }),
+    );
   const removeProducto = (i: number) =>
     props.setProductos((prev) => prev.filter((_, idx) => idx !== i));
   const sumaProductos = props.productos.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
@@ -566,7 +602,7 @@ function ProyectoEditForm(props: EditFormProps) {
 
       <div className="pt-2">
         <div className="flex justify-between items-baseline mb-1">
-          <label className="text-xs font-medium text-ink-dim">Productos del cliente</label>
+          <label className="text-xs font-medium text-ink-dim">Ítems del proyecto</label>
           <button
             type="button"
             onClick={addProducto}
@@ -577,11 +613,11 @@ function ProyectoEditForm(props: EditFormProps) {
           </button>
         </div>
         <p className="text-[11px] text-ink-muted mb-2">
-          Lo que el cliente ve en su estado de cuenta. Cada ingreso se asigna a un producto.
+          Lo que el cliente ve en su estado de cuenta. Cada ingreso se asigna a un ítem.
         </p>
         {props.productos.length === 0 ? (
           <div className="bg-cream/60 rounded-xl p-4 text-center text-xs text-ink-muted">
-            Sin productos.
+            Sin ítems.
           </div>
         ) : (
           <div className="space-y-2">
@@ -590,19 +626,35 @@ function ProyectoEditForm(props: EditFormProps) {
                 <div className="flex gap-2 items-start">
                   <input
                     type="text"
-                    placeholder="Producto (p. ej. Cocina integral 3.6 m)"
+                    placeholder="Ítem (p. ej. Puerta de clóset)"
                     value={pr.nombre}
                     onChange={(e) => updateProducto(i, { nombre: e.target.value })}
                     className="flex-1 min-w-0 bg-bg border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
+                  />
+                  {/* Cantidad y precio POR PIEZA. «20 puertas del mismo
+                    * acabado y precio» se captura así, no multiplicando a
+                    * mano. El importe de la línea se calcula y se enseña
+                    * abajo: es lo que se guarda y lo que suma al precio de
+                    * venta. */}
+                  <input
+                    type="number"
+                    step="1"
+                    min="1"
+                    aria-label="Cantidad"
+                    placeholder="Cant."
+                    value={pr.cantidad}
+                    onChange={(e) => updateProducto(i, { cantidad: e.target.value })}
+                    className="w-16 bg-bg border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none text-right"
                   />
                   <input
                     type="number"
                     step="0.01"
                     min="0"
-                    placeholder="Monto"
-                    value={pr.monto}
-                    onChange={(e) => updateProducto(i, { monto: e.target.value })}
-                    className="w-28 bg-bg border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none text-right"
+                    aria-label="Precio por pieza"
+                    placeholder="$ c/u"
+                    value={pr.unitario}
+                    onChange={(e) => updateProducto(i, { unitario: e.target.value })}
+                    className="w-24 bg-bg border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none text-right"
                   />
                   <button
                     type="button"
@@ -627,6 +679,9 @@ function ProyectoEditForm(props: EditFormProps) {
                     onChange={(e) => updateProducto(i, { fecha_entrega: e.target.value })}
                     className="w-36 bg-bg border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
                   />
+                  <span className="text-xs text-ink-dim whitespace-nowrap tabular-nums w-28 text-right">
+                    {formatMontoExact(parseFloat(pr.monto) || 0)}
+                  </span>
                 </div>
               </div>
             ))}
@@ -634,7 +689,7 @@ function ProyectoEditForm(props: EditFormProps) {
         )}
         {props.productos.length > 0 && (
           <div className="mt-2 flex justify-between text-xs px-1">
-            <span className="text-ink-muted">Suma de productos</span>
+            <span className="text-ink-muted">Suma de los ítems</span>
             <span
               className={`font-medium ${
                 precioNum > 0 && Math.abs(sumaProductos - precioNum) > 0.5
@@ -768,7 +823,7 @@ function ProyectoEditForm(props: EditFormProps) {
   );
 }
 
-// --- Productos del cliente (vista) ---
+// --- Los ítems del proyecto (vista) ---
 
 function ProductosVista({ proyecto }: { proyecto: Proyecto }) {
   const productos: ProductoProyecto[] = proyecto.productos ?? [];
@@ -777,7 +832,7 @@ function ProductosVista({ proyecto }: { proyecto: Proyecto }) {
   return (
     <div className="mb-4">
       <div className="flex justify-between items-baseline mb-2">
-        <h3 className="text-sm font-medium text-ink-dim">Productos del cliente</h3>
+        <h3 className="text-sm font-medium text-ink-dim">Ítems del proyecto</h3>
         {productos.length > 0 && (
           <span className="text-[11px] text-ink-muted">
             {formatMonto(suma, "MXN")}
@@ -789,16 +844,17 @@ function ProductosVista({ proyecto }: { proyecto: Proyecto }) {
       </div>
       {productos.length === 0 ? (
         <div className="bg-white border border-black/5 rounded-2xl p-6 text-center text-xs text-ink-muted">
-          Sin productos. Edita el proyecto para agregarlos: es lo que el cliente ve en su portal.
+          Sin ítems. Edita el proyecto para agregarlos: es lo que el cliente ve en su portal.
         </div>
       ) : (
         <div className="bg-white border border-black/5 rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-cream/50 text-xs text-ink-muted uppercase tracking-wide">
               <tr>
-                <th className="text-left px-4 py-2 font-medium">Producto</th>
+                <th className="text-left px-4 py-2 font-medium">Ítem</th>
+                <th className="text-right px-4 py-2 font-medium">Cant.</th>
                 <th className="text-left px-4 py-2 font-medium">Entrega</th>
-                <th className="text-right px-4 py-2 font-medium">Monto</th>
+                <th className="text-right px-4 py-2 font-medium">Importe</th>
                 <th className="text-right px-4 py-2 font-medium">Cobrado</th>
               </tr>
             </thead>
@@ -814,11 +870,19 @@ function ProductosVista({ proyecto }: { proyecto: Proyecto }) {
                         <p className="text-[11px] text-ink-muted">{pr.descripcion}</p>
                       )}
                     </td>
+                    <td className="text-right px-4 py-3 text-sm text-ink-dim tabular-nums">
+                      {pr.cantidad ?? 1}
+                    </td>
                     <td className="px-4 py-3 text-xs text-ink-muted whitespace-nowrap">
                       {fe && typeof fe.toDate === "function" ? formatDateShort(fe.toDate()) : "—"}
                     </td>
                     <td className="text-right px-4 py-3 text-sm text-ink-dim">
                       {formatMonto(pr.monto, "MXN")}
+                      {(pr.cantidad ?? 1) > 1 && (
+                        <span className="block text-[10px] text-ink-muted">
+                          {formatMonto(pr.monto / (pr.cantidad ?? 1), "MXN")} c/u
+                        </span>
+                      )}
                     </td>
                     <td className="text-right px-4 py-3">
                       <p className="text-sm text-ink-dim">{formatMonto(pr.pagado ?? 0, "MXN")}</p>

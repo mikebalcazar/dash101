@@ -474,6 +474,133 @@ test('se da de alta un cliente desde «nuevo proyecto», y avisa del parecido', 
   await ctx.close();
 });
 
+/* ═══════════════ 6 bis · editar la lista de ítems EN LA PANTALLA ═══════════════
+ *
+ * Mike lo reportó dos veces, y la segunda con la pantalla enfrente:
+ *
+ *   «en la lista de "productos del cliente" […] me sigue solo sumando las
+ *   listas de ítems cuando quiero editar y borrar. Le doy guardar cambios y
+ *   vuelve a sumar lo que estaba editable. No quita nada.»
+ *
+ * La primera vez se arregló el módulo y se probó el módulo
+ * (`pruebas/items-proyecto.spec.ts`), que es lo que llamaba la pantalla. Lo
+ * que NO se probó fue la pantalla: abrirla, teclear, borrar un renglón, picar
+ * «Guardar cambios» y volver a mirar. Esta prueba hace exactamente eso, con
+ * un navegador de verdad contra staging, porque es el único lugar donde se
+ * ve lo que Mike ve.
+ */
+
+test('editar los ítems del proyecto: se borra uno, se guarda, y NO vuelve', async () => {
+  const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  const { neg } = await negocioDePruebas(pag);
+  await elegirNegocio(pag, neg.id);
+
+  // Un proyecto propio de esta prueba, con su cliente, para no tocar nada de
+  // los demás recorridos.
+  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes?negocio_id=${neg.id}`))
+    .find((c) => c.nombre === CLIENTE_PRUEBAS);
+  if (!cliente) {
+    cliente = await api(pag, `/orgs/${ORG}/clientes`, {
+      method: 'POST', body: { nombre: CLIENTE_PRUEBAS, negocio_id: neg.id },
+    });
+  }
+  const proyecto = await api(pag, `/orgs/${ORG}/proyectos`, {
+    method: 'POST',
+    body: { nombre: `Ítems ${Date.now().toString(36).slice(-5)}`, cliente_id: cliente.id, negocio_id: neg.id, estado: 'activo' },
+  });
+  for (const [nombre, monto] of [['Cocina', 100_00], ['Clóset', 200_00], ['Isla', 50_00]]) {
+    await api(pag, `/orgs/${ORG}/items`, {
+      method: 'POST',
+      body: { nombre, monto, cantidad: 1, estado: 'vendido', proyecto_id: proyecto.id, cliente_id: cliente.id, negocio_id: neg.id },
+    });
+  }
+
+  await pag.goto(`${URL}/proyectos/${proyecto.id}`, { waitUntil: 'load' });
+  await pag.getByText('Ítems del proyecto').first().waitFor({ timeout: 20000 });
+  await pag.getByRole('button', { name: /Editar/ }).first().click();
+
+  const renglones = pag.locator('input[placeholder^="Ítem ("]');
+  await renglones.first().waitFor({ timeout: 15000 });
+  assert.equal(await renglones.count(), 3, 'la pantalla abre con los tres que hay');
+
+  // Lo de Mike: cambiarle a uno, BORRAR otro, y guardar.
+  await renglones.nth(0).fill('Cocina grande');
+  const basureros = pag.locator('input[placeholder^="Ítem ("]').locator('xpath=../button');
+  await basureros.nth(1).click(); // fuera «Clóset»
+  assert.equal(await renglones.count(), 2, 'en pantalla ya son dos');
+
+  await pag.getByRole('button', { name: /Guardar cambios/ }).click();
+  await pag.getByText('Cambios guardados').waitFor({ timeout: 20000 });
+  await pag.waitForTimeout(1500);
+
+  // Y ahora lo que importa: lo que quedó GUARDADO, leído de la API.
+  const quedaron = filas(await api(pag, `/orgs/${ORG}/items?proyecto_id=${proyecto.id}`))
+    .filter((i) => i.estado !== 'cancelado')
+    .map((i) => i.nombre)
+    .sort();
+  assert.deepEqual(quedaron, ['Cocina grande', 'Isla'], 'quedó LO QUE SE VE: ni el borrado ni copias');
+
+  const p = await api(pag, `/orgs/${ORG}/proyectos/${proyecto.id}`);
+  assert.equal(p.precio_venta, 150_00, 'y el precio de venta es la suma de los que quedaron');
+
+  // Guardar otra vez sin tocar nada tampoco duplica.
+  await pag.getByRole('button', { name: /Editar/ }).first().click();
+  await pag.getByRole('button', { name: /Guardar cambios/ }).click();
+  await pag.getByText('Cambios guardados').waitFor({ timeout: 20000 });
+  await pag.waitForTimeout(1500);
+  const otraVez = filas(await api(pag, `/orgs/${ORG}/items?proyecto_id=${proyecto.id}`))
+    .filter((i) => i.estado !== 'cancelado');
+  assert.equal(otraVez.length, 2, 'guardar dos veces seguidas no agrega nada');
+
+  console.log(`    ítems tras editar y borrar: ${quedaron.join(', ')} · precio ${pesos2(p.precio_venta)}`);
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
+test('la cantidad: 20 puertas a $1,500 son $30,000 de línea, no $600,000', async () => {
+  const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  const { neg } = await negocioDePruebas(pag);
+  await elegirNegocio(pag, neg.id);
+
+  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes?negocio_id=${neg.id}`))
+    .find((c) => c.nombre === CLIENTE_PRUEBAS);
+  if (!cliente) {
+    cliente = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS, negocio_id: neg.id } });
+  }
+  const proyecto = await api(pag, `/orgs/${ORG}/proyectos`, {
+    method: 'POST',
+    body: { nombre: `Cantidad ${Date.now().toString(36).slice(-5)}`, cliente_id: cliente.id, negocio_id: neg.id, estado: 'activo' },
+  });
+
+  await pag.goto(`${URL}/proyectos/${proyecto.id}`, { waitUntil: 'load' });
+  await pag.getByText('Ítems del proyecto').first().waitFor({ timeout: 20000 });
+  await pag.getByRole('button', { name: /Editar/ }).first().click();
+  await pag.getByRole('button', { name: 'Agregar' }).first().click();
+
+  await pag.locator('input[placeholder^="Ítem ("]').first().fill('Puerta de clóset');
+  await pag.getByLabel('Cantidad').first().fill('20');
+  await pag.getByLabel('Precio por pieza').first().fill('1500');
+
+  await pag.getByRole('button', { name: /Guardar cambios/ }).click();
+  await pag.getByText('Cambios guardados').waitFor({ timeout: 20000 });
+  await pag.waitForTimeout(1500);
+
+  const item = filas(await api(pag, `/orgs/${ORG}/items?proyecto_id=${proyecto.id}`))
+    .filter((i) => i.estado !== 'cancelado')[0];
+  assert.equal(item.cantidad, 20, 'se guardaron las 20 piezas');
+  assert.equal(item.monto, 30_000_00, 'y el importe es el de la línea');
+  const p = await api(pag, `/orgs/${ORG}/proyectos/${proyecto.id}`);
+  assert.equal(p.precio_venta, 30_000_00, 'el precio de venta NO se multiplica otra vez');
+
+  const dice = await texto(pag);
+  assert.ok(/20/.test(dice), 'la cantidad se ve en la tabla');
+  console.log(`    20 × ${pesos2(1_500_00)} = ${pesos2(item.monto)} de línea`);
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
 /* ═══════════════ 7 · el otro sentido de la puerta, al final ═══════════════ */
 
 test('un código equivocado NO entra', async () => {
