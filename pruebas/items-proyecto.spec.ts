@@ -133,6 +133,67 @@ describe("editar la lista de ítems de un proyecto", () => {
     expect(d.precio_venta).toBe(8_000);
   });
 
+  it("el que se quita deja de verse, y los cancelados no estorban al siguiente guardado", async () => {
+    /* Mike, tercera vez el 20-sep: «sigue agregando todo lo que aparece en la
+     * lista de ítems. No hay forma de quitar/eliminar ítems».
+     *
+     * Quitar CANCELA —la API contesta 403 `items_nunca_se_borran` si se
+     * intenta borrar, y hace bien: un ítem borrado deja el historial sin
+     * cuadrar—. Lo que estaba mal era que al guardar se pedía la lista del
+     * proyecto CON los cancelados, y la API tope cada lista en 500 filas por
+     * fecha: en un proyecto muy editado, los cancelados empujan a los vivos
+     * recientes fuera del tope, sus ids dejan de verse, y se vuelven a crear.
+     *
+     * Aquí se mide lo que se puede medir barato: que el quitado deje de
+     * verse, que siga existiendo cancelado —el rastro no se pierde— y que el
+     * siguiente guardado no lo reviva ni agregue copias. */
+    await updateProyecto(ids.proyecto, {
+      productos: [{ nombre: "Se queda", monto: 100 }, { nombre: "Se va", monto: 50 }],
+    });
+    const antes = (await getProyecto(ids.proyecto))!.productos!;
+    const seVa = antes.find((p) => p.nombre === "Se va")!;
+    const sobreviven = antes
+      .filter((p) => p.nombre !== "Se va")
+      .map((p) => ({ id: p.id, nombre: p.nombre, monto: p.monto }));
+
+    await updateProyecto(ids.proyecto, { productos: sobreviven });
+
+    const d = (await getProyecto(ids.proyecto))!;
+    expect(d.productos!.map((p) => p.nombre)).toEqual(["Se queda"]);
+    expect(d.precio_venta).toBe(100);
+
+    // Sigue existiendo, cancelado: el rastro no se pierde.
+    const todos = await pedir<{ filas: Array<{ id: string; estado: string }> }>(
+      `/orgs/${ORG}/items?proyecto_id=${encodeURIComponent(ids.proyecto)}`,
+    );
+    expect(todos.filas.find((i) => i.id === seVa.id)?.estado).toBe("cancelado");
+
+    // Y guardar otra vez no lo revive ni agrega copias.
+    await updateProyecto(ids.proyecto, { productos: sobreviven });
+    const otra = (await getProyecto(ids.proyecto))!;
+    expect(otra.productos!.map((p) => p.nombre)).toEqual(["Se queda"]);
+    expect(otra.precio_venta).toBe(100);
+  });
+
+  it("un id que ya no sale en la lista se revive, NO se duplica", async () => {
+    /* El corazón del defecto, reproducido barato: se cancela un ítem por la
+     * espalda —como pasaba solo cuando el tope de 500 dejaba fuera a los
+     * vivos— y se guarda la pantalla con ese mismo id adentro. Antes se creaba
+     * una copia; ahora se actualiza el que ya estaba. */
+    await updateProyecto(ids.proyecto, { productos: [{ nombre: "Cocina", monto: 100 }] });
+    const p1 = (await getProyecto(ids.proyecto))!.productos![0];
+
+    await pedir(`/orgs/${ORG}/items/${p1.id}`, { method: "PATCH", body: { estado: "cancelado" } });
+
+    await updateProyecto(ids.proyecto, { productos: [{ id: p1.id, nombre: "Cocina", monto: 120 }] });
+
+    const d = (await getProyecto(ids.proyecto))!;
+    expect(d.productos, "uno solo, no dos").toHaveLength(1);
+    expect(d.productos![0].id, "y es el mismo de antes, revivido").toBe(p1.id);
+    expect(d.productos![0].monto).toBe(120);
+    expect(d.precio_venta).toBe(120);
+  });
+
   it("se pueden dejar en cero: un proyecto sin ítems vale cero", async () => {
     await updateProyecto(ids.proyecto, { productos: [] });
     const d = (await getProyecto(ids.proyecto))!;

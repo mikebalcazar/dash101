@@ -102,7 +102,14 @@ export async function getProyecto(id: string): Promise<Proyecto | null> {
   const f = await obtener<A.FilaProyecto>('proyectos', id);
   if (!f) return null;
   const partes = await partesDeProyectos(f.negocio_id);
-  return A.proyecto(f, partes);
+  /* Los ítems de ESTE proyecto se piden aparte, y no se sacan de la lista del
+   * negocio entero, porque esa lista viene topada en 500 filas: en una
+   * empresa con años de trabajo —y con los ítems cancelados, que también
+   * ocupan lugar— los de un proyecto reciente se caen del tope y la pantalla
+   * los enseña de menos. Y lo que la pantalla no enseña, al guardar se
+   * cancela. Así el tope se aplica por proyecto, donde 500 ítems es mucho. */
+  const items = await listar<A.FilaItem>('items', { proyecto_id: id });
+  return A.proyecto(f, { ...partes, items });
 }
 
 /* ─────────────── movimientos ─────────────── */
