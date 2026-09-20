@@ -106,7 +106,11 @@ export interface ProductoProyecto {
   id: string;
   nombre: string;
   descripcion?: string;
+  /** El importe de LA LÍNEA: las 20 puertas juntas, no una. `precio_venta`
+   *  es la suma de estos. El precio por pieza es `monto / cantidad`. */
   monto: number;
+  /** Cuántas piezas iguales son (contrato 0.24.0). Por omisión 1. */
+  cantidad: number;
   /** Σ ingresos con producto_id == id — calculado por recalcularProyecto() */
   pagado: number;
   fecha_entrega?: Timestamp | null;

@@ -111,6 +111,28 @@ describe("editar la lista de ítems de un proyecto", () => {
     expect(d.precio_venta).toBe(antes.precio_venta);
   });
 
+  it("la cantidad viaja y el precio de venta NO se multiplica otra vez", async () => {
+    /* Mike, 20-sep: «a veces son 20 puertas del mismo acabado y precio».
+     * `monto` es el importe de la LÍNEA —las 20 juntas—; si alguien lo
+     * tratara como el precio de una, el precio de venta del proyecto saldría
+     * multiplicado por veinte y nadie lo notaría hasta cobrarle al cliente. */
+    await updateProyecto(ids.proyecto, {
+      productos: [{ nombre: "Puerta de clóset", monto: 30_000, cantidad: 20 }],
+    });
+    const d = (await getProyecto(ids.proyecto))!;
+    expect(d.productos).toHaveLength(1);
+    expect(d.productos![0].cantidad).toBe(20);
+    expect(d.productos![0].monto).toBe(30_000);
+    expect(d.precio_venta, "la suma es del importe de la línea").toBe(30_000);
+  });
+
+  it("sin decir cantidad, es uno: lo que ya existía no cambia", async () => {
+    await updateProyecto(ids.proyecto, { productos: [{ nombre: "Barra", monto: 8_000 }] });
+    const d = (await getProyecto(ids.proyecto))!;
+    expect(d.productos![0].cantidad).toBe(1);
+    expect(d.precio_venta).toBe(8_000);
+  });
+
   it("se pueden dejar en cero: un proyecto sin ítems vale cero", async () => {
     await updateProyecto(ids.proyecto, { productos: [] });
     const d = (await getProyecto(ids.proyecto))!;

@@ -224,10 +224,17 @@ export async function deleteProveedor(id: string): Promise<void> {
 
 /* ─────────────── proyectos, con sus ítems y sus partidas ─────────────── */
 
+/** Cuántas piezas iguales. Uno cuando no se dice, y nunca cero ni fracción:
+ *  media puerta no existe, y cero dejaría la cuenta de «sin ubicar» en
+ *  negativo del lado de quell101. */
+const cantidadDe = (p: ProductoProyectoInput): number =>
+  p.cantidad && p.cantidad > 0 ? Math.trunc(p.cantidad) : 1;
+
 function filaItem(p: ProductoProyectoInput, proyecto: { id: string; negocio_id: string; cliente_id: string }): Record<string, unknown> {
   return {
     negocio_id: proyecto.negocio_id, cliente_id: proyecto.cliente_id, proyecto_id: proyecto.id,
-    nombre: p.nombre, descripcion: oNulo(p.descripcion), monto: A.aCentavos(p.monto), moneda: 'MXN', estado: 'vendido',
+    nombre: p.nombre, descripcion: oNulo(p.descripcion), monto: A.aCentavos(p.monto),
+    cantidad: cantidadDe(p), moneda: 'MXN', estado: 'vendido',
     tipo: 'mueble', fecha_entrega: dia(p.fecha_entrega),
   };
 }
@@ -295,7 +302,7 @@ export async function updateProyecto(
     for (const p of quiere) {
       if (p.id && porId.has(p.id)) {
         quedan.add(p.id);
-        await cambiar('items', p.id, { nombre: p.nombre, descripcion: oNulo(p.descripcion), monto: A.aCentavos(p.monto), fecha_entrega: dia(p.fecha_entrega) });
+        await cambiar('items', p.id, { nombre: p.nombre, descripcion: oNulo(p.descripcion), monto: A.aCentavos(p.monto), cantidad: cantidadDe(p), fecha_entrega: dia(p.fecha_entrega) });
       } else {
         await crear('items', filaItem(p, donde));
       }
