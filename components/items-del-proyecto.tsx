@@ -42,7 +42,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { IconArrowUp, IconArrowDown, IconCheck, IconX, IconArrowsSort, IconLayersSubtract, IconThumbUp, IconBan, IconChevronDown, IconChevronRight, IconArrowsSplit, IconEdit } from "@tabler/icons-react";
+import { IconArrowUp, IconArrowDown, IconCheck, IconX, IconArrowsSort, IconLayersSubtract, IconThumbUp, IconBan, IconChevronDown, IconChevronRight, IconArrowsSplit, IconEdit, IconPlus, IconMinus } from "@tabler/icons-react";
 import {
   acomodar, agrupables, agrupar, aprobarItem, asignarProducto, cancelarItem, productosDelProyecto,
   separarItem, separarProducto,
@@ -65,6 +65,8 @@ const CANCELADOS = "__cancelados__";
 /** Lo que vale el dropdown cuando el ítem no es de ningún producto: es su
  *  propio producto único, que es como nacen todos. */
 const SOLO = "__solo__";
+/** En el gestor de ítems: escribir un producto nuevo en vez de entrar a uno. */
+const NUEVO = "__nuevo__";
 
 /** Las dos listas del dropdown que pidió Mike: los productos que ya se usan
  *  en la obra, y los ítems que todavía son su propio producto único. */
@@ -248,8 +250,23 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
     return (
       <div className="mb-4">
         <h3 className="text-sm font-medium text-ink-dim mb-2">Ítems del proyecto</h3>
-        <div className="bg-white border border-black/5 rounded-2xl p-6 text-center text-xs text-ink-muted">
-          Sin ítems. Edita el proyecto para agregarlos: es lo que el cliente ve en su portal.
+        <div className="bg-white border border-black/5 rounded-2xl p-6 text-center">
+          <p className="text-xs text-ink-muted">
+            Sin ítems todavía. Son los que el cliente ve en su portal.
+          </p>
+          {/* El botón va TAMBIÉN aquí, y es el caso donde más falta hace: sin
+              ítems no se dibuja la tabla, y con ella se iba el único camino
+              para capturar el primero. Lo cachó la puerta de despliegue el
+              20-sep, no un usuario. */}
+          {alEditarLista && (
+            <button
+              type="button"
+              onClick={alEditarLista}
+              className="mt-3 text-xs px-3 py-1.5 rounded-xl border border-black/10 bg-white text-ink-dim inline-flex items-center gap-1 hover:border-black/25"
+            >
+              <IconEdit size={13} /> Editar la lista
+            </button>
+          )}
         </div>
       </div>
     );
@@ -318,7 +335,7 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
           onClick={() => { setModo(modo === "juntar" ? "ver" : "juntar"); setHecho(""); setError(""); }}
           className="text-xs px-2.5 py-1.5 rounded-xl border border-black/10 bg-white text-ink-dim inline-flex items-center gap-1"
         >
-          <IconLayersSubtract size={13} /> {modo === "juntar" ? "Cerrar" : "Juntar los iguales"}
+          <IconLayersSubtract size={13} /> {modo === "juntar" ? "Cerrar" : "Agrupar en productos"}
         </button>
       </div>
 
@@ -332,7 +349,12 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
       )}
 
       {modo === "juntar" && (
-        <Juntador proyectoId={proyecto.id!} alJuntar={() => { setModo("ver"); alCambiar(); }} />
+        <Juntador
+          proyectoId={proyecto.id!}
+          filas={visibles}
+          opciones={opciones}
+          alJuntar={() => { setModo("ver"); alCambiar(); }}
+        />
       )}
 
       {modo === "ver" && (pestana === NO_APROBADOS || pestana === CANCELADOS) && (
@@ -353,7 +375,6 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
                 <th className="text-right px-4 py-2 font-medium">Cant.</th>
                 <th className="text-left px-4 py-2 font-medium">Entrega</th>
                 <th className="text-right px-4 py-2 font-medium">Importe</th>
-                <th className="text-right px-4 py-2 font-medium">Cobrado</th>
                 <th className="px-2 py-2" />
               </tr>
             </thead>
@@ -423,66 +444,104 @@ function FilaDeItem({
   alSeparar: (que: { producto: string } | { item: string }) => void;
   sangrada?: boolean;
 }) {
+  const [abierta, setAbierta] = useState(false);
   const pct = fila.monto > 0 ? Math.min(100, (fila.pagado / fila.monto) * 100) : 0;
   const fe = fila.fecha_entrega as Timestamp | null | undefined;
+  const fusionados = fila.fusionados ?? 0;
   return (
-    <tr className="border-t border-black/5">
-      <td className={`py-3 ${sangrada ? "pl-10 pr-4" : "px-4"}`}>
-        <p className="text-sm font-medium text-ink-dim">
-          {fila.clave && <span className="text-ink-muted font-normal">{fila.clave} · </span>}
-          {fila.nombre}
-        </p>
-        {fila.descripcion && <p className="text-[11px] text-ink-muted">{fila.descripcion}</p>}
-        {pestana === "" && fila.partida && (
-          <p className="text-[10px] text-ink-muted uppercase tracking-wide mt-0.5">{fila.partida}</p>
-        )}
-        <SelectorDeProducto fila={fila} opciones={opciones} ocupado={moviendo === fila.id} alEscoger={alCambiarProducto} />
-        {/* Un renglón que se tragó a otros cuando «juntar» fusionaba. No se
-            puede mover de grupo por pieza porque las piezas ya no existen
-            como renglones; esto las devuelve. Se ofrece sólo aquí, donde
-            está el renglón, y diciendo cuántas son. */}
-        {(fila.fusionados ?? 0) > 0 && (
-          <div className="mt-1.5 text-[11px] text-mauve-900">
-            <p>
-              Este renglón se tragó {fila.fusionados} más cuando juntar borraba renglones.
-            </p>
+    <>
+      <tr className="border-t border-black/5">
+        <td className={`py-3 ${sangrada ? "pl-10 pr-4" : "px-4"}`}>
+          <div className="flex items-start gap-2">
+            {/* El «+». Mike, 20-sep: «oculta la descripción en la lista, sólo
+                que se abra con un signo de más para desplegar más info». Es
+                un botón de verdad y no un div: así se llega con el teclado y
+                el lector de pantalla dice si está abierto o cerrado. */}
             <button
               type="button"
-              onClick={() => alSeparar({ item: fila.id })}
-              disabled={moviendo === fila.id}
-              className="mt-1 inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-xl border border-mauve-900/30 bg-white text-mauve-900 disabled:opacity-40"
+              onClick={() => setAbierta((v) => !v)}
+              aria-expanded={abierta}
+              aria-label={abierta ? `Ocultar el detalle de ${fila.nombre}` : `Ver el detalle de ${fila.nombre}`}
+              className="mt-0.5 shrink-0 w-5 h-5 rounded-md border border-black/10 bg-white text-ink-muted inline-flex items-center justify-center hover:border-black/25"
             >
-              <IconArrowsSplit size={13} />
-              {moviendo === fila.id ? "Separando…" : `Separar en ${(fila.fusionados ?? 0) + 1} renglones`}
+              {abierta ? <IconMinus size={11} /> : <IconPlus size={11} />}
             </button>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-ink-dim">
+                {fila.clave && <span className="text-ink-muted font-normal">{fila.clave} · </span>}
+                {fila.nombre}
+              </p>
+              {pestana === "" && fila.partida && (
+                <p className="text-[10px] text-ink-muted uppercase tracking-wide mt-0.5">{fila.partida}</p>
+              )}
+            </div>
           </div>
-        )}
-      </td>
-      <td className="text-right px-4 py-3 text-sm text-ink-dim tabular-nums">{fila.cantidad ?? 1}</td>
-      <td className="px-4 py-3 text-xs text-ink-muted whitespace-nowrap">
-        {fe && typeof fe.toDate === "function" ? formatDateShort(fe.toDate()) : "—"}
-      </td>
-      <td className="text-right px-4 py-3 text-sm text-ink-dim">
-        {formatMonto(fila.monto, "MXN")}
-        {(fila.cantidad ?? 1) > 1 && (
-          <span className="block text-[10px] text-ink-muted">
-            {formatMonto(fila.monto / (fila.cantidad ?? 1), "MXN")} c/u
-          </span>
-        )}
-      </td>
-      <td className="text-right px-4 py-3">
-        <p className="text-sm text-ink-dim">{formatMonto(fila.pagado ?? 0, "MXN")}</p>
-        <div className="flex items-center gap-1.5 justify-end mt-1">
-          <div className="w-16 h-1 bg-cream rounded-full overflow-hidden">
-            <div className="h-full bg-mint-900" style={{ width: `${pct}%` }} />
-          </div>
-          <span className="text-[10px] text-ink-muted w-7 text-right">{pct.toFixed(0)}%</span>
-        </div>
-      </td>
-      <td className="px-2 py-3 text-right">
-        <Cancelador id={fila.id} nombre={fila.nombre} ocupado={moviendo === fila.id} alCancelar={alMover} />
-      </td>
-    </tr>
+        </td>
+        <td className="text-right px-4 py-3 text-sm text-ink-dim tabular-nums">{fila.cantidad ?? 1}</td>
+        <td className="px-4 py-3 text-xs text-ink-muted whitespace-nowrap">
+          {fe && typeof fe.toDate === "function" ? formatDateShort(fe.toDate()) : "—"}
+        </td>
+        <td className="text-right px-4 py-3 text-sm text-ink-dim">
+          {formatMonto(fila.monto, "MXN")}
+          {(fila.cantidad ?? 1) > 1 && (
+            <span className="block text-[10px] text-ink-muted">
+              {formatMonto(fila.monto / (fila.cantidad ?? 1), "MXN")} c/u
+            </span>
+          )}
+        </td>
+        <td className="px-2 py-3 text-right">
+          <Cancelador id={fila.id} nombre={fila.nombre} ocupado={moviendo === fila.id} alCancelar={alMover} />
+        </td>
+      </tr>
+
+      {/* Lo que estaba estorbando en la lista: la descripción, lo cobrado y
+          el selector de producto. Mike los pidió aquí, detrás del «+». */}
+      {abierta && (
+        <tr className="border-t border-black/5 bg-cream/20">
+          <td colSpan={5} className={`py-3 ${sangrada ? "pl-16 pr-4" : "px-4"}`}>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="sm:col-span-2">
+                <p className="text-[10px] text-ink-muted uppercase tracking-wide mb-1">Descripción</p>
+                <p className="text-xs text-ink-dim">{fila.descripcion || "—"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-ink-muted uppercase tracking-wide mb-1">Cobrado</p>
+                <p className="text-sm text-ink-dim">{formatMonto(fila.pagado ?? 0, "MXN")}</p>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <div className="flex-1 max-w-[6rem] h-1 bg-white rounded-full overflow-hidden">
+                    <div className="h-full bg-mint-900" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="text-[10px] text-ink-muted">{pct.toFixed(0)}%</span>
+                </div>
+              </div>
+              <div className="sm:col-span-3">
+                <p className="text-[10px] text-ink-muted uppercase tracking-wide mb-1">De qué producto es</p>
+                <SelectorDeProducto
+                  fila={fila}
+                  opciones={opciones}
+                  ocupado={moviendo === fila.id}
+                  alEscoger={alCambiarProducto}
+                />
+                {fusionados > 0 && (
+                  <div className="mt-2 text-[11px] text-mauve-900">
+                    <p>Este renglón se tragó {fusionados} más cuando juntar borraba renglones.</p>
+                    <button
+                      type="button"
+                      onClick={() => alSeparar({ item: fila.id })}
+                      disabled={moviendo === fila.id}
+                      className="mt-1 inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-xl border border-mauve-900/30 bg-white text-mauve-900 disabled:opacity-40"
+                    >
+                      <IconArrowsSplit size={13} />
+                      {moviendo === fila.id ? "Separando…" : `Separar en ${fusionados + 1} renglones`}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
@@ -533,22 +592,22 @@ function ProductoEnLaLista({
               </span>
               <span className="block text-[11px] text-ink-muted">
                 {piezas.length} ítem{piezas.length === 1 ? "" : "s"} · {formatMonto(producto.precio / 100, "MXN")} la pieza
-                {abierto ? "" : " · toca para ver cuáles"}
+                {" · "}{formatMonto(pagado, "MXN")} cobrado
+                {abierto ? "" : " · toca para ver cada pieza y cambiarla de producto"}
               </span>
             </span>
           </button>
         </td>
         <td className="text-right px-4 py-3 text-sm text-ink-dim tabular-nums">{cuantas}</td>
         <td className="px-4 py-3" />
-        <td className="text-right px-4 py-3 text-sm font-medium text-ink-dim">{formatMonto(monto, "MXN")}</td>
-        <td className="text-right px-4 py-3">
-          <p className="text-sm text-ink-dim">{formatMonto(pagado, "MXN")}</p>
-          <div className="flex items-center gap-1.5 justify-end mt-1">
-            <div className="w-16 h-1 bg-white rounded-full overflow-hidden">
-              <div className="h-full bg-mint-900" style={{ width: `${pct}%` }} />
-            </div>
+        <td className="text-right px-4 py-3 text-sm font-medium text-ink-dim">
+          {formatMonto(monto, "MXN")}
+          <span className="flex items-center gap-1.5 justify-end mt-1">
+            <span className="w-16 h-1 bg-white rounded-full overflow-hidden block">
+              <span className="h-full bg-mint-900 block" style={{ width: `${pct}%` }} />
+            </span>
             <span className="text-[10px] text-ink-muted w-7 text-right">{pct.toFixed(0)}%</span>
-          </div>
+          </span>
         </td>
         <td className="px-2 py-3 text-right">
           {/* Sacar las piezas del grupo de un golpe. Mike, 20-sep:
@@ -733,149 +792,218 @@ function Acomodador({
 
 /* ─────────────── juntar los iguales ─────────────── */
 
-function Juntador({ proyectoId, alJuntar }: { proyectoId: string; alJuntar: () => void }) {
-  const [grupos, setGrupos] = useState<GrupoDeItems[] | null>(null);
-  const [cargando, setCargando] = useState(true);
+/* ─────────────── gestionar los ítems: a qué producto va cada uno ───────────────
+ *
+ * Mike, 20-sep: «la lista debe ser de TODOS los ítems, sean o no similares.
+ * Todo está en gestionar los ítems ya existentes». Y: «donde dice nombre del
+ * modelo debería poderse hacer uno nuevo, o seleccionar agregar a alguno ya
+ * existente. Al asignarlo a un producto existente, adopta en automático el
+ * precio del producto al que se agrupa».
+ *
+ * ANTES esto enseñaba sólo los montones que el parecido adivinaba, y si tus
+ * puertas no caían en uno, no había manera de tocarlas desde aquí. Ahora
+ * enseña la lista completa y quien decide marca; el parecido se queda, pero
+ * como ATAJO —un botón que marca un montón de un golpe—, no como la
+ * estructura de la pantalla.
+ *
+ * Lo que más cuidado necesita es el dinero: meter 25 puertas de $0 a un
+ * modelo de $2,850 sube el precio de venta de la obra en $71,250. Está bien
+ * que suba —es lo que se está pidiendo— y por eso el renglón de consecuencia
+ * lo dice con el número antes de aplicar, no después.
+ */
+function Juntador({
+  proyectoId, filas, opciones, alJuntar,
+}: {
+  proyectoId: string;
+  filas: Fila[];
+  opciones: Opciones;
+  alJuntar: () => void;
+}) {
+  const [sugerencias, setSugerencias] = useState<GrupoDeItems[]>([]);
+  const [marcados, setMarcados] = useState<Record<string, boolean>>({});
+  /** `NUEVO` o el id de un producto que ya existe. */
+  const [destino, setDestino] = useState<string>(NUEVO);
+  const [nombre, setNombre] = useState("");
+  const [precio, setPrecio] = useState("");
+  const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
-  const [fuera, setFuera] = useState<Record<string, boolean>>({});
-  const [nombres, setNombres] = useState<Record<string, string>>({});
-  /** El precio del modelo, en PESOS y como texto: es un campo que se teclea.
-   *  Vacío quiere decir «el que traen», que es lo que propone la API. */
-  const [precios, setPrecios] = useState<Record<string, string>>({});
-  const [juntando, setJuntando] = useState("");
 
-  const traer = async () => {
-    setCargando(true); setError("");
-    try { setGrupos(await agrupables(proyectoId)); }
-    catch (e) { setError(e instanceof Error ? e.message : "No se pudo ver qué se parece."); }
-    finally { setCargando(false); }
-  };
-  useEffect(() => { void traer(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [proyectoId]);
+  useEffect(() => {
+    let vivo = true;
+    agrupables(proyectoId)
+      .then((g) => { if (vivo) setSugerencias(g); })
+      .catch(() => { if (vivo) setSugerencias([]); });
+    return () => { vivo = false; };
+  }, [proyectoId]);
 
-  const juntar = async (g: GrupoDeItems) => {
-    const escogidos = g.items.filter((i) => !fuera[i.id]);
-    if (escogidos.length < 2) return;
-    const llave = g.items[0].id;
-    setJuntando(llave); setError("");
+  const escogidos = filas.filter((f) => marcados[f.id]);
+  const piezas = escogidos.reduce((s, f) => s + (f.cantidad ?? 1), 0);
+  const montoHoy = escogidos.reduce((s, f) => s + f.monto, 0);
+
+  /* El precio por pieza que van a tener. Si el destino es un producto que ya
+   * existe, es el suyo y no se discute. Si es nuevo y no se teclea nada, la
+   * API se queda con el más caro del montón: un promedio inventaría un
+   * número que nadie cotizó. En PESOS aquí; a centavos al mandar. */
+  const productoDestino = opciones.productos.find((p) => p.id === destino);
+  const tecleado = precio.trim();
+  const porPiezaPesos = productoDestino
+    ? productoDestino.precio / 100
+    : tecleado !== ""
+      ? Number(tecleado)
+      : Math.max(0, ...escogidos.map((f) => f.monto / (f.cantidad ?? 1)));
+  const montoNuevo = Number.isFinite(porPiezaPesos) ? porPiezaPesos * piezas : montoHoy;
+  const delta = montoNuevo - montoHoy;
+
+  const aplicar = async () => {
+    if (escogidos.length < 2 && !productoDestino) return;
+    if (!escogidos.length) return;
+    setGuardando(true); setError("");
     try {
-      const tecleado = (precios[llave] ?? "").trim();
       await agrupar(proyectoId, {
-        items: escogidos.map((i) => i.id),
-        nombre: nombres[llave]?.trim() || undefined,
-        // El precio viaja en centavos, como todo el dinero de la API.
-        precio: tecleado === "" ? undefined : Math.round(Number(tecleado) * 100),
+        items: escogidos.map((f) => f.id),
+        ...(productoDestino
+          ? { producto_id: productoDestino.id }
+          : { nombre: nombre.trim() || undefined, precio: tecleado === "" ? undefined : Math.round(Number(tecleado) * 100) }),
       });
+      setMarcados({});
       alJuntar();
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudieron agrupar.");
     } finally {
-      setJuntando("");
+      setGuardando(false);
     }
   };
 
-  if (cargando) return <p className="text-xs text-ink-muted">Viendo cuáles son el mismo producto…</p>;
-  if (error && !grupos) return <p className="text-xs text-mauve-900">{error}</p>;
-  if (!grupos?.length) {
-    return (
-      <p className="text-xs text-ink-muted bg-white border border-black/5 rounded-2xl p-4">
-        No hay renglones repetidos: cada ítem se llama distinto o cuesta distinto. Dos que se
-        llaman igual y cuestan distinto no se ofrecen a propósito —o no son lo mismo, o hay un
-        precio mal, y juntarlos escondería el error en un promedio—.
-      </p>
-    );
+  if (!filas.length) {
+    return <p className="text-xs text-ink-muted bg-white border border-black/5 rounded-2xl p-4">No hay ítems en esta vista.</p>;
   }
 
   return (
-    <div className="space-y-3">
-      {grupos.map((g) => {
-        const llave = g.items[0].id;
-        const escogidos = g.items.filter((i) => !fuera[i.id]);
-        const piezas = escogidos.reduce((s, i) => s + i.cantidad, 0);
-        const monto = escogidos.reduce((s, i) => s + i.monto, 0);
-        /* Lo que va a costar el grupo con el precio que se teclee, y cuánto
-         * mueve eso el precio de venta. Se saca aquí, antes de aplicar:
-         * enterarse de que la venta bajó por el total del mes es tarde. */
-        const tecleado = (precios[llave] ?? "").trim();
-        const porPieza = tecleado === "" ? g.precio_pieza : Math.round(Number(tecleado) * 100);
-        const nuevoTotal = Number.isFinite(porPieza) ? porPieza * piezas : monto;
-        const delta = nuevoTotal - monto;
-        return (
-          <div key={llave} className="bg-white border border-black/5 rounded-2xl p-3">
-            <p className="text-xs text-ink-dim">
-              <b>{g.renglones} renglones</b> de «{g.nombre}», a {pesos(g.precio_pieza)} la pieza.
-            </p>
-            <ul className="mt-2 space-y-1">
-              {g.items.map((i) => (
-                <li key={i.id} className="flex items-center gap-2 text-xs text-ink-dim">
-                  <input
-                    type="checkbox"
-                    checked={!fuera[i.id]}
-                    onChange={() => setFuera((p) => ({ ...p, [i.id]: !p[i.id] }))}
-                    aria-label={`Juntar ${i.clave ?? ""} ${i.nombre}`}
-                  />
-                  <span className="flex-1 min-w-0 truncate">
-                    {i.clave ? `${i.clave} · ` : ""}{i.nombre}
-                    {i.cantidad > 1 ? ` · ${i.cantidad} piezas` : ""}
-                  </span>
-                  <span className="text-ink-muted tabular-nums">{pesos(i.monto)}</span>
-                  {i.ubicados > 0 && (
-                    <span className="text-[10px] text-ink-muted">{i.ubicados} en plano</span>
-                  )}
-                </li>
-              ))}
-            </ul>
+    <div className="bg-white border border-black/5 rounded-2xl p-3 space-y-3">
+      {/* El parecido, como atajo. Marca un montón de un golpe; lo que se
+          agrupa sigue siendo lo que quede marcado abajo. */}
+      {sugerencias.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 items-baseline">
+          <span className="text-[11px] text-ink-muted">Se parecen:</span>
+          {sugerencias.map((g) => (
+            <button
+              key={g.items[0].id}
+              type="button"
+              onClick={() => setMarcados(Object.fromEntries(g.items.map((i) => [i.id, true])))}
+              className="text-[11px] px-2 py-1 rounded-lg border border-black/10 bg-cream/40 text-ink-dim hover:border-black/25"
+            >
+              {g.renglones} × «{g.nombre}» a {pesos(g.precio_pieza)}
+            </button>
+          ))}
+        </div>
+      )}
 
-            <div className="grid grid-cols-2 gap-2 mt-2">
+      <div className="flex gap-2 text-[11px]">
+        <button type="button" onClick={() => setMarcados(Object.fromEntries(filas.map((f) => [f.id, true])))}
+          className="text-ink-dim hover:underline">Marcar todos</button>
+        <button type="button" onClick={() => setMarcados({})} className="text-ink-dim hover:underline">Ninguno</button>
+      </div>
+
+      {/* TODOS los ítems de la vista, se parezcan o no. */}
+      <ul className="max-h-80 overflow-y-auto divide-y divide-black/5 border-y border-black/5">
+        {filas.map((f) => {
+          const suyo = opciones.productos.find((p) => p.id === f.producto_id);
+          return (
+            <li key={f.id} className="flex items-center gap-2 py-1.5 text-xs text-ink-dim">
               <input
-                type="text"
-                value={nombres[llave] ?? ""}
-                onChange={(e) => setNombres((p) => ({ ...p, [llave]: e.target.value }))}
-                placeholder={`Nombre del modelo (hoy: ${g.nombre})`}
-                aria-label="Nombre del producto"
-                className="bg-white border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-ink/40"
+                type="checkbox"
+                checked={!!marcados[f.id]}
+                onChange={() => setMarcados((p) => ({ ...p, [f.id]: !p[f.id] }))}
+                aria-label={`Agrupar ${f.clave ?? ""} ${f.nombre}`}
               />
-              <input
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step="0.01"
-                value={precios[llave] ?? ""}
-                onChange={(e) => setPrecios((p) => ({ ...p, [llave]: e.target.value }))}
-                placeholder={`Precio por pieza (hoy: ${(g.precio_pieza / 100).toFixed(2)})`}
-                aria-label="Precio por pieza del producto"
-                className="bg-white border border-black/10 rounded-lg px-2 py-1.5 text-xs tabular-nums focus:outline-none focus:border-ink/40"
-              />
-            </div>
+              <span className="flex-1 min-w-0 truncate">
+                {f.clave && <span className="text-ink-muted">{f.clave} · </span>}
+                {f.nombre}
+                {(f.cantidad ?? 1) > 1 && <span className="text-ink-muted"> · {f.cantidad} piezas</span>}
+              </span>
+              <span className="text-[10px] text-ink-muted shrink-0">
+                {suyo ? suyo.nombre : "suelto"}
+              </span>
+              <span className="text-ink-muted tabular-nums shrink-0">
+                {formatMonto(f.monto / (f.cantidad ?? 1), "MXN")}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
 
-            <p className="text-[11px] text-ink-muted mt-2">
-              Quedan <b>{escogidos.length} renglones</b> apuntando al mismo modelo,{" "}
-              {piezas} pieza{piezas === 1 ? "" : "s"} por {pesos(nuevoTotal)}.
-              Cada pieza sigue siendo la suya, con su código de obra y su seguimiento en el
-              plano, y se puede sacar del grupo cuando quieras.
-              {delta === 0
-                ? " El precio de venta del proyecto no se mueve."
-                : ` El precio de venta del proyecto ${delta > 0 ? "sube" : "baja"} ${pesos(Math.abs(delta))}.`}
-            </p>
+      {/* A qué producto van: uno nuevo, o uno que ya existe. */}
+      <div className="space-y-2">
+        <label className="block">
+          <span className="text-[11px] text-ink-muted">A qué producto van</span>
+          <select
+            value={destino}
+            onChange={(e) => setDestino(e.target.value)}
+            className="w-full mt-1 bg-white border border-black/10 rounded-lg px-2 py-1.5 text-xs text-ink-dim focus:outline-none focus:border-ink/40"
+          >
+            <option value={NUEVO}>Un producto nuevo</option>
+            {opciones.productos.length > 0 && (
+              <optgroup label="Agregar a uno que ya existe">
+                {opciones.productos.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre} · {p.items ?? 0} ítems · {formatMonto(p.precio / 100, "MXN")} c/u
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+        </label>
 
-            <div className="flex items-center gap-2 mt-2">
-              <button
-                type="button"
-                onClick={() => juntar(g)}
-                disabled={escogidos.length < 2 || juntando === llave}
-                className="bg-ink text-white text-xs px-3 py-2 rounded-xl inline-flex items-center gap-1 disabled:opacity-40"
-              >
-                <IconCheck size={13} />
-                {juntando === llave ? "Juntando…" : `Juntar ${escogidos.length}`}
-              </button>
-              {escogidos.length < 2 && (
-                <span className="text-[11px] text-ink-muted inline-flex items-center gap-1">
-                  <IconX size={12} /> Hacen falta dos.
-                </span>
-              )}
-            </div>
+        {productoDestino ? (
+          <p className="text-[11px] text-ink-muted">
+            Toman el precio de «{productoDestino.nombre}»: {formatMonto(productoDestino.precio / 100, "MXN")} la
+            pieza. El nombre y el precio del modelo no se tocan desde aquí.
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="text" value={nombre} onChange={(e) => setNombre(e.target.value)}
+              placeholder="Nombre del modelo" aria-label="Nombre del producto nuevo"
+              className="bg-white border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-ink/40"
+            />
+            <input
+              type="number" inputMode="decimal" min={0} step="0.01"
+              value={precio} onChange={(e) => setPrecio(e.target.value)}
+              placeholder="Precio por pieza" aria-label="Precio por pieza del producto nuevo"
+              className="bg-white border border-black/10 rounded-lg px-2 py-1.5 text-xs tabular-nums focus:outline-none focus:border-ink/40"
+            />
           </div>
-        );
-      })}
+        )}
+      </div>
+
+      {escogidos.length > 0 && (
+        <p className="text-[11px] text-ink-muted">
+          <b>{escogidos.length} ítems</b>, {piezas} pieza{piezas === 1 ? "" : "s"}, quedan en{" "}
+          {productoDestino ? `«${productoDestino.nombre}»` : "un modelo nuevo"} por {formatMonto(montoNuevo, "MXN")}.
+          Cada pieza sigue siendo la suya, con su código de obra y su seguimiento en el plano, y se puede sacar
+          del grupo cuando quieras.
+          {delta === 0
+            ? " El precio de venta del proyecto no se mueve."
+            : ` OJO: el precio de venta ${delta > 0 ? "sube" : "baja"} ${formatMonto(Math.abs(delta), "MXN")}.`}
+        </p>
+      )}
+
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={aplicar}
+          disabled={guardando || escogidos.length === 0 || (!productoDestino && escogidos.length < 2)}
+          className="bg-ink text-white text-xs px-3 py-2 rounded-xl inline-flex items-center gap-1 disabled:opacity-40"
+        >
+          <IconCheck size={13} />
+          {guardando ? "Agrupando…" : `Agrupar ${escogidos.length}`}
+        </button>
+        {!productoDestino && escogidos.length === 1 && (
+          <span className="text-[11px] text-ink-muted inline-flex items-center gap-1">
+            <IconX size={12} /> Para un modelo nuevo hacen falta dos; con uno solo, escoge un producto que ya exista.
+          </span>
+        )}
+      </div>
       {error && <p className="text-xs text-mauve-900">{error}</p>}
     </div>
   );

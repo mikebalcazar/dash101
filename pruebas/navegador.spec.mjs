@@ -865,8 +865,14 @@ test('agrupar dos renglones en un producto: NO se borra ninguno y se pueden move
     assert.fail(`no salió el dropdown de producto. La pantalla decía: ${(await texto(pag)).replace(/\s+/g, ' ').slice(0, 400)}`);
   }
 
-  await pag.getByRole('button', { name: /Juntar los iguales/ }).click();
-  const juntar = pag.getByRole('button', { name: /^Juntar 2$/ });
+  await pag.getByRole('button', { name: /Agrupar en productos/ }).click();
+  /* La lista es de TODOS los ítems y nace sin nada marcado —Mike, 20-sep:
+     «la lista debe ser de todos los ítems, sean o no similares; todo está
+     en gestionar los ítems ya existentes»—, así que primero se marcan. */
+  const marcar = pag.getByRole('button', { name: /^Marcar todos$/ });
+  await marcar.waitFor({ timeout: 20000 });
+  await marcar.click();
+  const juntar = pag.getByRole('button', { name: /^Agrupar 2$/ });
   await juntar.waitFor({ timeout: 20000 });
   await juntar.click();
 

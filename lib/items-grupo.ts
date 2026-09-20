@@ -71,18 +71,25 @@ export async function agrupables(proyecto_id: string): Promise<GrupoDeItems[]> {
  *  puede mover; escogió con botones que el grupo de producto reemplace a la
  *  fusión.
  *
+ *  Con `producto_id` las piezas entran a un modelo QUE YA EXISTE y adoptan
+ *  su precio, en vez de escribir uno nuevo (contrato 0.37.0). Ahí el nombre
+ *  y el precio se ignoran: el modelo ya tiene los suyos.
+ *
  *  Las piezas heredan el precio del producto, así que el precio de venta del
  *  proyecto SÍ se puede mover. Por eso vuelve el antes y el después: la
  *  pantalla lo enseña y quien agrupó ve lo que hizo. En CENTAVOS. */
 export async function agrupar(
   proyecto_id: string,
-  args: { items: string[]; nombre?: string; codigo?: string; precio?: number },
-): Promise<{ producto: Producto; items: number; venta_antes: number; venta_despues: number }> {
-  const r = await pedir<{ producto: Producto; items: unknown[]; venta_antes: number; venta_despues: number }>(
+  args: { items: string[]; nombre?: string; codigo?: string; precio?: number; producto_id?: string },
+): Promise<{ producto: Producto; items: number; nuevo: boolean; venta_antes: number; venta_despues: number }> {
+  const r = await pedir<{ producto: Producto; items: unknown[]; nuevo: boolean; venta_antes: number; venta_despues: number }>(
     `${base(proyecto_id)}/agrupar`,
     { method: 'POST', body: args },
   );
-  return { producto: r.producto, items: r.items?.length ?? 0, venta_antes: r.venta_antes, venta_despues: r.venta_despues };
+  return {
+    producto: r.producto, items: r.items?.length ?? 0, nuevo: r.nuevo,
+    venta_antes: r.venta_antes, venta_despues: r.venta_despues,
+  };
 }
 
 /* ────────── el producto de cada ítem (contrato 0.35.0) ──────────
