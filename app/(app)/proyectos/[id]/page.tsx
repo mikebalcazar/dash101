@@ -17,6 +17,7 @@ import { formatMonto, formatMontoExact } from "@/lib/format";
 import { Timestamp } from "firebase/firestore";
 import { IconArrowLeft, IconTrash, IconPlus, IconEdit } from "@tabler/icons-react";
 import { formatDateShort } from "@/lib/format";
+import { ObraDelProyecto } from "@/components/obra-del-proyecto";
 
 const ESTADO_STYLE: Record<string, string> = {
   planeando: "bg-cream text-ink-muted",
@@ -321,6 +322,9 @@ export default function ProyectoDetallePage() {
               {formatMonto(p.precio_venta, "MXN")} − {formatMonto(p.compromiso_total, "MXN")}
             </p>
           </div>
+
+          {/* La obra de quell101, si la hay (contrato 0.22.0). */}
+          <ObraDelProyecto proyectoId={p.id!} />
 
           {/* Productos del cliente */}
           <ProductosVista proyecto={p} />

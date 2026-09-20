@@ -26,7 +26,9 @@ export class ErrorApi extends Error {
 let galleta = '';
 const enNavegador = typeof window !== 'undefined';
 
-export async function pedir<T>(ruta: string, opciones: { method?: string; body?: unknown } = {}): Promise<T> {
+/** El viaje: cabeceras, galleta y `fetch`. Lo comparten las dos formas de
+ *  pedir, para que la sesión se guarde en un solo lugar. */
+async function llamar(ruta: string, opciones: { method?: string; body?: unknown }): Promise<Response> {
   const cabeceras: Record<string, string> = { 'Content-Type': 'application/json', 'X-App': 'dash101' };
   if (!enNavegador && galleta) cabeceras.Cookie = galleta;
   const r = await fetch(`${apiBase()}${ruta}`, {
@@ -39,6 +41,11 @@ export async function pedir<T>(ruta: string, opciones: { method?: string; body?:
     const puesta = r.headers.get('set-cookie');
     if (puesta) galleta = puesta.split(';')[0];
   }
+  return r;
+}
+
+export async function pedir<T>(ruta: string, opciones: { method?: string; body?: unknown } = {}): Promise<T> {
+  const r = await llamar(ruta, opciones);
   let cuerpo: Respuesta<T>;
   try {
     cuerpo = (await r.json()) as Respuesta<T>;
@@ -47,6 +54,28 @@ export async function pedir<T>(ruta: string, opciones: { method?: string; body?:
   }
   if (!cuerpo.ok) throw new ErrorApi(cuerpo.error, r.status, cuerpo.detalle);
   return cuerpo.data;
+}
+
+/** Lo mismo, pero SIN desenvolver.
+ *
+ *  El motor de quell101 corre dentro de la API (`/orgs/:o/quell/*`) y es el
+ *  mismo código que corría en su Worker: contesta el objeto pelón, no el
+ *  `{ok, data}` de la suite. Pasarlo por `pedir` truena con
+ *  «undefined (200)», que no dice nada. Esto es para esas rutas y nada más;
+ *  todo lo de la suite va por `pedir`. */
+export async function pedirCrudo<T>(ruta: string, opciones: { method?: string; body?: unknown } = {}): Promise<T> {
+  const r = await llamar(ruta, opciones);
+  let cuerpo: unknown;
+  try {
+    cuerpo = await r.json();
+  } catch {
+    throw new ErrorApi('respuesta_no_json', r.status);
+  }
+  if (!r.ok) {
+    const e = cuerpo as { error?: string; detalle?: unknown };
+    throw new ErrorApi(e?.error ?? 'error', r.status, e?.detalle);
+  }
+  return cuerpo as T;
 }
 
 /** GET /orgs/:o/<tabla>?filtros — la lista completa (la API tope en 500). */
