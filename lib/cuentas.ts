@@ -65,7 +65,7 @@ export async function createCuenta(uid: string, data: CuentaInput): Promise<stri
 
 export async function updateCuenta(
   id: string,
-  data: Partial<Omit<CuentaInput, "negocio_id" | "saldo_inicial">>
+  data: Partial<Omit<CuentaInput, "negocio_id">>
 ): Promise<void> {
   if (fuente() === 'api') return escribir.updateCuenta(id, data);
   await updateDoc(doc(db, "cuentas", id), data);

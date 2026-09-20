@@ -132,8 +132,24 @@ export async function createCuenta(_uid: string, d: CuentaInput): Promise<string
   return f.id;
 }
 
-export async function updateCuenta(id: string, d: Partial<Omit<CuentaInput, 'negocio_id' | 'saldo_inicial'>>): Promise<void> {
-  await cambiar('cuentas', id, { nombre: d.nombre, tipo: d.tipo, banco: d.banco === undefined ? undefined : oNulo(d.banco), moneda: d.moneda });
+/** El `negocio_id` sigue sin poderse cambiar: mover una cuenta de negocio
+ *  se llevaría sus movimientos al otro lado y descuadraría los dos.
+ *
+ *  El SALDO INICIAL sí se puede corregir, desde el 20-sep. Estuvo prohibido
+ *  hasta hoy, y la intención era buena —cambiarlo recalcula el saldo entero
+ *  de la cuenta—, pero dejaba sin salida el caso más común de todos: el
+ *  número con el que se abre una cuenta el primer día, tecleado por alguien
+ *  que apenas está conociendo el sistema. Mike se topó con eso: $148,000 de
+ *  prueba que no aparecían en ningún movimiento —porque no son un
+ *  movimiento— y que no había manera de bajar sin borrar la cuenta.
+ *
+ *  No hace falta recalcular nada aquí: `saldo_actual` no se guarda, se suma
+ *  al leer (`saldo_inicial` + ingresos − egresos). */
+export async function updateCuenta(id: string, d: Partial<Omit<CuentaInput, 'negocio_id'>>): Promise<void> {
+  await cambiar('cuentas', id, {
+    nombre: d.nombre, tipo: d.tipo, banco: d.banco === undefined ? undefined : oNulo(d.banco), moneda: d.moneda,
+    saldo_inicial: d.saldo_inicial === undefined ? undefined : A.aCentavos(d.saldo_inicial),
+  });
 }
 
 export async function deleteCuenta(id: string): Promise<void> {

@@ -26,6 +26,16 @@ export default function CuentaDetallePage() {
   const [banco, setBanco] = useState("");
   const [numero, setNumero] = useState("");
   const [moneda, setMoneda] = useState<Moneda>("MXN");
+  /* El saldo inicial: con cuánto empezó la cuenta.
+   *
+   * NO es un movimiento, y por eso no sale en la lista de Movimientos: el
+   * saldo de una cuenta es `saldo_inicial + ingresos − egresos`. Hasta el
+   * 20-sep no se podía corregir, y eso dejaba sin salida el caso más común
+   * de todos: el número que se teclea el primer día, cuando uno apenas está
+   * conociendo el sistema. Mike se topó con $148,000 de prueba que no
+   * aparecían en ningún movimiento —porque no son uno— y que no había
+   * manera de bajar sin borrar la cuenta entera. */
+  const [saldoInicial, setSaldoInicial] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -47,6 +57,7 @@ export default function CuentaDetallePage() {
         setBanco(c.banco ?? "");
         setNumero(c.numero ?? "");
         setMoneda(c.moneda);
+        setSaldoInicial(String(c.saldo_inicial));
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Error"))
       .finally(() => setLoading(false));
@@ -63,6 +74,7 @@ export default function CuentaDetallePage() {
         banco: banco.trim() || undefined,
         numero: numero.trim() || undefined,
         moneda,
+        saldo_inicial: Number(saldoInicial) || 0,
       });
       setNotice("Cambios guardados");
       setTimeout(() => setNotice(""), 2000);
@@ -180,6 +192,25 @@ export default function CuentaDetallePage() {
             </div>
           </div>
         )}
+
+        <div>
+          <label htmlFor="saldo-inicial" className="text-xs font-medium text-ink-dim block mb-1.5">
+            Saldo inicial
+          </label>
+          <input
+            id="saldo-inicial"
+            type="number"
+            step="0.01"
+            value={saldoInicial}
+            onChange={(e) => setSaldoInicial(e.target.value)}
+            className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm tabular-nums focus:outline-none focus:border-ink/40 transition"
+          />
+          <p className="text-[11px] text-ink-muted mt-1.5">
+            Con cuánto empezó esta cuenta. <strong>No es un movimiento</strong>: por eso no aparece en
+            la lista de Movimientos. El saldo que ves es este número más los ingresos, menos los egresos —
+            así que al cambiarlo se recorre el saldo completo de la cuenta en esa misma cantidad.
+          </p>
+        </div>
 
         {error && (
           <p className="text-xs text-mauve-900 bg-mauve-50 px-3 py-2 rounded-xl">{error}</p>
