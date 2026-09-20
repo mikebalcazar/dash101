@@ -837,11 +837,28 @@ test('agrupar dos renglones en un producto: NO se borra ninguno y se pueden move
   }
 
   /* Antes de agrupar, cada ítem ya trae su dropdown: los dos son su propio
-   * producto único y cada uno puede escoger al otro. */
-  assert.ok(
-    await pag.locator('select').filter({ hasText: 'Es su propio producto' }).first().isVisible(),
-    'cada ítem trae su dropdown de producto',
-  );
+   * producto único y cada uno puede escoger al otro.
+   *
+   * SE ESPERA POR CONDICIÓN. La primera versión de esto preguntaba
+   * `isVisible()` en el instante en que aparecía «Ítems del proyecto», y se
+   * cayó en la puerta de despliegue: el dropdown se pinta con una SEGUNDA
+   * llamada —la de las opciones— que todavía no había vuelto, y mientras no
+   * hay opciones el control no se dibuja, a propósito. O sea que acusó a
+   * código que sí sirve, que es justo contra lo que avisa el comentario de
+   * arriba en este mismo archivo.
+   *
+   * Y se busca la OPCIÓN, no el `<select>`: un `<option>` dentro de un
+   * select cerrado no cuenta como visible para Playwright, así que se espera
+   * a que esté `attached`. Es la manera directa de decir «existe el
+   * dropdown y trae la opción de salirse del grupo». */
+  try {
+    await pag
+      .locator('select option', { hasText: 'Es su propio producto' })
+      .first()
+      .waitFor({ state: 'attached', timeout: 20000 });
+  } catch {
+    assert.fail(`no salió el dropdown de producto. La pantalla decía: ${(await texto(pag)).replace(/\s+/g, ' ').slice(0, 400)}`);
+  }
 
   await pag.getByRole('button', { name: /Juntar los iguales/ }).click();
   const juntar = pag.getByRole('button', { name: /^Juntar 2$/ });
