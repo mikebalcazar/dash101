@@ -54,6 +54,17 @@ export default function NuevoMovimientoPage() {
   const [productoId, setProductoId] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [showNota, setShowNota] = useState(false);
+  /* La factura, en tres estados y no en una palomita.
+   *
+   * «Ya se facturó» y «falta facturar» no son lo mismo que sí y no: falta el
+   * tercero, «no lleva factura», que es el préstamo del socio, la devolución
+   * o el traspaso. Sin ése, o se marca una mentira o el movimiento se queda
+   * para siempre en la lista de pendientes y la lista deja de leerse.
+   *
+   * Un cobro a cliente arranca en «falta facturar», que es lo que casi
+   * siempre pasa. Un egreso arranca en «no lleva»: los que sí la llevan
+   * vienen de una orden de compra, que ya trae el dato desde que se pidió. */
+  const [factura, setFactura] = useState<"ya" | "falta" | "no">("falta");
   const [quickCreate, setQuickCreate] = useState<QuickCreate>(null);
 
   const [submitting, setSubmitting] = useState(false);
@@ -101,6 +112,10 @@ export default function NuevoMovimientoPage() {
   const proyectoSel = proyectos.find((p) => p.id === proyectoId);
   const productosDelProyecto = proyectoSel?.productos ?? [];
   const productoSel = productosDelProyecto.find((pr) => pr.id === productoId);
+
+  useEffect(() => {
+    setFactura(tipo === "ingreso" ? "falta" : "no");
+  }, [tipo]);
 
   // Ingreso a un proyecto de un cliente: preselecciona al cliente del proyecto
   useEffect(() => {
@@ -177,8 +192,12 @@ export default function NuevoMovimientoPage() {
         producto_nombre: tipo === "ingreso" && productoSel ? productoSel.nombre : null,
         negocio_id: negocio.id!,
         descripcion: descripcion.trim() || undefined,
+        /* «Ya se facturó» también espera factura: la espera es lo que hace
+         * que se persiga si mañana la cancelan. Lo que la saca de la lista
+         * de pendientes es `facturado`, que se marca aparte con su UUID. */
+        requiere_factura: factura !== "no",
       });
-      router.push("/movimientos");
+      router.push(factura === "ya" ? "/fiscal/pendientes" : "/movimientos");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al crear movimiento");
     } finally {
@@ -443,6 +462,38 @@ export default function NuevoMovimientoPage() {
                   />
                 </div>
               )}
+
+              <div>
+                <label className="text-xs font-medium text-ink-dim block mb-1.5">Factura</label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {([
+                    ["ya", "Ya se facturó"],
+                    ["falta", "Falta facturar"],
+                    ["no", "No lleva"],
+                  ] as const).map(([v, texto]) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setFactura(v)}
+                      aria-pressed={factura === v}
+                      className={`rounded-xl px-2 py-2 text-xs border transition ${
+                        factura === v
+                          ? "bg-ink text-white border-ink"
+                          : "bg-white text-ink-dim border-black/10 hover:border-ink/30"
+                      }`}
+                    >
+                      {texto}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-ink-muted mt-1.5">
+                  {factura === "ya"
+                    ? "Al guardar te llevo a capturar el folio fiscal y a colgar el archivo."
+                    : factura === "falta"
+                      ? "Se queda en «pendientes de facturar» hasta que la captures."
+                      : "No aparece en pendientes. Para un préstamo, un traspaso o una devolución."}
+                </p>
+              </div>
             </>
           )}
         </div>

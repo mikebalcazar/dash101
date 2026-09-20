@@ -83,15 +83,30 @@ export interface PendienteDeFactura {
   fecha: string;
   /** En PESOS. */
   monto: number;
+  /** `ingreso` es un cobro al cliente que falta facturar; `egreso`, un pago
+   *  a proveedor cuya factura no ha llegado. El tipo importa más de lo que
+   *  parece: decide si el IVA de esa factura es trasladado o acreditable. */
+  tipo: 'ingreso' | 'egreso';
   descripcion: string | null;
   contraparte_nombre: string | null;
   orden_folio: string | null;
   orden_proveedor: string | null;
 }
 
-export async function listPendientes(negocio_id?: string | null): Promise<PendienteDeFactura[]> {
-  const q = negocio_id ? `?negocio_id=${encodeURIComponent(negocio_id)}` : '';
-  const r = await pedir<{ filas: (Omit<PendienteDeFactura, 'monto'> & { monto: number })[] }>(`${base()}/pendientes${q}`);
+/** Lo que falta facturar. Sin `tipo` vienen los dos lados (contrato 0.25.0);
+ *  hasta entonces sólo podían venir egresos, porque la espera de la factura
+ *  se leía de la orden de compra y un cobro no tiene orden. */
+export async function listPendientes(
+  negocio_id?: string | null,
+  tipo?: 'ingreso' | 'egreso',
+): Promise<PendienteDeFactura[]> {
+  const q = new URLSearchParams();
+  if (negocio_id) q.set('negocio_id', negocio_id);
+  if (tipo) q.set('tipo', tipo);
+  const s = q.toString();
+  const r = await pedir<{ filas: (Omit<PendienteDeFactura, 'monto'> & { monto: number })[] }>(
+    `${base()}/pendientes${s ? '?' + s : ''}`,
+  );
   return r.filas.map((f) => ({ ...f, monto: aPesos(f.monto) }));
 }
 

@@ -606,6 +606,66 @@ test('la cantidad: 20 puertas a $1,500 son $30,000 de línea, no $600,000', asyn
   await ctx.close();
 });
 
+test('un cobro se captura «falta facturar» y aparece en la lista de pendientes', async () => {
+  /* Encargo de Mike del 20-sep. Lo que se recorre aquí es lo que él hace:
+   * capturar un ingreso diciendo que falta facturarlo, y encontrarlo después
+   * en Fiscal → Falta la factura, del lado de los COBROS.
+   *
+   * El lado de los cobros se pinta aparte del de los pagos a propósito: de un
+   * cobro sale el IVA que se traslada y de un pago el que se acredita. */
+  const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  const { neg } = await negocioDePruebas(pag);
+  await elegirNegocio(pag, neg.id);
+
+  const cuentas = filas(await api(pag, `/orgs/${ORG}/cuentas?negocio_id=${neg.id}`));
+  assert.ok(cuentas.length > 0, 'la demo tiene al menos una cuenta');
+
+  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes?negocio_id=${neg.id}`))
+    .find((c) => c.nombre === CLIENTE_PRUEBAS);
+  if (!cliente) {
+    cliente = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS, negocio_id: neg.id } });
+  }
+  const proyecto = await api(pag, `/orgs/${ORG}/proyectos`, {
+    method: 'POST',
+    body: { nombre: `Cobro ${Date.now().toString(36).slice(-5)}`, cliente_id: cliente.id, negocio_id: neg.id, estado: 'activo' },
+  });
+
+  await pag.goto(`${URL}/movimientos/nuevo`, { waitUntil: 'load' });
+  await pag.getByLabel('Fecha').first().waitFor({ timeout: 20000 });
+  await pag.getByRole('button', { name: /^Ingreso$/ }).click();
+  await pag.locator('input[inputmode="decimal"]').first().fill('12345');
+
+  // Proyecto y cliente: el cliente se preselecciona solo desde el proyecto.
+  await pag.locator('select').filter({ hasText: proyecto.nombre }).first()
+    .selectOption({ label: new RegExp(proyecto.nombre) }).catch(() => {});
+
+  // Lo nuevo: el cobro arranca en «Falta facturar» sin tocar nada.
+  const falta = pag.getByRole('button', { name: 'Falta facturar' });
+  await falta.waitFor({ timeout: 20000 });
+  assert.equal(await falta.getAttribute('aria-pressed'), 'true',
+    'un ingreso arranca en «falta facturar», que es lo que casi siempre pasa');
+  await falta.click();
+
+  await pag.getByRole('button', { name: /Guardar|Crear/ }).last().click();
+  await pag.waitForURL(/\/movimientos/, { timeout: 30000 });
+
+  // Y sale en la lista de pendientes, del lado de los cobros.
+  const pend = await api(pag, `/orgs/${ORG}/fiscal/pendientes?negocio_id=${neg.id}&tipo=ingreso`);
+  const mio = filas(pend).find((m) => m.monto === 12_345_00);
+  assert.ok(mio, 'el cobro quedó esperando factura');
+  assert.equal(mio.tipo, 'ingreso');
+
+  await pag.goto(`${URL}/fiscal/pendientes`, { waitUntil: 'load' });
+  await pag.getByText('Cobros que falta facturar').first().waitFor({ timeout: 20000 });
+  const dice = await texto(pag);
+  assert.ok(/Cobros que falta facturar/.test(dice), 'la pantalla separa los cobros de los pagos');
+
+  console.log(`    un cobro de ${pesos2(12_345_00)} esperando factura`);
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
 /* ═══════════════ 7 · el otro sentido de la puerta, al final ═══════════════ */
 
 test('un código equivocado NO entra', async () => {
