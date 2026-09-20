@@ -113,12 +113,30 @@ export function normalizarNombre(txt: string): string {
 /** Los clientes que se parecen a ese nombre: el mismo ya normalizado, o uno
  *  que contiene al otro («Ramírez» contra «Familia Ramírez»). No se inventa
  *  distancia de edición: con esto se atrapa lo que de verdad pasa al capturar
- *  dos veces, y no se molesta a nadie con falsos parecidos. */
-export function clientesParecidos(nombre: string, clientes: Cliente[]): Cliente[] {
+ *  dos veces, y no se molesta a nadie con falsos parecidos.
+ *
+ *  Con la API la regla la contesta EL SERVIDOR (contrato 0.23.0), porque las
+ *  tres apps preguntan lo mismo y tres reglas parecidas son tres reglas. Lo
+ *  de abajo es el camino de Firestore, que no tiene a quién preguntarle. */
+export async function clientesParecidos(
+  nombre: string,
+  clientes: Cliente[],
+  negocioId?: string,
+): Promise<Cliente[]> {
+  if (fuente() === 'api') return leer.clientesParecidos(nombre, negocioId);
   const n = normalizarNombre(nombre);
   if (n.length < 3) return [];
   return clientes.filter((c) => {
     const o = normalizarNombre(c.nombre);
     return o === n || (o.length >= 3 && (o.includes(n) || n.includes(o)));
   });
+}
+
+/** Juntar dos clientes en uno: `queda` se queda con todo, `seVa` desaparece.
+ *  Devuelve cuántas filas se movieron, para poder decírselo a quien lo hizo:
+ *  «se movieron 3 proyectos y 12 ítems» es lo que deja tranquilo a alguien
+ *  que acaba de hacer algo que no se deshace. */
+export async function fusionarClientes(queda: string, seVa: string): Promise<Record<string, number>> {
+  if (fuente() !== 'api') throw new Error('Fusionar clientes necesita la API.');
+  return (await escribir.fusionarClientes(queda, seVa)).movidos;
 }

@@ -10,7 +10,7 @@
  * escribe. */
 
 import * as A from './adaptar';
-import { listar, obtener, yo } from './cliente';
+import { listar, obtener, pedir, yo } from './cliente';
 import { org } from '../fuente';
 import type { Cliente, Cuenta, Movimiento, Negocio, Opex, Proveedor, Proyecto, Usuario } from '@/types/schema';
 
@@ -49,6 +49,16 @@ export async function getCuenta(id: string): Promise<Cuenta | null> {
 
 export async function listClientes(negocioId: string): Promise<Cliente[]> {
   return (await listar<A.FilaCliente>('clientes', { negocio_id: negocioId })).map(A.cliente);
+}
+
+/** «¿No te refieres a…?» — la regla la contesta la API (contrato 0.23.0), no
+ *  esta pantalla: tres apps con tres ideas de qué se parece a qué son tres
+ *  reglas, y la que falle va a ser la que nadie probó. */
+export async function clientesParecidos(nombre: string, negocioId?: string): Promise<Cliente[]> {
+  const q = new URLSearchParams({ nombre });
+  if (negocioId) q.set('negocio_id', negocioId);
+  const r = await pedir<{ parecidos: A.FilaCliente[] }>(`/orgs/${org()}/clientes/parecidos?${q}`);
+  return r.parecidos.map(A.cliente);
 }
 
 export async function getCliente(id: string): Promise<Cliente | null> {

@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { useNegocioActivo } from "@/lib/negocio-activo-context";
-import { createCliente } from "@/lib/clientes";
+import { clientesParecidos, createCliente } from "@/lib/clientes";
+import type { Cliente } from "@/types/schema";
 import { IconArrowLeft } from "@tabler/icons-react";
 
 export default function NuevoClientePage() {
@@ -20,6 +21,15 @@ export default function NuevoClientePage() {
   const [notas, setNotas] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  /* «¿No te refieres a X?». Mike, 20-sep: «si se quiere crear un cliente con
+   * el nombre ya existente, preguntar si no te estás refiriendo a X cliente».
+   * Antes de guardar se le pregunta a la API —la regla vive allá, una sola
+   * para las tres apps—; si hay parecidos se enseñan y no se guarda todavía.
+   * Insistir es un clic: a veces de veras son dos («Muebles Luna» del norte y
+   * del sur), y el trabajo capturado no se pierde. */
+  const [parecidos, setParecidos] = useState<Cliente[]>([]);
+  const [insistir, setInsistir] = useState(false);
 
   if (!activo) {
     return (
@@ -36,6 +46,12 @@ export default function NuevoClientePage() {
     e.preventDefault();
     if (!user) return;
     setError("");
+
+    if (!insistir) {
+      const iguales = await clientesParecidos(nombre.trim(), [], activo.id!).catch(() => []);
+      if (iguales.length > 0) { setParecidos(iguales); return; }
+    }
+
     setSubmitting(true);
     try {
       await createCliente(user.uid, {
@@ -79,7 +95,7 @@ export default function NuevoClientePage() {
             required
             maxLength={100}
             value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
+            onChange={(e) => { setNombre(e.target.value); setParecidos([]); setInsistir(false); }}
             placeholder="Boutique Luna S.A. de C.V."
             className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
           />
@@ -131,6 +147,33 @@ export default function NuevoClientePage() {
             className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 resize-none transition"
           />
         </div>
+
+        {parecidos.length > 0 && !insistir && (
+          <div className="bg-sky-50 text-sky-900 text-xs px-3 py-2.5 rounded-xl space-y-2">
+            <p>
+              Ya hay {parecidos.length === 1 ? "un cliente" : "clientes"} con un nombre muy
+              parecido. ¿No te refieres a {parecidos.length === 1 ? "éste" : "alguno de éstos"}?
+            </p>
+            <ul className="space-y-1">
+              {parecidos.map((c) => (
+                <li key={c.id}>
+                  <Link href={`/clientes/${c.id}`} className="font-medium underline">
+                    {c.nombre}
+                  </Link>
+                  {c.email ? ` · ${c.email}` : ""}
+                  {c.telefono ? ` · ${c.telefono}` : ""}
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              onClick={() => setInsistir(true)}
+              className="underline font-medium"
+            >
+              No, es otro cliente: créalo de todos modos
+            </button>
+          </div>
+        )}
 
         {error && (
           <p className="text-xs text-mauve-900 bg-mauve-50 px-3 py-2 rounded-xl">{error}</p>
