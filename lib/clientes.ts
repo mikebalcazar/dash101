@@ -91,3 +91,34 @@ export async function setAccesoPortal(
   if (fuente() === 'api') throw new Error('Con FUENTE=api el acceso al portal se maneja en lib/portal.ts.');
   await updateDoc(doc(db, "clientes", clienteId), data);
 }
+
+/* ─────────────── parecidos ───────────────
+ * Para no terminar con «Familia Ramírez», «familia ramirez» y «Flia Ramirez»
+ * como tres clientes distintos, que después nadie sabe cuál es cuál.
+ *
+ * La regla de normalizar es la MISMA que la de la suite (`normalizar` en
+ * `src/lib.ts`, que es lo que guarda en `clientes.nombre_norm`): sin acentos,
+ * en minúsculas y con los espacios apretados. Si aquí fuera distinta, la
+ * pantalla diría que no hay parecido y la base diría que sí. */
+
+export function normalizarNombre(txt: string): string {
+  return String(txt || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Los clientes que se parecen a ese nombre: el mismo ya normalizado, o uno
+ *  que contiene al otro («Ramírez» contra «Familia Ramírez»). No se inventa
+ *  distancia de edición: con esto se atrapa lo que de verdad pasa al capturar
+ *  dos veces, y no se molesta a nadie con falsos parecidos. */
+export function clientesParecidos(nombre: string, clientes: Cliente[]): Cliente[] {
+  const n = normalizarNombre(nombre);
+  if (n.length < 3) return [];
+  return clientes.filter((c) => {
+    const o = normalizarNombre(c.nombre);
+    return o === n || (o.length >= 3 && (o.includes(n) || n.includes(o)));
+  });
+}
