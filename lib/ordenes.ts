@@ -12,7 +12,7 @@
  */
 
 import { aCentavos, aPesos } from './api/adaptar';
-import { ErrorApi, listar, pedir } from './api/cliente';
+import { listar, pedir } from './api/cliente';
 import { apiBase, org } from './fuente';
 
 export type EstadoOrden = 'en_buzon' | 'devuelta' | 'pagada' | 'rechazada';
@@ -249,23 +249,21 @@ export async function listPartidasDe(proyecto_id: string): Promise<PartidaDeProy
 }
 
 /* ─────────────── la cotización y el comprobante ───────────────
- * Cuelgan de `archivos`, la tabla que ya existe: no se inventa otra. La subida
- * es multipart, así que no puede ir por `pedir`, que manda JSON; es el único
- * lugar de dash101 que habla con la API sin él, y por eso repite a mano la
- * cabecera `X-App` y las galletas del mismo origen. */
+ * Cuelgan de `archivos`, la tabla que ya existe: no se inventa otra.
+ *
+ * La subida es multipart, y antes armaba su propio `fetch` a un lado de
+ * `pedir`. En el navegador funcionaba de casualidad —la cookie la pone el
+ * navegador— pero fuera de él no hay galletero, así que la sesión no viajaba
+ * y la API contestaba `sin_sesion`: la subida era el único camino de dash101
+ * que no se podía medir desde una prueba. Ahora va por `pedir` como todo lo
+ * demás, que sabe mandar una forma sin pisarle el `Content-Type`. */
 
 export async function subirArchivo(de_tabla: string, de_id: string, archivo: File): Promise<ArchivoOrden> {
   const forma = new FormData();
   forma.set('archivo', archivo);
   forma.set('de_tabla', de_tabla);
   forma.set('de_id', de_id);
-  const r = await fetch(`${apiBase()}/orgs/${org()}/archivos`, {
-    method: 'POST', body: forma, headers: { 'X-App': 'dash101' }, credentials: 'include',
-  });
-  const cuerpo = (await r.json().catch(() => ({ ok: false, error: 'respuesta_no_json' }))) as
-    { ok: true; data: ArchivoOrden } | { ok: false; error: string };
-  if (!cuerpo.ok) throw new ErrorApi(cuerpo.error, r.status);
-  return cuerpo.data;
+  return pedir<ArchivoOrden>(`/orgs/${org()}/archivos`, { method: 'POST', body: forma });
 }
 
 /** Para pintarlo en un `<img>` o abrirlo en otra pestaña. Va por el mismo
