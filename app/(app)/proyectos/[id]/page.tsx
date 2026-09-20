@@ -18,7 +18,6 @@ import { Timestamp } from "firebase/firestore";
 import { IconArrowLeft, IconTrash, IconPlus, IconEdit } from "@tabler/icons-react";
 import { formatDateShort } from "@/lib/format";
 import { ObraDelProyecto } from "@/components/obra-del-proyecto";
-import { ItemsSinPrecio } from "@/components/items-sin-precio";
 import { ItemsDelProyecto } from "@/components/items-del-proyecto";
 
 const ESTADO_STYLE: Record<string, string> = {
@@ -363,11 +362,6 @@ export default function ProyectoDetallePage() {
 
           {/* La obra de quell101, si la hay (contrato 0.22.0). */}
           <ObraDelProyecto proyectoId={p.id!} />
-
-          {/* Y lo que vino del plano y todavía no tiene precio. Va debajo de
-              la obra porque de ahí salió, y aparte de los ítems porque no
-              cuenta para el monto de venta. */}
-          <ItemsSinPrecio proyectoId={p.id!} />
 
           {/* Los ítems del proyecto: en su orden, por partidas y sin
               repetidos (contrato 0.30.0). */}

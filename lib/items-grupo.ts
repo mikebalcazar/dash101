@@ -90,3 +90,28 @@ export async function acomodar(
   });
   return r.acomodados;
 }
+
+/* ─────────────── aprobar y cancelar (contrato 0.31.0) ───────────────
+ *
+ * Mike, 20-sep: «se debe poder cancelar algún ítem ya sea desde quell o
+ * desde dash, y se refleja en los 2. (…) Para que un ítem se considere
+ * cancelado tiene que haber estado aprobado primero y luego cancelado.»
+ *
+ * La clasificación la contesta la API: `cancelar` devuelve si quedó
+ * CANCELADO —estuvo aprobado— o DESCARTADO —nunca lo estuvo—, y la pantalla
+ * dice esa palabra en vez de volver a sacar la cuenta.
+ */
+
+/** Aprobar: entra al alcance y desde ahí suma en el proyecto. */
+export async function aprobarItem(id: string): Promise<void> {
+  await pedir(`/orgs/${org()}/items/${encodeURIComponent(id)}/aprobar`, { method: 'POST' });
+}
+
+/** Cancelar. Devuelve cómo quedó, para poder decirlo con su nombre. */
+export async function cancelarItem(id: string, motivo?: string): Promise<'cancelado' | 'descartado'> {
+  const r = await pedir<{ alcance: 'cancelado' | 'descartado' }>(
+    `/orgs/${org()}/items/${encodeURIComponent(id)}/cancelar`,
+    { method: 'POST', body: { motivo } },
+  );
+  return r.alcance;
+}

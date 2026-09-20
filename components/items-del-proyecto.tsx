@@ -27,13 +27,22 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { IconArrowUp, IconArrowDown, IconCheck, IconX, IconArrowsSort, IconLayersSubtract } from "@tabler/icons-react";
-import { acomodar, agrupables, agrupar, type GrupoDeItems } from "@/lib/items-grupo";
+import { IconArrowUp, IconArrowDown, IconCheck, IconX, IconArrowsSort, IconLayersSubtract, IconThumbUp, IconBan } from "@tabler/icons-react";
+import { acomodar, agrupables, agrupar, aprobarItem, cancelarItem, type GrupoDeItems } from "@/lib/items-grupo";
+import { fueraDeAlcance } from "@/lib/api/leer";
+import type { ItemFuera } from "@/lib/api/leer";
 import { formatDateShort, formatMonto } from "@/lib/format";
 import type { ProductoProyecto, Proyecto } from "@/types/schema";
 import type { Timestamp } from "firebase/firestore";
 
 const SIN = "__sin__";
+/* Las dos pestañas que no son partidas: lo que está fuera del alcance.
+ * Mike, 20-sep: «en la pestaña de partida de ítems fuera de alcance,
+ * dividirlos entre "no aprobados" y "Cancelados"». Van al final y separadas
+ * de las partidas porque no son un capítulo de la venta: son lo que no se
+ * está cobrando. */
+const NO_APROBADOS = "__no_aprobados__";
+const CANCELADOS = "__cancelados__";
 /** El dinero de la API viaja en CENTAVOS; el de `productos` ya viene en
  *  pesos. Esta es la única conversión de esta pantalla, y es de ida. */
 const pesos = (centavos: number) => formatMonto(Math.round(centavos) / 100, "MXN");
@@ -46,6 +55,36 @@ export function ItemsDelProyecto({ proyecto, alCambiar }: { proyecto: Proyecto; 
   const [modo, setModo] = useState<"ver" | "acomodar" | "juntar">("ver");
   const [error, setError] = useState("");
   const [hecho, setHecho] = useState("");
+  const [fuera, setFuera] = useState<{ no_aprobados: ItemFuera[]; cancelados: ItemFuera[] }>({ no_aprobados: [], cancelados: [] });
+  const [moviendo, setMoviendo] = useState("");
+
+  const traerFuera = async () => {
+    try { setFuera(await fueraDeAlcance(proyecto.id!)); }
+    catch { setFuera({ no_aprobados: [], cancelados: [] }); }
+  };
+  useEffect(() => { void traerFuera(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [proyecto.id, proyecto.productos]);
+
+  /** Aprobar, cancelar o reactivar. Se recarga todo después: cambiar el
+   *  alcance mueve el precio de venta del proyecto, y enseñar la lista nueva
+   *  junto al total viejo es enseñar dos verdades. */
+  const mover = async (id: string, que: "aprobar" | "cancelar", motivo?: string) => {
+    setMoviendo(id); setError(""); setHecho("");
+    try {
+      if (que === "aprobar") { await aprobarItem(id); setHecho("Aprobado: ya cuenta en el precio de venta."); }
+      else {
+        const como = await cancelarItem(id, motivo);
+        setHecho(como === "cancelado"
+          ? "Cancelado: estaba aprobado, así que sale de la venta y queda en Cancelados."
+          : "Descartado: nunca estuvo aprobado, así que no cuenta como cancelado.");
+      }
+      await traerFuera();
+      alCambiar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo.");
+    } finally {
+      setMoviendo("");
+    }
+  };
 
   /** La lista con su partida y su orden resueltos, ya ordenada. El orden es
    *  partida, después `orden`, después como se capturaron: con todo en cero
@@ -70,7 +109,8 @@ export function ItemsDelProyecto({ proyecto, alCambiar }: { proyecto: Proyecto; 
   const suma = visibles.reduce((s, f) => s + f.monto, 0);
   const sumaTodo = filas.reduce((s, f) => s + f.monto, 0);
 
-  if (filas.length === 0) {
+  const hayFuera = fuera.no_aprobados.length + fuera.cancelados.length > 0;
+  if (filas.length === 0 && !hayFuera) {
     return (
       <div className="mb-4">
         <h3 className="text-sm font-medium text-ink-dim mb-2">Ítems del proyecto</h3>
@@ -96,13 +136,16 @@ export function ItemsDelProyecto({ proyecto, alCambiar }: { proyecto: Proyecto; 
 
       {/* Las pestañas. Se enseñan siempre que haya más de una partida: con
           una sola, una fila de pestañas es un adorno que ocupa alto. */}
-      {partidas.length > 1 && (
+      {(partidas.length > 1 || hayFuera) && (
         <div className="flex gap-1 overflow-x-auto pb-2 -mx-1 px-1" role="tablist" aria-label="Partidas">
           {[{ v: "", t: `Todas (${filas.length})` },
             ...partidas.map((pa) => ({
               v: pa === "" ? SIN : pa,
               t: `${pa === "" ? "Sin partida" : pa} (${filas.filter((f) => f.partida === pa).length})`,
-            }))].map((op) => (
+            })),
+            ...(fuera.no_aprobados.length ? [{ v: NO_APROBADOS, t: `No aprobados (${fuera.no_aprobados.length})` }] : []),
+            ...(fuera.cancelados.length ? [{ v: CANCELADOS, t: `Cancelados (${fuera.cancelados.length})` }] : []),
+          ].map((op) => (
             <button
               key={op.v}
               type="button"
@@ -149,7 +192,16 @@ export function ItemsDelProyecto({ proyecto, alCambiar }: { proyecto: Proyecto; 
         <Juntador proyectoId={proyecto.id!} alJuntar={() => { setModo("ver"); alCambiar(); }} />
       )}
 
-      {modo === "ver" && (
+      {modo === "ver" && (pestana === NO_APROBADOS || pestana === CANCELADOS) && (
+        <FueraDelAlcance
+          filas={pestana === NO_APROBADOS ? fuera.no_aprobados : fuera.cancelados}
+          cual={pestana === NO_APROBADOS ? "no_aprobados" : "cancelados"}
+          moviendo={moviendo}
+          alMover={mover}
+        />
+      )}
+
+      {modo === "ver" && pestana !== NO_APROBADOS && pestana !== CANCELADOS && (
         <div className="bg-white border border-black/5 rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-cream/50 text-xs text-ink-muted uppercase tracking-wide">
@@ -159,6 +211,7 @@ export function ItemsDelProyecto({ proyecto, alCambiar }: { proyecto: Proyecto; 
                 <th className="text-left px-4 py-2 font-medium">Entrega</th>
                 <th className="text-right px-4 py-2 font-medium">Importe</th>
                 <th className="text-right px-4 py-2 font-medium">Cobrado</th>
+                <th className="px-2 py-2" />
               </tr>
             </thead>
             <tbody>
@@ -194,6 +247,9 @@ export function ItemsDelProyecto({ proyecto, alCambiar }: { proyecto: Proyecto; 
                         </div>
                         <span className="text-[10px] text-ink-muted w-7 text-right">{pct.toFixed(0)}%</span>
                       </div>
+                    </td>
+                    <td className="px-2 py-3 text-right">
+                      <Cancelador id={pr.id} nombre={pr.nombre} ocupado={moviendo === pr.id} alCancelar={mover} />
                     </td>
                   </tr>
                 );
@@ -416,5 +472,135 @@ function Juntador({ proyectoId, alJuntar }: { proyectoId: string; alJuntar: () =
       })}
       {error && <p className="text-xs text-mauve-900">{error}</p>}
     </div>
+  );
+}
+
+/* ─────────────── fuera del alcance ───────────────
+ *
+ * Mike, 20-sep: «en la pestaña de partida de ítems fuera de alcance,
+ * dividirlos entre "no aprobados" y "Cancelados"». Son dos listas y no una
+ * con etiquetas porque significan cosas distintas: de una hay que decidir
+ * —entra o no entra—, y la otra es historia, para consultarse.
+ *
+ * Los DESCARTADOS —lo que se quitó sin haber estado aprobado nunca— no salen
+ * en «Cancelados»: nunca fueron una venta, y meterlos ahí diría que se echó
+ * para atrás algo que jamás se cerró. Esa es la regla de Mike, y la contesta
+ * la API.
+ */
+function FueraDelAlcance({
+  filas, cual, moviendo, alMover,
+}: {
+  filas: ItemFuera[];
+  cual: "no_aprobados" | "cancelados";
+  moviendo: string;
+  alMover: (id: string, que: "aprobar" | "cancelar", motivo?: string) => void;
+}) {
+  const suma = filas.reduce((s, f) => s + f.monto, 0);
+  return (
+    <div className="bg-white border border-black/5 rounded-2xl p-3">
+      <p className="text-xs text-ink-muted mb-2">
+        {cual === "no_aprobados" ? (
+          <>Tienen precio y toda su información, pero <b>no cuentan</b> en el precio de venta y no
+          salen en el plano de la obra hasta que los apruebes. Suman {formatMonto(suma, "MXN")} si
+          entraran todos.</>
+        ) : (
+          <>Estuvieron aprobados y se cancelaron, así que ya no cuentan. Se quedan aquí para
+          poder consultarlos; si alguno se revive, vuelve a sumar.</>
+        )}
+      </p>
+
+      <ul className="divide-y divide-black/5">
+        {filas.map((f) => (
+          <li key={f.id} className="py-2 flex flex-wrap items-center gap-2">
+            <span className="text-sm text-ink-dim flex-1 min-w-[10rem]">
+              {f.clave ? <span className="text-ink-muted">{f.clave} · </span> : null}
+              {f.nombre}
+              {f.cantidad > 1 ? <span className="text-ink-muted"> · {f.cantidad} piezas</span> : null}
+              {f.descripcion ? <span className="block text-[11px] text-ink-muted">{f.descripcion}</span> : null}
+              {f.motivo ? <span className="block text-[11px] text-ink-muted">Motivo: {f.motivo}</span> : null}
+            </span>
+            <span className="text-sm text-ink-dim tabular-nums">{formatMonto(f.monto, "MXN")}</span>
+            {cual === "no_aprobados" ? (
+              <span className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => alMover(f.id, "aprobar")}
+                  disabled={moviendo === f.id}
+                  className="bg-ink text-white text-[11px] px-2 py-1 rounded-lg inline-flex items-center gap-1 disabled:opacity-40"
+                >
+                  <IconThumbUp size={12} /> Aprobar
+                </button>
+                <Cancelador id={f.id} nombre={f.nombre} ocupado={moviendo === f.id} alCancelar={alMover} etiqueta="Descartar" />
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => alMover(f.id, "aprobar")}
+                disabled={moviendo === f.id}
+                className="text-[11px] px-2 py-1 rounded-lg border border-black/10 text-ink-dim disabled:opacity-40"
+              >
+                Revivir
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Cancelar en dos pasos, con su motivo.
+ *
+ *  Dos pasos porque no se puede deshacer solo: cancelar saca el ítem del
+ *  precio de venta. Y con motivo porque tres meses después «por qué se cayó
+ *  esto» no tiene otra respuesta; se guarda en el ítem, no en la cabeza de
+ *  quien lo canceló. */
+function Cancelador({
+  id, nombre, ocupado, alCancelar, etiqueta = "Cancelar",
+}: {
+  id: string;
+  nombre: string;
+  ocupado: boolean;
+  alCancelar: (id: string, que: "aprobar" | "cancelar", motivo?: string) => void;
+  etiqueta?: string;
+}) {
+  const [abierto, setAbierto] = useState(false);
+  const [motivo, setMotivo] = useState("");
+
+  if (!abierto) {
+    return (
+      <button
+        type="button"
+        onClick={() => setAbierto(true)}
+        disabled={ocupado}
+        aria-label={`${etiqueta} ${nombre}`}
+        className="text-[11px] px-2 py-1 rounded-lg border border-black/10 text-ink-muted disabled:opacity-40 inline-flex items-center gap-1"
+      >
+        <IconBan size={12} /> {etiqueta}
+      </button>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1">
+      <input
+        type="text"
+        value={motivo}
+        onChange={(e) => setMotivo(e.target.value)}
+        placeholder="¿Por qué?"
+        aria-label={`Motivo para ${etiqueta.toLowerCase()} ${nombre}`}
+        className="w-28 bg-white border border-black/10 rounded-lg px-2 py-1 text-[11px] focus:outline-none focus:border-ink/40"
+      />
+      <button
+        type="button"
+        onClick={() => { alCancelar(id, "cancelar", motivo); setAbierto(false); setMotivo(""); }}
+        disabled={ocupado}
+        className="bg-mauve-900 text-white text-[11px] px-2 py-1 rounded-lg disabled:opacity-40"
+      >
+        {ocupado ? "…" : "Confirmar"}
+      </button>
+      <button type="button" onClick={() => setAbierto(false)} className="text-[11px] text-ink-muted px-1">
+        <IconX size={12} />
+      </button>
+    </span>
   );
 }
