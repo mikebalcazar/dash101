@@ -39,6 +39,21 @@ const DEMO = {
     { nombre: 'Herrajes Aztecas', categoria: 'herrajes', correo: 'pedidos@herrajes-aztecas.ejemplo.mx' },
   ],
   cliente: { nombre: 'Familia Ramírez', correo: 'familia.ramirez@ejemplo.mx', telefono: '55 0000 0000', notas: 'Org de demostración. Todo es ficticio.' },
+  /* Las compras del taller (contrato 0.21.0). Dos esperando pago —una ya
+   * vencida y urgente, que es lo que tiene que saltar en el buzón—, una
+   * pagada con su factura, y una pagada de la que la factura NO ha llegado,
+   * para que «Falta la factura» tenga algo que perseguir.
+   *
+   * Las pide `prueba.admin@ejemplo.mx`, no el superadmin: en las capturas del
+   * escaparate tiene que verse una cuenta ficticia, no el correo de Mike. */
+  compras: [
+    { concepto: 'Tablero de encino, 12 hojas', proveedor: 'Maderas del Sur', monto: 870000, dias: 3, partida: 'Tablero, chapa de encino y cantos' },
+    { concepto: 'Cinta de cantos y adhesivo', proveedor: 'Maderas del Sur', monto: 139200, dias: -1, urgente: true },
+    { concepto: 'Herrajes de la isla', proveedor: 'Herrajes Aztecas', monto: 348000, dias: 5, pagar: 'Banco Demo', factura: 'DEMO-CFDI-0001' },
+    { concepto: 'Flete de entrega', proveedor: 'Maderas del Sur', monto: 116000, dias: 7, pagar: 'Banco Demo' },
+  ],
+  /** Quién puede pagar en la demo. Es una etiqueta, no un rol. */
+  contador: 'prueba.admin@ejemplo.mx',
   /** El PIN del portal de la familia. Es de demostración: se publica a propósito. */
   pin: '480217',
   proyecto: { nombre: 'Cocina Ramírez', descripcion: 'Cocina integral en L con isla, para la casa de Coyoacán.', estado: 'activo', fecha_inicio: '2026-08-18' },
@@ -104,6 +119,15 @@ async function asegurar(tabla, filtro, clave, valor, datos, app = 'dash101') {
   const ya = l.data.filas.find((f) => String(f[clave] ?? '') === valor);
   if (ya) { hallados.push(`${tabla}/${ya.id}`); return ya; }
   return crear(tabla, datos, app);
+}
+
+/** Un día relativo a hoy, en `AAAA-MM-DD`. Las fechas de las compras son
+ *  relativas a propósito: una demo con fechas fijas se ve vencida a los tres
+ *  meses y las capturas salen en rojo sin que nada esté mal. */
+function dia(n) {
+  const d = new Date(Date.now() + n * 86400000);
+  const p = (x) => String(x).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
 async function entrar(correo, { codigo = true, pin } = {}) {
@@ -227,6 +251,81 @@ async function main() {
     const l = await pedir(`/orgs/${ORG}/${t}`, { app: 'dash101' });
     linea(`  ${t.padEnd(12)} ${String(l.data?.total ?? '?').padStart(3)}`);
   }
+
+  /* ── las compras y la huella fiscal (0.21.0) ──
+   *
+   * Quién paga lo reparte el dueño, y en `demo` el único que entra como
+   * dueño es el superadmin (los miembros de la demo son admin y socio). Por
+   * eso la etiqueta la pone él aquí, una vez, y de ahí en adelante la demo ya
+   * tiene quién pague: sin eso, el buzón sale vacío en las capturas y la
+   * prueba de navegador no puede pagar nada. */
+  linea('');
+  linea('== Las compras del taller (órdenes y fiscal) ==');
+  const dueno = galleta;
+
+  const gente = await pedir(`/orgs/${ORG}/ordenes/contadores`, { app: 'dash101' });
+  if (gente.estado !== 200) throw new Error(`contadores: ${gente.estado} ${gente.error ?? ''}`);
+  const quienPaga = (gente.data.filas ?? []).find((f) => f.correo === DEMO.contador);
+  if (!quienPaga) throw new Error(`${DEMO.contador} no es miembro de ${ORG}`);
+  if (!quienPaga.es_contador) {
+    const m = await pedir(`/orgs/${ORG}/ordenes/contadores`, { app: 'dash101', method: 'POST', body: { usuario_id: quienPaga.usuario_id, valor: true } });
+    if (m.estado !== 200) throw new Error(`marcar contador: ${m.estado} ${m.error ?? ''}`);
+    creados.push(`contador/${DEMO.contador}`);
+  }
+  rev(true, `${DEMO.contador} puede pagar`, quienPaga.es_contador ? 'ya podía' : 'se le marcó');
+
+  // Las pide y las paga la cuenta ficticia, que es la que sale en pantalla.
+  await entrar(DEMO.contador);
+  const yaHay = await pedir(`/orgs/${ORG}/ordenes`, { app: 'dash101' });
+  if (yaHay.estado !== 200) throw new Error(`ordenes: ${yaHay.estado} ${yaHay.error ?? ''}`);
+  const porConceptoOC = Object.fromEntries((yaHay.data.filas ?? []).map((f) => [f.concepto, f]));
+
+  const partidasDelProyecto = await pedir(`/orgs/${ORG}/partidas?proyecto_id=${proyecto.id}`, { app: 'dash101' });
+  const partidaPorConcepto = Object.fromEntries((partidasDelProyecto.data?.filas ?? []).map((f) => [f.concepto, f]));
+
+  for (const c of DEMO.compras) {
+    let oc = porConceptoOC[c.concepto];
+    if (!oc) {
+      const r = await pedir(`/orgs/${ORG}/ordenes`, { app: 'dash101', method: 'POST', body: {
+        negocio_id: negocio.id,
+        proveedor_id: proveedores[c.proveedor].id, proveedor_nombre: c.proveedor,
+        concepto: c.concepto, monto: c.monto, con_factura: true, urgente: !!c.urgente,
+        fecha_maxima_pago: dia(c.dias),
+        ...(c.partida ? { proyecto_id: proyecto.id, partida_id: partidaPorConcepto[c.partida]?.id ?? null } : {}),
+      } });
+      if (r.estado !== 201) throw new Error(`orden «${c.concepto}»: ${r.estado} ${r.error ?? ''} ${JSON.stringify(r.detalle ?? '')}`);
+      oc = r.data;
+      creados.push(`ordenes/${oc.id}`);
+    } else hallados.push(`ordenes/${oc.id}`);
+
+    if (c.pagar && oc.estado === 'en_buzon') {
+      const pago = await pedir(`/orgs/${ORG}/ordenes/${oc.id}/pagar`, { app: 'dash101', method: 'POST', body: { cuenta_id: cuentas[c.pagar].id } });
+      if (pago.estado !== 200) throw new Error(`pagar «${c.concepto}»: ${pago.estado} ${pago.error ?? ''}`);
+      oc = pago.data.orden;
+      // La factura del que la trae: se captura y se le cuelga al movimiento
+      // que YA existe, que es como llega en la vida real.
+      if (c.factura) {
+        const cf = await pedir(`/orgs/${ORG}/fiscal/cfdi`, { app: 'dash101', method: 'POST', body: {
+          negocio_id: negocio.id, uuid: c.factura, tipo: 'egreso', rfc: 'XAXX010101000',
+          razon_social: c.proveedor, subtotal: oc.subtotal, iva: oc.iva, total: oc.monto, fecha: dia(0),
+        } });
+        if (cf.estado === 201) {
+          const lg = await pedir(`/orgs/${ORG}/fiscal/cfdi/${cf.data.id}/ligar`, { app: 'dash101', method: 'POST', body: { movimiento_id: pago.data.movimiento.id } });
+          if (lg.estado !== 200) throw new Error(`ligar CFDI: ${lg.estado} ${lg.error ?? ''}`);
+          creados.push(`cfdi/${cf.data.id}`);
+        } else if (cf.estado !== 409) throw new Error(`CFDI ${c.factura}: ${cf.estado} ${cf.error ?? ''}`);
+      }
+    }
+    rev(true, `  ${oc.folio} · ${c.concepto}`, `${oc.estado} · ${oc.subtotal} + ${oc.iva}`);
+  }
+
+  const buzon = await pedir(`/orgs/${ORG}/ordenes/buzon`, { app: 'dash101' });
+  rev(buzon.estado === 200, 'el buzón abre para quien paga', `${buzon.data?.filas?.length} por pagar · ${buzon.data?.vencidas} vencida(s)`);
+  const pendientes = await pedir(`/orgs/${ORG}/fiscal/pendientes`, { app: 'dash101' });
+  rev(pendientes.estado === 200, 'y hay algo que perseguir en «Falta la factura»', `${pendientes.data?.filas?.length}`);
+  const ivaMes = await pedir(`/orgs/${ORG}/fiscal/iva?mes=${dia(0).slice(0, 7)}`, { app: 'dash101' });
+  rev(ivaMes.estado === 200, 'el IVA del mes sale', `acreditable ${ivaMes.data?.acreditable} centavos`);
+  galleta = dueno;
 
   /* ── y lo que ve la familia ── */
   linea('');

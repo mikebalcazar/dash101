@@ -314,7 +314,7 @@ test('conciliar: la que cuadra no deja ajuste, la que no cuadra sí, y el saldo 
 
 test('a 390×844 no hay barrido horizontal ni errores de JavaScript', async () => {
   const { ctx, pag, errores } = await pestana({ width: 390, height: 844 }, true);
-  for (const ruta of ['/dashboard', '/movimientos', '/cuentas', '/conciliacion']) {
+  for (const ruta of ['/dashboard', '/movimientos', '/cuentas', '/conciliacion', '/ordenes', '/ordenes/nueva', '/ordenes/buzon', '/fiscal', '/fiscal/pendientes', '/fiscal/cfdi']) {
     await pag.goto(`${URL}${ruta}`, { waitUntil: 'load' });
     await pag.waitForTimeout(1500);
     const m = await pag.evaluate(() => ({ ancho: document.documentElement.scrollWidth, ventana: window.innerWidth }));
@@ -324,7 +324,95 @@ test('a 390×844 no hay barrido horizontal ni errores de JavaScript', async () =
   await ctx.close();
 });
 
-/* ═══════════════ 5 · el otro sentido de la puerta, al final ═══════════════ */
+/* ═══════════════ 5 · una compra de punta a punta, desde el celular ═══════════════
+ *
+ * Es el recorrido que pidió el encargo de órdenes (19-sep): pedir una compra
+ * a 390 × 844 con foto adjunta, pagarla, y que quien la pidió vea el cambio.
+ *
+ * Aquí lo pide y lo paga la MISMA cuenta —es la única que esta prueba sabe
+ * abrir— y por eso «ve el cambio» se comprueba en Mis compras. Que un miembro
+ * no pueda ver las órdenes de otro ni abrir el buzón se mide en el servidor,
+ * en `pruebas/ordenes.spec.ts` de suite101-api, que es donde se decide.
+ *
+ * Todo pasa en «Pruebas de navegador», no en Taller Demo: esto SÍ escribe
+ * —una orden y un egreso— y las cifras de la demo son las de las capturas. */
+
+// Un PNG de 1×1 transparente: lo mínimo que prueba que el archivo sube, se
+// registra y se pinta. Una foto de verdad no mediría nada más.
+const PNG_1PX = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+  'base64',
+);
+
+test('pedir una compra desde el celular, pagarla, y que el que la pidió lo vea', async () => {
+  const { ctx, pag, errores } = await pestana({ width: 390, height: 844 }, true);
+
+  // Primero la página: `api()` habla por `/s101`, que es una ruta relativa, y
+  // sin una página abierta no hay contra qué resolverla.
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  const { neg, cuenta } = await negocioDePruebas(pag);
+  await elegirNegocio(pag, neg.id);
+
+  // Quien paga es una etiqueta, y la reparte el dueño: esta cuenta es admin
+  // de `demo`, no dueña, así que NO puede ponérsela sola —eso lo revisa el
+  // servidor—. Se la deja puesta `scripts/sembrar-demo.mjs`, que entra como
+  // superadmin. Si el buzón no abre, eso es lo que falta.
+  const buzon = await pag.evaluate(async () => (await fetch('/s101/orgs/demo/ordenes/buzon', {
+    headers: { 'X-App': 'dash101' }, credentials: 'include',
+  })).status);
+  assert.equal(buzon, 200, 'esta cuenta puede pagar (si no: node scripts/sembrar-demo.mjs)');
+
+  // ── pedirla ──
+  await pag.goto(`${URL}/ordenes/nueva`, { waitUntil: 'load' });
+  await pag.getByLabel('Cuánto es (total, con IVA si lleva)').fill('1160');
+  await pag.getByLabel('Qué se compra').fill('Triplay del navegador');
+  await pag.getByPlaceholder('Nombre del proveedor').fill('Maderas del navegador');
+  await pag.setInputFiles('#archivo', { name: 'cotizacion.png', mimeType: 'image/png', buffer: PNG_1PX });
+
+  // El desglose se propone solo, y es lo que se va a guardar.
+  assert.equal(await pag.getByLabel('Subtotal').inputValue(), '1000', 'el subtotal propuesto');
+  assert.equal(await pag.getByLabel('IVA', { exact: true }).inputValue(), '160', 'y el IVA');
+
+  await pag.getByRole('button', { name: 'Pedir la compra' }).click();
+  // `/ordenes/nueva` también casa con «/ordenes/algo»: hay que esperar a que
+  // deje de ser la pantalla del formulario.
+  await pag.waitForURL((u) => /\/ordenes\/[^/]+$/.test(u.pathname) && !u.pathname.endsWith('/nueva'), { timeout: 30000 });
+  await pag.waitForTimeout(1000);
+  const dice = await texto(pag);
+  assert.match(dice, /OC-\d+/, 'la orden trae folio');
+  assert.match(dice, /\$1,160\.00/, 'el total en PESOS, no en centavos');
+  assert.ok(!/116000/.test(dice), 'y en ningún lado se asoman los centavos crudos');
+  assert.match(dice, /En el buzón/, 'cae directa al buzón, sin autorización previa');
+  const folio = dice.match(/OC-\d+/)[0];
+
+  // La cotización subió y se pinta.
+  assert.equal(await pag.locator('img[alt="cotizacion.png"]').count(), 1, 'la cotización se ve');
+
+  // ── pagarla ──
+  await pag.getByRole('button', { name: 'Pagar', exact: true }).click();
+  await pag.getByLabel('De qué cuenta sale').selectOption(cuenta.id);
+  await pag.getByRole('button', { name: 'Registrar el pago' }).click();
+  await pag.getByText(/Pagada\./).waitFor({ timeout: 30000 });
+
+  // ── y el egreso quedó, por el monto exacto y una sola vez ──
+  const movs = filas(await api(pag, `/orgs/${ORG}/movimientos?cuenta_id=${cuenta.id}`));
+  const suyos = movs.filter((m) => (m.descripcion || '').includes(folio));
+  assert.equal(suyos.length, 1, 'un solo egreso, no dos');
+  assert.equal(suyos[0].tipo, 'egreso');
+  assert.equal(suyos[0].monto, 116000, 'por 116 000 centavos, que son los $1,160.00');
+
+  // ── el que la pidió lo ve ──
+  await pag.goto(`${URL}/ordenes`, { waitUntil: 'load' });
+  await pag.getByText(folio).first().waitFor({ timeout: 15000 });
+  const lista = await texto(pag);
+  assert.match(lista, /Pagada/, 'en Mis compras ya dice Pagada');
+
+  console.log(`    ${folio}: pedida a 390×844 con foto, pagada de ${CUENTA_PRUEBAS}, egreso de 116000 centavos`);
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
+/* ═══════════════ 6 · el otro sentido de la puerta, al final ═══════════════ */
 
 test('un código equivocado NO entra', async () => {
   const { ctx, pag } = await pestana();

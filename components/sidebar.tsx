@@ -16,6 +16,8 @@ import {
   IconBuildingSkyscraper,
   IconUsersGroup,
   IconScale,
+  IconShoppingCart,
+  IconReceiptTax,
 } from "@tabler/icons-react";
 
 type NavItem = { href: string; icon: typeof IconHome; label: string };
@@ -29,6 +31,8 @@ const items: NavItem[] = [
   { href: "/clientes", icon: IconUsers, label: "Clientes" },
   { href: "/proveedores", icon: IconTruck, label: "Proveedores" },
   { href: "/opex", icon: IconReceipt, label: "OPEX" },
+  { href: "/ordenes", icon: IconShoppingCart, label: "Compras" },
+  { href: "/fiscal", icon: IconReceiptTax, label: "Fiscal" },
   { href: "/conciliacion", icon: IconScale, label: "Conciliación" },
   { href: "/flujo", icon: IconChartLine, label: "Flujo" },
   { href: "/equipo", icon: IconUsersGroup, label: "Equipo" },
