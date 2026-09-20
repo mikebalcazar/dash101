@@ -76,7 +76,7 @@ export default function ProyectoDetallePage() {
 
   const [proyecto, setProyecto] = useState<Proyecto | null>(null);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
-  const [editMode, setEditMode] = useState(false);
+  const [editMode, setEditMode] = useState<"no" | "proyecto" | "items">("no");
 
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
@@ -192,7 +192,7 @@ export default function ProyectoDetallePage() {
         })),
       });
       await loadProyecto();
-      setEditMode(false);
+      setEditMode("no");
       setNotice("Cambios guardados");
       setTimeout(() => setNotice(""), 2000);
     } catch (err) {
@@ -246,16 +246,16 @@ export default function ProyectoDetallePage() {
       {/* «Cambios guardados» se pinta AQUÍ, en la vista.
         *
         * Vivía dentro del formulario de edición, y al guardar el orden es
-        * `setEditMode(false)` y luego `setNotice(...)`: el formulario ya se
+        * `setEditMode("no")` y luego `setNotice(...)`: el formulario ya se
         * había desmontado, así que el aviso no aparecía nunca. Nadie lo
         * reportó porque no molesta —no se ve una confirmación que no
         * existe—, pero quien guarda merece saber que se guardó. Lo cachó la
         * prueba de navegador del 20-sep, que lo esperaba. */}
-      {!editMode && notice && (
+      {editMode === "no" && notice && (
         <p className="text-xs text-mint-900 bg-mint-50 px-3 py-2 rounded-xl mb-4">{notice}</p>
       )}
 
-      {!editMode ? (
+      {editMode === "no" ? (
         <>
           {/* Header */}
           <div className="flex justify-between items-start gap-3 mb-4">
@@ -275,11 +275,11 @@ export default function ProyectoDetallePage() {
               )}
             </div>
             <button
-              onClick={() => setEditMode(true)}
+              onClick={() => setEditMode("proyecto")}
               className="text-xs bg-white border border-black/10 rounded-xl px-3 py-1.5 hover:border-black/20 transition flex items-center gap-1"
             >
               <IconEdit size={13} />
-              Editar
+              Editar el proyecto
             </button>
           </div>
 
@@ -364,7 +364,11 @@ export default function ProyectoDetallePage() {
 
           {/* Los ítems del proyecto: en su orden, por partidas y sin
               repetidos (contrato 0.30.0). */}
-          <ItemsDelProyecto proyecto={p} alCambiar={() => { void loadProyecto(); }} />
+          <ItemsDelProyecto
+            proyecto={p}
+            alCambiar={() => { void loadProyecto(); }}
+            alEditarLista={() => setEditMode("items")}
+          />
 
           {/* Lo acordado con cada proveedor. Se llamaba «Partidas de
               proveedores»; desde que los ítems tienen su propia partida —el
@@ -457,6 +461,7 @@ export default function ProyectoDetallePage() {
         </>
       ) : (
         <ProyectoEditForm
+          seccion={editMode === "items" ? "items" : "proyecto"}
           proyecto={p}
           proveedores={proveedores}
           nombre={nombre}
@@ -475,7 +480,7 @@ export default function ProyectoDetallePage() {
           setItems={setItemsEdit}
           onSave={handleSave}
           onCancel={() => {
-            setEditMode(false);
+            setEditMode("no");
             loadProyecto();
           }}
           saving={saving}
@@ -490,6 +495,17 @@ export default function ProyectoDetallePage() {
 // --- Edit form (extracted for clarity) ---
 
 interface EditFormProps {
+  /** Qué parte se está editando. Mike, 20-sep, con la pantalla enfrente: «el
+   *  botón de editar de arriba debería ser para la info del proyecto. Abajo
+   *  en la sección de la lista de ítems debería haber otro botón de editar
+   *  para editar la lista».
+   *
+   *  Es UN solo formulario que enseña una mitad u otra, y no dos
+   *  formularios: guardar manda el proyecto completo —nombre, ítems y
+   *  partidas—, así que partirlo en dos guardados dejaría a cada uno
+   *  pisando lo que el otro no enseñó. Lo que no se ve se manda tal como
+   *  se cargó. */
+  seccion: "proyecto" | "items";
   proyecto: Proyecto;
   proveedores: Proveedor[];
   nombre: string;
@@ -558,8 +574,12 @@ function ProyectoEditForm(props: EditFormProps) {
 
   return (
     <form onSubmit={props.onSave} className="space-y-4">
-      <h2 className="text-lg font-medium text-ink-dim">Editar proyecto</h2>
+      <h2 className="text-lg font-medium text-ink-dim">
+        {props.seccion === "items" ? "Editar la lista de ítems" : "Editar el proyecto"}
+      </h2>
 
+      {props.seccion === "proyecto" && (
+        <>
       <div>
         <label className="text-xs font-medium text-ink-dim block mb-1.5">Nombre</label>
         <input
@@ -616,7 +636,10 @@ function ProyectoEditForm(props: EditFormProps) {
           />
         </div>
       </div>
+        </>
+      )}
 
+      {props.seccion === "items" && (
       <div className="pt-2">
         <div className="flex justify-between items-baseline mb-1">
           <label className="text-xs font-medium text-ink-dim">Ítems del proyecto</label>
@@ -724,7 +747,9 @@ function ProyectoEditForm(props: EditFormProps) {
           </div>
         )}
       </div>
+      )}
 
+      {props.seccion === "proyecto" && (
       <div className="pt-2">
         <div className="flex justify-between items-baseline mb-2">
           <label className="text-xs font-medium text-ink-dim">Partidas de proveedores</label>
@@ -812,6 +837,7 @@ function ProyectoEditForm(props: EditFormProps) {
           </div>
         )}
       </div>
+      )}
 
       {props.error && (
         <p className="text-xs text-mauve-900 bg-mauve-50 px-3 py-2 rounded-xl">{props.error}</p>
