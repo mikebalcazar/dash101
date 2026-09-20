@@ -7,11 +7,14 @@ import { getCliente, updateCliente, deleteCliente } from "@/lib/clientes";
 import type { Cliente } from "@/types/schema";
 import { IconArrowLeft, IconTrash } from "@tabler/icons-react";
 import { AccesoPortal } from "@/components/acceso-portal";
+import { FusionarCliente } from "@/components/fusionar-cliente";
+import { useNegocioActivo } from "@/lib/negocio-activo-context";
 
 export default function ClienteDetallePage() {
   const router = useRouter();
   const params = useParams();
   const id = params?.id as string;
+  const { activo } = useNegocioActivo();
 
   const [cliente, setCliente] = useState<Cliente | null>(null);
   const [nombre, setNombre] = useState("");
@@ -189,6 +192,11 @@ export default function ClienteDetallePage() {
       </form>
 
       {cliente && <AccesoPortal cliente={cliente} emailSugerido={email} onChange={recargar} />}
+
+      {/* Juntar dos que son el mismo (contrato 0.23.0). */}
+      {cliente && activo?.id && (
+        <FusionarCliente cliente={cliente} negocioId={activo.id} onFusionado={recargar} />
+      )}
 
       <div className="mt-10 pt-6 border-t border-mauve-50">
         <h3 className="text-xs font-medium text-mauve-900 uppercase tracking-wide mb-2">

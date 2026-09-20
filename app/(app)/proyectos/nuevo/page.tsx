@@ -138,7 +138,7 @@ export default function NuevoProyectoPage() {
     if (!nombre) { setErrorCliente("Escribe el nombre del cliente."); return; }
     if (!activo?.id || !user) return;
 
-    const iguales = clientesParecidos(nombre, clientes);
+    const iguales = await clientesParecidos(nombre, clientes, activo.id);
     if (iguales.length > 0 && !insistir) { setParecidos(iguales); return; }
 
     setGuardandoCliente(true);

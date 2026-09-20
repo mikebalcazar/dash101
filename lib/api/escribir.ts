@@ -149,6 +149,23 @@ export async function createCliente(_uid: string, d: ClienteInput): Promise<stri
   return f.id;
 }
 
+/** Juntar dos clientes en uno (contrato 0.23.0). `queda` se queda con todo y
+ *  `seVa` desaparece: sus proyectos, ítems, cotizaciones y movimientos pasan
+ *  al primero, y lo que a éste le falte —correo, teléfono, RFC, notas, el
+ *  acceso al portal— se lo hereda. No se deshace, y la API sólo se lo deja
+ *  hacer al dueño y a la administración. */
+export async function fusionarClientes(queda: string, seVa: string): Promise<{ movidos: Record<string, number> }> {
+  try {
+    const r = await pedir<{ movidos: Record<string, number> }>(`${ruta('clientes', queda)}/fusionar`, {
+      method: 'POST',
+      body: { se_va_id: seVa },
+    });
+    return r;
+  } catch (e) {
+    return enClaro(e, 'clientes');
+  }
+}
+
 export async function updateCliente(id: string, d: Partial<Omit<ClienteInput, 'negocio_id'>>): Promise<void> {
   await cambiar('clientes', id, {
     nombre: d.nombre,
