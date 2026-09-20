@@ -28,7 +28,7 @@ import { createNegocio } from "@/lib/negocios";
 import { createCliente } from "@/lib/clientes";
 import { createProyecto, getProyecto } from "@/lib/proyectos";
 import { ligarObra, itemsDeLaObra, fusionarItemsDeLaObra } from "@/lib/obras";
-import { acomodar, agrupables, agrupar, asignarProducto, productosDelProyecto } from "@/lib/items-grupo";
+import { acomodar, agrupables, agrupar, asignarProducto, productosDelProyecto, separarProducto } from "@/lib/items-grupo";
 
 const CORREO = process.env.CORREO_SUPERADMIN ?? "mike@forespot.com";
 const ORG = `ag-${(process.env.GITHUB_RUN_ID ?? Date.now().toString(36)).toString().toLowerCase().slice(-12)}`;
@@ -270,5 +270,43 @@ describe("desde el plano", () => {
     expect(r.sumados).toBe(1);
     expect(await venta(), "una puerta más vale una puerta más").toBe(antes + 8_000);
     expect((await items()).find((p) => p.id === item.id)!.cantidad).toBe(2);
+  });
+});
+
+describe("separar: sacar las piezas del grupo de un golpe", () => {
+  /* Mike, 20-sep, con HOLCIM enfrente: «ya se hizo un desastre y ahora no
+   * puedo separar los ítems para agruparlos en otro producto. O mejor
+   * sepárame todos los ítems de puertas otra vez».
+   *
+   * El rescate de un renglón FUSIONADO se mide en la API, que es donde se
+   * puede armar ese estado (suite101-api, pruebas/agrupar-items.spec.ts).
+   * Aquí se mide lo que esta pantalla necesita: que separar un producto
+   * entero sea UNA llamada y que no mueva el precio de venta. */
+  it("separar el producto saca a todas sus piezas y no mueve la venta", async () => {
+    const lista = await items();
+    const a = lista[0], b = lista[1];
+    expect(a && b, "hacen falta dos renglones para este caso").toBeTruthy();
+    // Se ponen los dos en un producto nuevo y luego se separan.
+    const pr = await agrupar(ids.proyecto, { items: [a.id, b.id], nombre: "Para separar" });
+    expect((await items()).filter((p) => p.producto_id === pr.producto.id)).toHaveLength(2);
+
+    const antes = await venta();
+    const r = await separarProducto(ids.proyecto, pr.producto.id);
+    expect(r.separados).toBe(2);
+    expect(r.reconstruidos, "ninguno venía de la fusión vieja").toBe(0);
+    expect(r.venta_antes).toBe(r.venta_despues);
+    expect(await venta(), "separar no cambia lo que se cobra").toBe(antes);
+
+    const ya = await items();
+    for (const id of [a.id, b.id]) {
+      expect(ya.find((p) => p.id === id)!.producto_id ?? null, `${id} salió del grupo`).toBeNull();
+    }
+  });
+
+  it("separar un producto que ya no tiene piezas: se rechaza, no se calla", async () => {
+    const lista = await items();
+    const pr = await agrupar(ids.proyecto, { items: [lista[0].id, lista[1].id], nombre: "Para separar dos veces" });
+    await separarProducto(ids.proyecto, pr.producto.id);
+    await expect(separarProducto(ids.proyecto, pr.producto.id)).rejects.toThrow();
   });
 });

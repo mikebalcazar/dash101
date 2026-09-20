@@ -143,6 +143,50 @@ export async function productosDelProyecto(
  *  Entrar HEREDA EL PRECIO del producto. Salirse no se lo quita: la pieza se
  *  queda con el que ya tenía. Vuelve el precio de venta del proyecto antes y
  *  después, en CENTAVOS. */
+/* ────────── separar (contrato 0.36.0) ──────────
+ *
+ * Mike, 20-sep, con HOLCIM enfrente: «ya se hizo un desastre y ahora no puedo
+ * separar los ítems para agruparlos en otro producto. O mejor sepárame todos
+ * los ítems de puertas otra vez».
+ *
+ * Dos cosas que desde la pantalla se ven igual: un ítem metido en un producto
+ * —sacarlo de uno en uno son 29 clics— y un renglón que viene de la FUSIÓN
+ * del contrato 0.30.0, que borraba los renglones que absorbía y por eso no se
+ * puede partir. Estas dos funciones atienden las dos.
+ */
+
+/** Lo que devolvió un separar. El dinero no se mueve: `venta_antes` y
+ *  `venta_despues` salen iguales salvo que algo raro pase, y la pantalla lo
+ *  dice. En CENTAVOS. */
+export interface Separado {
+  /** Cuántos renglones se sacaron de su producto. */
+  separados: number;
+  /** Cuántos renglones borrados por la fusión vieja se devolvieron. */
+  reconstruidos: number;
+  /** Cuántas piezas del plano se repartieron a su renglón, por código. */
+  piezas_repartidas: number;
+  venta_antes: number;
+  venta_despues: number;
+}
+
+/** Separar UN ítem: sacarlo de su producto y, si es un renglón fusionado,
+ *  devolver los renglones que se tragó. */
+export async function separarItem(item_id: string): Promise<Separado> {
+  const r = await pedir<{ reconstruidos: unknown[]; piezas_repartidas: number; venta_antes: number; venta_despues: number }>(
+    `/orgs/${org()}/items/${encodeURIComponent(item_id)}/separar`,
+    { method: 'POST' },
+  );
+  return {
+    separados: 1, reconstruidos: r.reconstruidos?.length ?? 0, piezas_repartidas: r.piezas_repartidas,
+    venta_antes: r.venta_antes, venta_despues: r.venta_despues,
+  };
+}
+
+/** Separar TODAS las piezas de un producto en una obra, de un golpe. */
+export async function separarProducto(proyecto_id: string, producto_id: string): Promise<Separado> {
+  return pedir<Separado>(`${base(proyecto_id)}/separar`, { method: 'POST', body: { producto_id } });
+}
+
 export async function asignarProducto(
   item_id: string,
   args: { producto_id?: string; desde_item?: string; solo?: boolean },
