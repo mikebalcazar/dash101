@@ -155,7 +155,12 @@ $('f-clave').onsubmit = async (ev) => {
   } finally { b.disabled = false; b.textContent = 'Entrar'; }
 };
 
-$('b-olvide').onclick = async () => {
+/** Pide el código y enseña la pantalla donde se teclea. Se llama desde
+ *  «Olvidé mi contraseña» y desde «Volver a mandar el código»: si el correo
+ *  no llega —pasa—, tiene que haber manera de pedir otro sin empezar de
+ *  cero. La API pide esperar unos segundos entre uno y otro, y eso se dice
+ *  con sus palabras en vez de dejar el botón mudo. */
+async function mandarCodigo() {
   decir('err-codigo', ''); decir('ok-codigo', '');
   $('codigo-p').textContent = `Te lo mandamos a ${correo}. Vence en 10 minutos.`;
   $('codigo').value = '';
@@ -169,7 +174,9 @@ $('b-olvide').onclick = async () => {
       decir('ok-codigo', 'Ambiente de pruebas: el código se rellenó solo.', 'bien');
     }
   } catch (e) { decir('err-codigo', enPalabras(e)); }
-};
+}
+$('b-olvide').onclick = mandarCodigo;
+$('b-reenviar').onclick = mandarCodigo;
 
 $('f-codigo').onsubmit = async (ev) => {
   ev.preventDefault();
