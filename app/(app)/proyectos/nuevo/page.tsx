@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { useNegocioActivo } from "@/lib/negocio-activo-context";
-import { listClientes } from "@/lib/clientes";
+import { clientesParecidos, createCliente, listClientes } from "@/lib/clientes";
 import { listProveedores } from "@/lib/proveedores";
 import { createProyecto } from "@/lib/proyectos";
 import type { Cliente, Proveedor, EstadoProyecto } from "@/types/schema";
@@ -32,6 +32,16 @@ export default function NuevoProyectoPage() {
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [clienteId, setClienteId] = useState("");
+
+  /* Dar de alta un cliente sin salirse de aquí. Antes había que irse a
+   * Clientes, crearlo, y volver a empezar el proyecto desde cero: el
+   * formulario se perdía. Lo pidió Mike el 20-sep. */
+  const [nuevoCliente, setNuevoCliente] = useState(false);
+  const [nc, setNc] = useState({ nombre: "", email: "", telefono: "" });
+  const [guardandoCliente, setGuardandoCliente] = useState(false);
+  const [errorCliente, setErrorCliente] = useState("");
+  const [parecidos, setParecidos] = useState<Cliente[]>([]);
+  const [insistir, setInsistir] = useState(false);
   const [precioVenta, setPrecioVenta] = useState("0");
   const [estado, setEstado] = useState<EstadoProyecto>("planeando");
   const [fechaInicio, setFechaInicio] = useState(new Date().toISOString().slice(0, 10));
@@ -83,6 +93,40 @@ export default function NuevoProyectoPage() {
   const compromiso = partidas.reduce((s, p) => s + (parseFloat(p.monto_acordado) || 0), 0);
   const precioNum = parseFloat(precioVenta) || 0;
   const margen = precioNum - compromiso;
+
+  /** Guarda el cliente nuevo y lo deja escogido. Antes de guardar avisa si
+   *  ya hay uno que se parece: capturar dos veces al mismo cliente con el
+   *  nombre escrito distinto es el error que después nadie sabe deshacer. */
+  const guardarCliente = async () => {
+    setErrorCliente("");
+    const nombre = nc.nombre.trim();
+    if (!nombre) { setErrorCliente("Escribe el nombre del cliente."); return; }
+    if (!activo?.id || !user) return;
+
+    const iguales = clientesParecidos(nombre, clientes);
+    if (iguales.length > 0 && !insistir) { setParecidos(iguales); return; }
+
+    setGuardandoCliente(true);
+    try {
+      const id = await createCliente(user.uid, {
+        nombre,
+        email: nc.email.trim() || undefined,
+        telefono: nc.telefono.trim() || undefined,
+        negocio_id: activo.id,
+      });
+      const lista = await listClientes(activo.id);
+      setClientes(lista);
+      setClienteId(id);
+      setNuevoCliente(false);
+      setParecidos([]);
+      setInsistir(false);
+      setNc({ nombre: "", email: "", telefono: "" });
+    } catch (e) {
+      setErrorCliente(e instanceof Error ? e.message : "No se pudo guardar el cliente.");
+    } finally {
+      setGuardandoCliente(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,12 +196,10 @@ export default function NuevoProyectoPage() {
         Se agregará a <strong>{activo.nombre}</strong>
       </p>
 
-      {clientes.length === 0 && (
+      {clientes.length === 0 && !nuevoCliente && (
         <div className="bg-sky-50 text-sky-900 text-xs px-3 py-2 rounded-xl mb-4">
-          Este negocio no tiene clientes.{" "}
-          <Link href="/clientes/nuevo" className="underline">
-            Crear cliente
-          </Link>
+          Este negocio no tiene clientes todavía. Escoge «+ Cliente nuevo…» en el
+          desplegable y lo das de alta aquí mismo, sin perder lo que ya escribiste.
         </div>
       )}
 
@@ -190,15 +232,26 @@ export default function NuevoProyectoPage() {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs font-medium text-ink-dim block mb-1.5">
+            {/* La etiqueta va amarrada al campo con `htmlFor`: así el lector de
+              * pantalla dice de qué es, y al picar el texto se abre el
+              * desplegable. */}
+            <label htmlFor="cliente" className="text-xs font-medium text-ink-dim block mb-1.5">
               Cliente <span className="text-mauve-900">*</span>
             </label>
             <select
-              required
-              value={clienteId}
-              onChange={(e) => setClienteId(e.target.value)}
-              disabled={clientes.length === 0}
-              className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition disabled:opacity-60"
+              id="cliente"
+              required={!nuevoCliente}
+              value={nuevoCliente ? "__nuevo__" : clienteId}
+              onChange={(e) => {
+                if (e.target.value === "__nuevo__") {
+                  setNuevoCliente(true);
+                  setClienteId("");
+                } else {
+                  setNuevoCliente(false);
+                  setClienteId(e.target.value);
+                }
+              }}
+              className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
             >
               <option value="">— Selecciona —</option>
               {clientes.map((c) => (
@@ -206,6 +259,7 @@ export default function NuevoProyectoPage() {
                   {c.nombre}
                 </option>
               ))}
+              <option value="__nuevo__">+ Cliente nuevo…</option>
             </select>
           </div>
           <div>
@@ -222,6 +276,92 @@ export default function NuevoProyectoPage() {
               ))}
             </select>
           </div>
+
+        {nuevoCliente && (
+          <div className="bg-cream rounded-2xl p-4">
+            <p className="text-xs font-medium text-ink-dim mb-2">Cliente nuevo</p>
+            <input
+              type="text"
+              value={nc.nombre}
+              onChange={(e) => { setNc({ ...nc, nombre: e.target.value }); setParecidos([]); setInsistir(false); }}
+              placeholder="Nombre o razón social"
+              className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
+            />
+            <div className="grid grid-cols-2 gap-3 mt-2">
+              <input
+                type="email"
+                value={nc.email}
+                onChange={(e) => setNc({ ...nc, email: e.target.value })}
+                placeholder="Correo (opcional)"
+                className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
+              />
+              <input
+                type="tel"
+                value={nc.telefono}
+                onChange={(e) => setNc({ ...nc, telefono: e.target.value })}
+                placeholder="Teléfono (opcional)"
+                className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
+              />
+            </div>
+
+            {parecidos.length > 0 && (
+              <div className="bg-white border border-black/10 rounded-xl p-3 mt-3">
+                <p className="text-xs text-ink-dim mb-2">
+                  Ya hay {parecidos.length === 1 ? "un cliente" : "clientes"} con un nombre parecido.
+                  ¿No te refieres a {parecidos.length === 1 ? "éste" : "alguno de éstos"}?
+                </p>
+                <div className="space-y-1.5">
+                  {parecidos.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        setClienteId(c.id!);
+                        setNuevoCliente(false);
+                        setParecidos([]);
+                        setInsistir(false);
+                        setNc({ nombre: "", email: "", telefono: "" });
+                      }}
+                      className="w-full text-left bg-cream hover:bg-black/5 rounded-lg px-3 py-2 text-sm text-ink-dim transition"
+                    >
+                      Usar <strong>{c.nombre}</strong>
+                      {c.email ? <span className="text-ink-muted"> · {c.email}</span> : null}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setInsistir(true); setParecidos([]); }}
+                  className="text-xs text-ink-muted underline mt-2"
+                >
+                  No, es otro cliente
+                </button>
+              </div>
+            )}
+
+            {errorCliente && (
+              <p className="text-xs text-mauve-900 mt-2">{errorCliente}</p>
+            )}
+
+            <div className="flex gap-2 mt-3">
+              <button
+                type="button"
+                onClick={guardarCliente}
+                disabled={guardandoCliente || !nc.nombre.trim()}
+                className="bg-ink hover:bg-ink/90 text-cream rounded-xl px-4 py-2 text-sm font-medium transition disabled:opacity-40"
+              >
+                {guardandoCliente ? "Guardando…" : "Guardar cliente"}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setNuevoCliente(false); setParecidos([]); setInsistir(false); setErrorCliente(""); }}
+                className="text-sm text-ink-muted px-2"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -350,7 +490,7 @@ export default function NuevoProyectoPage() {
           </Link>
           <button
             type="submit"
-            disabled={submitting || !nombre.trim() || !clienteId || clientes.length === 0}
+            disabled={submitting || !nombre.trim() || !clienteId}
             className="bg-ink text-cream rounded-xl px-5 py-2 text-sm font-medium hover:bg-ink/90 disabled:opacity-50 transition"
           >
             {submitting ? "Creando…" : "Crear proyecto"}

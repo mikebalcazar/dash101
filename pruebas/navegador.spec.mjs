@@ -425,7 +425,56 @@ test('pedir una compra desde el celular, pagarla, y que el que la pidió lo vea'
   await ctx.close();
 });
 
-/* ═══════════════ 6 · el otro sentido de la puerta, al final ═══════════════ */
+/* ═══════════════ 6 · dar de alta un cliente sin salirse del proyecto ═══════
+ *
+ * Lo pidió Mike el 20-sep: antes, para crear un proyecto de un cliente nuevo
+ * había que irse a Clientes, crearlo y volver a empezar el formulario. Aquí
+ * se mide lo que de verdad importa: que el cliente nuevo quede escogido sin
+ * salirse, y que al escribir un nombre que ya existe la pantalla pregunte
+ * «¿no te refieres a éste?» en vez de crear el duplicado callada. */
+
+const CLIENTE_PRUEBAS = 'Cliente de navegador';
+
+test('se da de alta un cliente desde «nuevo proyecto», y avisa del parecido', async () => {
+  const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
+  // Primero la página: `api()` habla por `/s101`, que es relativo, y sin una
+  // página abierta no hay contra qué resolverlo.
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  const { neg } = await negocioDePruebas(pag);
+  await elegirNegocio(pag, neg.id);
+
+  await pag.goto(`${URL}/proyectos/nuevo`, { waitUntil: 'load' });
+  await pag.getByLabel('Cliente').waitFor({ timeout: 20000 });
+  await pag.waitForTimeout(1000);
+
+  const yaEsta = (await pag.getByLabel('Cliente').innerText()).includes(CLIENTE_PRUEBAS);
+
+  await pag.getByLabel('Cliente').selectOption('__nuevo__');
+  await pag.getByPlaceholder('Nombre o razón social').fill(
+    // Con minúsculas y sin acentos a propósito: así se prueba que el parecido
+    // se busca como lo guarda la suite, no comparando texto tal cual.
+    yaEsta ? CLIENTE_PRUEBAS.toLowerCase() : CLIENTE_PRUEBAS,
+  );
+  await pag.getByRole('button', { name: 'Guardar cliente' }).click();
+
+  if (yaEsta) {
+    // Ya existía: tiene que preguntar antes de crear otro igual.
+    await pag.getByText(/¿No te refieres a/).waitFor({ timeout: 15000 });
+    await pag.getByRole('button', { name: new RegExp(`Usar ${CLIENTE_PRUEBAS}`) }).click();
+  }
+
+  await pag.waitForTimeout(2000);
+  const escogido = await pag.getByLabel('Cliente').inputValue();
+  assert.ok(escogido && escogido !== '__nuevo__', 'el cliente quedó escogido en el desplegable');
+  const nombreEscogido = await pag.getByLabel('Cliente').evaluate((s) => s.selectedOptions[0]?.textContent);
+  assert.match(nombreEscogido || '', new RegExp(CLIENTE_PRUEBAS, 'i'), 'y es el que se acaba de dar de alta');
+
+  console.log(`    cliente «${nombreEscogido}» ${yaEsta ? 'reusado por parecido' : 'creado'} sin salirse del proyecto`);
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
+/* ═══════════════ 7 · el otro sentido de la puerta, al final ═══════════════ */
 
 test('un código equivocado NO entra', async () => {
   const { ctx, pag } = await pestana();
