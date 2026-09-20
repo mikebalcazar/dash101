@@ -22,7 +22,7 @@ import { fuente } from "@/lib/fuente";
 import { entrarDePrueba, pedir, pedirCrudo } from "@/lib/api/cliente";
 import { createNegocio } from "@/lib/negocios";
 import { createCliente } from "@/lib/clientes";
-import { createProyecto, getProyecto } from "@/lib/proyectos";
+import { createProyecto, getProyecto, itemsSinPrecio } from "@/lib/proyectos";
 import { ligarObra, listObras, itemsDeLaObra, fusionarItemsDeLaObra } from "@/lib/obras";
 
 const CORREO = process.env.CORREO_SUPERADMIN ?? "mike@forespot.com";
@@ -126,9 +126,17 @@ describe("juntar los ítems de la obra con los del proyecto", () => {
      * trae precio, y una venta de cero pesos en la proyección es una cifra
      * que nadie tecleó. */
     const p = await getProyecto(ids.proyecto);
-    expect(p!.precio_venta).toBe(60_000);
-    const closet = (p!.productos ?? []).find((x) => x.nombre === "Clóset del pasillo");
-    expect(closet, "pero el ítem sí está en la lista, para ponerle precio").toBeTruthy();
+    expect(p!.precio_venta, "la proyección no se movió ni un peso").toBe(60_000);
+    /* Y NO está entre los `productos`, a propósito: ésa es la lista que el
+     * formulario guarda, y el guardado marca vendido todo lo que le llega.
+     * Un cotizado ahí se volvería venta al primer «Guardar». */
+    expect((p!.productos ?? []).map((x) => x.nombre)).not.toContain("Clóset del pasillo");
+
+    /* Pero tiene que VERSE, o la pieza existe y no hay dónde tocarla. Sale
+     * en su propia lista, la del bloque «traídos del plano». */
+    const sinPrecio = await itemsSinPrecio(ids.proyecto);
+    const closet = sinPrecio.find((x) => x.nombre === "Clóset del pasillo");
+    expect(closet, "se ve en la lista de los que faltan de preciar").toBeTruthy();
     expect(closet!.monto).toBe(0);
   });
 

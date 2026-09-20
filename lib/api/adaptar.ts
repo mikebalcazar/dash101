@@ -70,7 +70,7 @@ export interface FilaProyecto {
   precio_venta: number; cobrado: number; pagado_prov: number; compromiso: number; avance: number;
   creado_at: string; actualizado_at: string | null;
 }
-export interface FilaItem { id: string; proyecto_id: string | null; nombre: string; descripcion: string | null; monto: number; cantidad: number; estado: string; etapa: number; clave: string | null; fecha_entrega: string | null; origen: { quell_id?: string } | null }
+export interface FilaItem { id: string; proyecto_id: string | null; nombre: string; descripcion: string | null; monto: number; cantidad: number; estado: string; etapa: number; clave: string | null; tipo: string | null; fecha_entrega: string | null; origen: { quell_id?: string } | null }
 export interface FilaPartida { id: string; proyecto_id: string; item_id: string | null; proveedor_id: string | null; proveedor_nombre: string | null; concepto: string | null; monto_acordado: number; monto_pagado: number; estado: 'pendiente' | 'parcial' | 'pagado' }
 export interface FilaMovimiento {
   id: string; negocio_id: string; tipo: 'ingreso' | 'egreso'; monto: number; fecha: string; cuenta_id: string;

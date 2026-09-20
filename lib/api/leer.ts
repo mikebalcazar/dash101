@@ -130,6 +130,27 @@ export async function getProyecto(id: string): Promise<Proyecto | null> {
   return A.proyecto(f, { ...partes, items });
 }
 
+/** Los ítems del proyecto que TODAVÍA NO SE VENDEN: cotizados, sin precio.
+ *
+ *  Van aparte de `productos` y no revueltos con ellos, y es a propósito.
+ *  `productos` es lo que el formulario del proyecto guarda, y el guardado
+ *  marca VENDIDO todo lo que le llega. Si un cotizado entrara ahí, abrir el
+ *  proyecto y guardar convertiría en venta una cotización que nadie cerró
+ *  —las de quote101, sin ir más lejos— e inflaría el precio de venta con
+ *  dinero que nunca entró.
+ *
+ *  Hoy los usa el bloque «traídos del plano»: las piezas que vinieron de la
+ *  obra nacen cotizadas y en cero, y hay que poder verlas para ponerles
+ *  precio. Sin esta lectura quedaban invisibles en dash101, que era un hueco
+ *  de verdad: la pieza existía y no había dónde tocarla. */
+export async function itemsSinPrecio(proyecto_id: string): Promise<Array<{ id: string; nombre: string; clave: string | null; tipo: string; monto: number; cantidad: number }>> {
+  const filas = await listarCompleto<A.FilaItem>('items', { proyecto_id, estado: 'cotizado' });
+  return filas.map((i) => ({
+    id: i.id, nombre: i.nombre, clave: i.clave ?? null, tipo: i.tipo ?? '',
+    monto: A.aPesos(i.monto), cantidad: Number(i.cantidad ?? 1),
+  }));
+}
+
 /* ─────────────── movimientos ─────────────── */
 
 async function nombresDe(negocioId: string) {
