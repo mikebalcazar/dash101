@@ -17,11 +17,11 @@ import { useRouter } from "next/navigation";
 import { useNegocioActivo } from "@/lib/negocio-activo-context";
 import { listProveedores } from "@/lib/proveedores";
 import { listProyectos } from "@/lib/proyectos";
+import { SoltarArchivo } from "@/components/soltar-archivo";
 import { crearOrden, desglosar, listPartidasDe, subirArchivo, type PartidaDeProyecto } from "@/lib/ordenes";
 import { formatMontoExact } from "@/lib/format";
 import { BOTON, CAJA, CAJA_NUM, ETIQUETA } from "@/components/ordenes-ui";
 import type { Proveedor, Proyecto } from "@/types/schema";
-import { IconCamera, IconCheck } from "@tabler/icons-react";
 
 const hoy = () => {
   const d = new Date();
@@ -275,16 +275,16 @@ export default function NuevaOrdenPage() {
         </div>
 
         <div>
-          <label className={ETIQUETA} htmlFor="archivo">Foto o PDF de la cotización</label>
-          <label className="flex items-center gap-2 border border-dashed border-black/15 rounded-xl px-3 py-3 text-sm text-ink-muted cursor-pointer">
-            <IconCamera size={18} />
-            <span className="flex-1 truncate">{archivo ? archivo.name : "Tomar foto o escoger archivo"}</span>
-            {archivo && <IconCheck size={16} className="text-mint-900" />}
-            <input
-              id="archivo" type="file" accept="image/*,application/pdf" className="hidden"
-              onChange={(e) => setArchivo(e.target.files?.[0] ?? null)}
-            />
-          </label>
+          {/* El mismo control que en facturar: arrastrar, pegar o escoger,
+              y ver la foto antes de mandarla. En el celular sigue abriendo
+              la cámara, que es de donde sale casi siempre. */}
+          <SoltarArchivo
+            id="archivo"
+            etiqueta="Foto o PDF de la cotización"
+            acepta="image/*,application/pdf"
+            archivo={archivo}
+            alEscoger={setArchivo}
+          />
         </div>
 
         <button className={`${BOTON} w-full`} disabled={!listo} onClick={() => void guardar()}>

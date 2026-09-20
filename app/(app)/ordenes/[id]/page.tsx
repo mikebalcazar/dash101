@@ -22,9 +22,10 @@ import {
   type ArchivoOrden, type EventoOrden, type Orden,
 } from "@/lib/ordenes";
 import { formatMontoExact } from "@/lib/format";
+import { SoltarArchivo } from "@/components/soltar-archivo";
 import { BOTON, CAJA, CAJA_NUM, Dinero, ETIQUETA, Estado, Vence } from "@/components/ordenes-ui";
 import type { Cuenta } from "@/types/schema";
-import { IconArrowLeft, IconFileText, IconPaperclip } from "@tabler/icons-react";
+import { IconArrowLeft, IconFileText } from "@tabler/icons-react";
 
 const QUE: Record<EventoOrden["que"], string> = {
   creada: "La pidió",
@@ -244,15 +245,16 @@ export default function OrdenPage() {
                 </select>
               </div>
               <div>
-                <label className={ETIQUETA} htmlFor="comprobante">Comprobante del pago</label>
-                <label className="flex items-center gap-2 border border-dashed border-black/15 rounded-xl px-3 py-3 text-sm text-ink-muted cursor-pointer">
-                  <IconPaperclip size={16} />
-                  <span className="flex-1 truncate">{comprobante ? comprobante.name : "Foto o PDF (opcional)"}</span>
-                  <input
-                    id="comprobante" type="file" accept="image/*,application/pdf" className="hidden"
-                    onChange={(e) => setComprobante(e.target.files?.[0] ?? null)}
-                  />
-                </label>
+                {/* El mismo control de siempre: arrastrar, pegar o escoger,
+                    y ver el comprobante antes de pagar. */}
+                <SoltarArchivo
+                  id="comprobante"
+                  etiqueta="Comprobante del pago"
+                  acepta="image/*,application/pdf"
+                  archivo={comprobante}
+                  alEscoger={setComprobante}
+                  ayuda="Foto o PDF (opcional)"
+                />
               </div>
               <p className="text-[11px] text-ink-muted">
                 Al pagar se registra el egreso por {formatMontoExact(orden.monto, orden.moneda)} y se le avisa por
