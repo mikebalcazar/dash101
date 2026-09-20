@@ -243,6 +243,18 @@ export default function ProyectoDetallePage() {
         Volver a proyectos
       </Link>
 
+      {/* «Cambios guardados» se pinta AQUÍ, en la vista.
+        *
+        * Vivía dentro del formulario de edición, y al guardar el orden es
+        * `setEditMode(false)` y luego `setNotice(...)`: el formulario ya se
+        * había desmontado, así que el aviso no aparecía nunca. Nadie lo
+        * reportó porque no molesta —no se ve una confirmación que no
+        * existe—, pero quien guarda merece saber que se guardó. Lo cachó la
+        * prueba de navegador del 20-sep, que lo esperaba. */}
+      {!editMode && notice && (
+        <p className="text-xs text-mint-900 bg-mint-50 px-3 py-2 rounded-xl mb-4">{notice}</p>
+      )}
+
       {!editMode ? (
         <>
           {/* Header */}
