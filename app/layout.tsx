@@ -9,8 +9,8 @@ import "./globals.css";
  * anterior que el borde de Cloudflare todavía no soltó: el 12-sep eso dio un
  * 500 que «se arregló solo», y un rojo falso hoy es un verde falso mañana. */
 export const metadata: Metadata = {
-  title: "Conta Master",
-  description: "Gestión financiera multi-negocio",
+  title: "dash101",
+  description: "El dinero de la empresa: proyectos, cuentas, compras y lo fiscal.",
   other: { "dash101-version": process.env.NEXT_PUBLIC_VERSION ?? "dev" },
 };
 

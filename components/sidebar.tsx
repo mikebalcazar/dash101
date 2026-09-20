@@ -56,11 +56,16 @@ export function Sidebar() {
 
   return (
     <aside className="w-16 sm:w-52 bg-cream flex flex-col items-center sm:items-stretch py-4 px-0 sm:px-3 gap-1">
-      <div className="flex items-center gap-2 mb-4 sm:px-1">
-        <div className="w-9 h-9 rounded-xl bg-ink text-cream flex items-center justify-center text-sm font-medium shrink-0">
-          CM
-        </div>
-        <span className="hidden sm:block text-sm font-medium text-ink-dim">dash101</span>
+      {/* El logotipo oficial, el mismo del escaparate
+        * (`descargas/sitio/marca/dash101.svg`). En el teléfono no cabe la
+        * palabra, así que va el aro con el «101», recortado del mismo
+        * archivo. Antes decía «CM», de cuando la app se llamaba Conta
+        * Master. */}
+      <div className="flex items-center mb-4 sm:px-1 h-9">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/marca/dash101.svg" alt="dash101" className="hidden sm:block h-5" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/marca/dash101-aro.svg" alt="dash101" className="sm:hidden h-7 mx-auto" />
       </div>
 
       {items.map((item) => {

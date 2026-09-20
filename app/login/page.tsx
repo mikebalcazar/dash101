@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { IconBrandGoogle, IconLeaf } from "@tabler/icons-react";
+import { IconBrandGoogle } from "@tabler/icons-react";
 
 export default function LoginPage() {
   const { fuente } = useAuth();
@@ -243,11 +243,10 @@ function Marco({ children, pie }: { children: React.ReactNode; pie: string }) {
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <div className="flex items-center gap-3 mb-8 justify-center">
-          <div className="w-10 h-10 rounded-xl bg-ink text-cream flex items-center justify-center">
-            <IconLeaf size={20} />
-          </div>
-          <h1 className="text-xl font-marca">Conta Master</h1>
+        <div className="flex items-center mb-8 justify-center">
+          {/* El logotipo oficial, el mismo del escaparate. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/marca/dash101.svg" alt="dash101" className="h-8" />
         </div>
 
         <div className="bg-white border border-black/5 rounded-3xl p-7">

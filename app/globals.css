@@ -20,18 +20,21 @@
 @font-face{font-family:"Sansation";src:url("/fonts/sansation-700.woff2") format("woff2");font-weight:700;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 @font-face{font-family:"Sansation";src:url("/fonts/sansation-700-ext.woff2") format("woff2");font-weight:700;font-display:swap;unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
 
+/* Los mismos tonos que `tailwind.config.ts`, para lo que no pasa por
+ * Tailwind. Si se cambia uno, se cambian los dos: son la misma paleta. */
 :root {
-  --color-bg: #FBF8F2;
-  --color-cream: #F3EEE3;
-  --color-ink: #1E2A3A;
-  --color-ink-dim: #2A2E3A;
-  --color-ink-muted: #6E737E;
-  --color-mint-50: #D6E8E0;
-  --color-mint-900: #2F5D52;
-  --color-mauve-50: #E4D0D8;
-  --color-mauve-900: #5C485E;
-  --color-sky-50: #D2DCE8;
-  --color-sky-900: #3A4D6B;
+  --color-bg: #F3F6F8;
+  --color-cream: #E9EEF2;
+  --color-ink: #122733;
+  --color-ink-dim: #152028;
+  --color-ink-muted: #4B5A66;
+  --color-mint-50: #DDF1E6;
+  --color-mint-900: #1E7A4C;
+  --color-mauve-50: #F7E4DE;
+  --color-mauve-900: #A0472C;
+  --color-sky-50: #D9EEF8;
+  --color-sky-900: #05506F;
+  --color-marca: #0080C1;
 }
 
 html, body {
