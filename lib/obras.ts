@@ -1,4 +1,4 @@
-/* Las obras de quell101, del lado de dash101 · contrato 0.22.0 de la suite.
+/* Las obras de quell101, del lado de dash101 · contrato 0.26.0 de la suite.
  *
  * Mike, 20-sep: la obra que se abre en quell101 y el proyecto que se abre
  * aquí son la misma casa. Este módulo habla con `/orgs/:o/obras/*`, que la
@@ -66,4 +66,71 @@ export function urlObra(obra: Obra): string {
     ? 'https://bitacora-obra-staging.mike-929.workers.dev'
     : 'https://bitacora-obra.mike-929.workers.dev';
   return `${casa}/#/p/${obra.id}`;
+}
+
+/* ─────────────── los ítems, uno solo de los dos lados (0.26.0) ───────────────
+ *
+ * Las piezas del plano y los ítems vendidos del proyecto son la misma lista
+ * contada dos veces. La API no las junta sola: PROPONE y espera. Emparejar
+ * por parecido acierta casi siempre, y la vez que falla le cuelga el dinero
+ * de una pieza a otra, que se arregla a mano cuando alguien lo note.
+ */
+
+/** Una pieza del plano y el ítem al que se parece. */
+export interface ParejaDeItem {
+  element_id: string;
+  codigo: string;
+  pieza: string;
+  tipo: string;
+  item_id: string;
+  item_clave: string | null;
+  item_nombre: string;
+  /** En CENTAVOS, como todo el dinero de la API. */
+  monto: number;
+  cantidad: number;
+  estado: string;
+  /** Por qué se emparejaron. Se enseña: quien decide no tiene que adivinar. */
+  por: 'codigo' | 'nombre';
+}
+
+/** Una pieza del plano que no se parece a ningún ítem. */
+export interface PiezaSinItem {
+  element_id: string;
+  codigo: string;
+  pieza: string;
+  tipo: string;
+}
+
+/** Un ítem vendido que todavía no tiene pieza en el plano. */
+export interface ItemSinPieza {
+  id: string;
+  clave: string | null;
+  nombre: string;
+  monto: number;
+  cantidad: number;
+  estado: string;
+}
+
+export interface PropuestaDeItems {
+  parejas: ParejaDeItem[];
+  nuevos: PiezaSinItem[];
+  sueltos: ItemSinPieza[];
+}
+
+/** Qué se emparejaría con qué. NO escribe nada. */
+export async function itemsDeLaObra(obra_id: string): Promise<PropuestaDeItems> {
+  const r = await pedir<PropuestaDeItems>(`${base()}/${encodeURIComponent(obra_id)}/items`);
+  return { parejas: r.parejas, nuevos: r.nuevos, sueltos: r.sueltos };
+}
+
+/** Aplicar lo que se aceptó. Lo que no se mande, no se toca. */
+export async function fusionarItemsDeLaObra(
+  obra_id: string,
+  plan: { ligar?: Array<{ element_id: string; item_id: string }>; crear?: string[] },
+): Promise<{ ligados: number; creados: number }> {
+  const r = await pedir<{ ligados: number; creados: number }>(
+    `${base()}/${encodeURIComponent(obra_id)}/items`,
+    { method: 'POST', body: plan },
+  );
+  return { ligados: r.ligados, creados: r.creados };
 }

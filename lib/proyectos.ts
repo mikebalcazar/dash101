@@ -108,6 +108,16 @@ export async function getProyecto(id: string): Promise<Proyecto | null> {
   return { id: snap.id, ...snap.data() } as Proyecto;
 }
 
+/** Los ítems del proyecto que todavía no se venden: cotizados, sin precio.
+ *
+ *  Hoy son las piezas que se trajeron del plano de la obra. Van APARTE de
+ *  `productos` porque el guardado del proyecto marca vendido todo lo que le
+ *  llega, y una cotización que nadie cerró no es una venta. */
+export async function itemsSinPrecio(proyecto_id: string) {
+  if (fuente() !== 'api') return [];
+  return leer.itemsSinPrecio(proyecto_id);
+}
+
 export async function createProyecto(uid: string, data: ProyectoInput): Promise<string> {
   if (fuente() === 'api') return escribir.createProyecto(uid, data);
   const compromiso = calcCompromiso(data.partidas);
