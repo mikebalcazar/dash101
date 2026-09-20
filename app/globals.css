@@ -56,3 +56,38 @@ html, body {
 /* Columnas de dinero: los diez digitos miden lo mismo y las cifras se alinean.
    Funciona porque el subconjunto de Fira lleva la caracteristica tnum. */
 .cifra, td.cifra, .tabular { font-variant-numeric: tabular-nums; }
+
+/* ─────────────── al imprimir ───────────────
+ *
+ * El estado de cuenta de un cliente se manda por correo, y Mike lo pidió
+ * «en un PDF». No se arma un PDF en el servidor: el navegador ya sabe
+ * hacerlo —Imprimir → Guardar como PDF— y esa salida sale bien en cualquier
+ * máquina, sin una librería más que mantener y sin que el documento dependa
+ * de que un Worker no se quede sin memoria a media página.
+ *
+ * Lo que sí hace falta es que la hoja se vea como un documento y no como una
+ * captura de pantalla: sin menú, sin botones, en blanco y negro legible, y
+ * sin que una tabla se parta a la mitad entre dos hojas.
+ */
+@media print {
+  /* Lo que sólo sirve para navegar no va en el papel. */
+  .print\:hidden,
+  aside,
+  nav { display: none !important; }
+
+  /* El papel es blanco: los fondos de pantalla se comen la tinta y no
+     aportan nada. */
+  body,
+  main { background: #fff !important; }
+
+  main { padding: 0 !important; }
+
+  /* Un renglón de tabla partido entre dos hojas es un renglón que alguien va
+     a leer mal. */
+  tr, .no-partir { break-inside: avoid; page-break-inside: avoid; }
+
+  /* Cada proyecto empieza donde quepa, pero no a caballo. */
+  .hoja-bloque { break-inside: avoid; page-break-inside: avoid; }
+
+  a[href]::after { content: ""; }
+}

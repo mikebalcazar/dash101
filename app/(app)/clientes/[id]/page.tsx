@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { getCliente, updateCliente, deleteCliente } from "@/lib/clientes";
 import type { Cliente } from "@/types/schema";
-import { IconArrowLeft, IconTrash } from "@tabler/icons-react";
+import { IconArrowLeft, IconTrash, IconReceipt2 } from "@tabler/icons-react";
 import { AccesoPortal } from "@/components/acceso-portal";
 import { FusionarCliente } from "@/components/fusionar-cliente";
 import { useNegocioActivo } from "@/lib/negocio-activo-context";
@@ -107,7 +107,18 @@ export default function ClienteDetallePage() {
         Volver a clientes
       </Link>
 
-      <h2 className="text-lg font-medium text-ink-dim">Editar cliente</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-medium text-ink-dim">Editar cliente</h2>
+        {/* El estado de cuenta se abre desde aquí porque es de este cliente y
+            de nadie más: buscarlo en otro menú obliga a escogerlo dos veces. */}
+        <Link
+          href={`/clientes/${id}/estado-de-cuenta`}
+          className="text-xs text-ink-dim inline-flex items-center gap-1.5 bg-white border border-black/10 rounded-xl px-3 py-2 hover:border-black/20 transition"
+        >
+          <IconReceipt2 size={14} />
+          Estado de cuenta
+        </Link>
+      </div>
 
       <form onSubmit={handleSave} className="space-y-4 mt-6">
         <div>
