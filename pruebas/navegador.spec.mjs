@@ -854,6 +854,53 @@ test('juntar dos renglones iguales en un concepto: queda uno de dos piezas y la 
   await ctx.close();
 });
 
+test('el archivo de la factura: se escoge y se ve antes de guardar', async () => {
+  /* Mike, 20-sep: «quiero poder arrastrar los archivos para subirlos. Y que
+   * me muestre un preview del archivo abajo».
+   *
+   * Aquí se mide el camino que un navegador automatizado puede recorrer de
+   * verdad: escoger el archivo y ver que la pantalla lo reconoce y lo pinta.
+   * Arrastrar es el mismo `input` por debajo —el área es su etiqueta—, así
+   * que si esto pasa, el otro camino entrega el mismo archivo. */
+  const { ctx, pag, errores } = await pestana();
+  await entrar(pag, CORREO);
+
+  const neg = (await api(pag, `/orgs/${ORG}/negocios`)).filas[0];
+  const cta = filas(await api(pag, `/orgs/${ORG}/cuentas?negocio_id=${neg.id}`))
+    .find((c) => c.nombre === CUENTA_PRUEBAS)
+    ?? await api(pag, `/orgs/${ORG}/cuentas`, { method: 'POST', body: { negocio_id: neg.id, nombre: CUENTA_PRUEBAS, tipo: 'banco' } });
+  const mov = await api(pag, `/orgs/${ORG}/movimientos`, {
+    method: 'POST',
+    body: { negocio_id: neg.id, tipo: 'egreso', monto: 1_160_00, fecha: '2026-09-16',
+            cuenta_id: cta.id, descripcion: 'Con factura por colgar' },
+  });
+
+  await pag.goto(`${URL}/movimientos/${mov.id}/editar`, { waitUntil: 'load' });
+  try {
+    await pag.getByRole('button', { name: /Ya se facturó/ }).waitFor({ timeout: 30000 });
+  } catch {
+    assert.fail(`no cargó la pantalla de editar. Decía: ${(await texto(pag)).replace(/\s+/g, ' ').slice(0, 300)}`);
+  }
+  await pag.getByRole('button', { name: /Ya se facturó/ }).click();
+
+  const entrada = pag.locator('#archivo-factura');
+  await entrada.waitFor({ state: 'attached', timeout: 15000 });
+  await entrada.setInputFiles({
+    name: 'factura-de-prueba.xml',
+    mimeType: '',   // como llega arrastrado desde el explorador: sin tipo
+    buffer: Buffer.from('<?xml version="1.0"?>\n<Comprobante Total="1160.00"/>', 'utf8'),
+  });
+
+  /* Lo que importa: que la pantalla lo haya tomado —a pesar de venir sin
+   * tipo— y que enseñe qué se va a colgar. */
+  await pag.getByText('factura-de-prueba.xml', { exact: false }).first().waitFor({ timeout: 15000 });
+  const dice = await texto(pag);
+  assert.ok(/Comprobante|1160/.test(dice), `la vista previa enseña el contenido; decía: ${dice.replace(/\s+/g, ' ').slice(0, 300)}`);
+
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
 /* ═══════════════ 7 · el otro sentido de la puerta, al final ═══════════════ */
 
 test('un código equivocado NO entra', async () => {

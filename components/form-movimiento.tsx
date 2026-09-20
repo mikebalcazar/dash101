@@ -21,6 +21,7 @@ import type {
 import { formatMonto } from "@/lib/format";
 import { crearCfdi, ligarCfdi } from "@/lib/fiscal";
 import { subirArchivo } from "@/lib/ordenes";
+import { SoltarArchivo } from "@/components/soltar-archivo";
 import {
   IconArrowLeft,
   IconArrowDownLeft,
@@ -779,18 +780,17 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
                       </div>
                     </div>
 
-                    <div>
-                      <label htmlFor="archivo-factura" className="text-xs font-medium text-ink-dim block mb-1.5">
-                        El archivo (XML o PDF) — opcional
-                      </label>
-                      <input
-                        id="archivo-factura"
-                        type="file"
-                        accept=".xml,.pdf,application/xml,text/xml,application/pdf"
-                        onChange={(e) => setArchivoFactura(e.target.files?.[0] ?? null)}
-                        className="w-full text-xs text-ink-dim file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-1.5 file:text-xs file:text-ink-dim"
-                      />
-                    </div>
+                    {/* Arrastrar, pegar o escoger, y ver lo que se va a
+                        colgar antes de guardar. Mike, 20-sep: «quiero poder
+                        arrastrar los archivos para subirlos. Y que me
+                        muestre un preview del archivo abajo». */}
+                    <SoltarArchivo
+                      id="archivo-factura"
+                      etiqueta="El archivo (XML o PDF) — opcional"
+                      acepta=".xml,.pdf,application/xml,text/xml,application/pdf"
+                      archivo={archivoFactura}
+                      alEscoger={setArchivoFactura}
+                    />
 
                     <p className="text-[11px] text-ink-muted">
                       El total de la factura es el del movimiento: {formatMonto(parseFloat(monto) || 0, negocio?.moneda ?? "MXN")}.
