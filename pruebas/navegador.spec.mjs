@@ -607,19 +607,21 @@ test('la cantidad: 20 puertas a $1,500 son $30,000 de línea, no $600,000', asyn
 });
 
 test('un cobro se captura «falta facturar» y aparece en la lista de pendientes', async () => {
-  /* Encargo de Mike del 20-sep. Lo que se recorre aquí es lo que él hace:
-   * capturar un ingreso diciendo que falta facturarlo, y encontrarlo después
-   * en Fiscal → Falta la factura, del lado de los COBROS.
+  /* Encargo de Mike del 20-sep. Se recorre lo que él hace: capturar un
+   * ingreso diciendo que falta facturarlo, y encontrarlo en Fiscal → Falta la
+   * factura, del lado de los COBROS.
    *
-   * El lado de los cobros se pinta aparte del de los pagos a propósito: de un
-   * cobro sale el IVA que se traslada y de un pago el que se acredita. */
+   * Los campos se buscan por lo que SON —`input[type=number]`, el `select`
+   * que contiene la opción con ese id— y no por su etiqueta: las etiquetas de
+   * este formulario no están ligadas a su campo con `htmlFor`, y buscarlas
+   * con getByLabel tumbó el despliegue de las 05:56. */
   const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
   const { neg } = await negocioDePruebas(pag);
   await elegirNegocio(pag, neg.id);
 
-  const cuentas = filas(await api(pag, `/orgs/${ORG}/cuentas?negocio_id=${neg.id}`));
-  assert.ok(cuentas.length > 0, 'la demo tiene al menos una cuenta');
+  const cuenta = filas(await api(pag, `/orgs/${ORG}/cuentas?negocio_id=${neg.id}`))[0];
+  assert.ok(cuenta, 'la demo tiene al menos una cuenta');
 
   let cliente = filas(await api(pag, `/orgs/${ORG}/clientes?negocio_id=${neg.id}`))
     .find((c) => c.nombre === CLIENTE_PRUEBAS);
@@ -632,36 +634,78 @@ test('un cobro se captura «falta facturar» y aparece en la lista de pendientes
   });
 
   await pag.goto(`${URL}/movimientos/nuevo`, { waitUntil: 'load' });
-  await pag.getByLabel('Fecha').first().waitFor({ timeout: 20000 });
+  const campoMonto = pag.locator('input[type="number"]').first();
+  await campoMonto.waitFor({ timeout: 25000 });
+
   await pag.getByRole('button', { name: /^Ingreso$/ }).click();
-  await pag.locator('input[inputmode="decimal"]').first().fill('12345');
+  await campoMonto.fill('12345');
 
-  // Proyecto y cliente: el cliente se preselecciona solo desde el proyecto.
-  await pag.locator('select').filter({ hasText: proyecto.nombre }).first()
-    .selectOption({ label: new RegExp(proyecto.nombre) }).catch(() => {});
+  // Cada select se ubica por la opción que contiene: no depende del orden.
+  await pag.locator(`select:has(option[value="${proyecto.id}"])`).first()
+    .selectOption(proyecto.id, { timeout: 25000 });
+  await pag.locator(`select:has(option[value="${cuenta.id}"])`).first().selectOption(cuenta.id);
+  await pag.locator(`select:has(option[value="${cliente.id}"])`).first().selectOption(cliente.id);
 
-  // Lo nuevo: el cobro arranca en «Falta facturar» sin tocar nada.
+  // Lo nuevo: un ingreso arranca solo en «falta facturar».
   const falta = pag.getByRole('button', { name: 'Falta facturar' });
   await falta.waitFor({ timeout: 20000 });
   assert.equal(await falta.getAttribute('aria-pressed'), 'true',
     'un ingreso arranca en «falta facturar», que es lo que casi siempre pasa');
-  await falta.click();
 
-  await pag.getByRole('button', { name: /Guardar|Crear/ }).last().click();
-  await pag.waitForURL(/\/movimientos/, { timeout: 30000 });
+  await pag.getByRole('button', { name: /^Registrar ingreso$/ }).click();
+  await pag.waitForURL(/\/movimientos(\?|$)/, { timeout: 30000 });
 
-  // Y sale en la lista de pendientes, del lado de los cobros.
-  const pend = await api(pag, `/orgs/${ORG}/fiscal/pendientes?negocio_id=${neg.id}&tipo=ingreso`);
-  const mio = filas(pend).find((m) => m.monto === 12_345_00);
+  const pend = filas(await api(pag, `/orgs/${ORG}/fiscal/pendientes?negocio_id=${neg.id}&tipo=ingreso`));
+  const mio = pend.find((m) => m.monto === 12_345_00);
   assert.ok(mio, 'el cobro quedó esperando factura');
   assert.equal(mio.tipo, 'ingreso');
 
   await pag.goto(`${URL}/fiscal/pendientes`, { waitUntil: 'load' });
-  await pag.getByText('Cobros que falta facturar').first().waitFor({ timeout: 20000 });
-  const dice = await texto(pag);
-  assert.ok(/Cobros que falta facturar/.test(dice), 'la pantalla separa los cobros de los pagos');
+  await pag.getByText('Cobros que falta facturar').first().waitFor({ timeout: 25000 });
 
   console.log(`    un cobro de ${pesos2(12_345_00)} esperando factura`);
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
+test('corregir un movimiento: se cambia el monto y el saldo se recalcula', async () => {
+  /* Mike, 20-sep: «no hay manera de editar un movimiento, no puedo. necesito
+   * corregir un movimiento». Antes había que borrarlo y recapturarlo. */
+  const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  const { neg } = await negocioDePruebas(pag);
+  await elegirNegocio(pag, neg.id);
+
+  const cuenta = filas(await api(pag, `/orgs/${ORG}/cuentas?negocio_id=${neg.id}`))[0];
+  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes?negocio_id=${neg.id}`))
+    .find((c) => c.nombre === CLIENTE_PRUEBAS);
+  if (!cliente) {
+    cliente = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS, negocio_id: neg.id } });
+  }
+
+  // Un cobro capturado con un cero de más, que es el error de verdad.
+  const mov = await api(pag, `/orgs/${ORG}/movimientos`, {
+    method: 'POST',
+    body: {
+      negocio_id: neg.id, tipo: 'ingreso', monto: 90_000_00, fecha: '2026-03-18',
+      cuenta_id: cuenta.id, contraparte_tipo: 'cliente', contraparte_id: cliente.id,
+      contraparte_nombre: cliente.nombre, descripcion: 'Con un cero de mas',
+    },
+  });
+
+  await pag.goto(`${URL}/movimientos/${mov.id}/editar`, { waitUntil: 'load' });
+  const campoMonto = pag.locator('input[type="number"]').first();
+  await campoMonto.waitFor({ timeout: 25000 });
+  assert.equal(await campoMonto.inputValue(), '90000', 'llega prellenado con lo que había');
+
+  await campoMonto.fill('9000');
+  await pag.getByRole('button', { name: /^Guardar cambios$/ }).click();
+  await pag.waitForURL(/\/movimientos(\?|$)/, { timeout: 30000 });
+
+  const d = await api(pag, `/orgs/${ORG}/movimientos/${mov.id}`);
+  assert.equal(d.monto, 9_000_00, 'quedó corregido');
+  assert.equal(d.descripcion, 'Con un cero de mas', 'y lo que no se tocó no se perdió');
+
   assert.deepEqual(errores, [], 'cero errores de JavaScript');
   await ctx.close();
 });

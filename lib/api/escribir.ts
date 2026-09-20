@@ -399,6 +399,57 @@ export async function createMovimiento(_uid: string, d: MovimientoInput): Promis
   return f.id;
 }
 
+/** Corregir un movimiento que se capturó mal.
+ *
+ *  Sólo se mandan los campos que vienen: lo que no se toca, no se pisa. Los
+ *  saldos de la cuenta y los cachés del proyecto los recalcula la API sola al
+ *  escribir, así que aquí no hay nada que cuadrar a mano.
+ *
+ *  DOS COSAS QUE NO SE PUEDEN CORREGIR DESDE AQUÍ, y las dos a propósito:
+ *
+ *  · Una pata de TRANSFERENCIA. Son dos movimientos que tienen que seguir
+ *    siendo espejo; cambiarle el monto a uno solo deja las dos cuentas
+ *    descuadradas y nadie se entera hasta el corte. Se borra —lo que se lleva
+ *    las dos patas— y se vuelve a capturar.
+ *  · El MONTO de un movimiento que ya tiene factura. El CFDI se capturó por
+ *    un importe; moverlo por debajo deja la factura diciendo una cosa y el
+ *    movimiento otra, y de ahí sale el IVA que se entera. Primero se quita la
+ *    marca de facturado, se corrige, y se vuelve a capturar la factura.
+ *
+ *  Las dos se revisan también aquí y no nada más en la pantalla: una pantalla
+ *  vieja en un teléfono que no se ha refrescado sigue mandando lo de antes. */
+export async function updateMovimiento(id: string, d: Partial<MovimientoInput>): Promise<void> {
+  const actual = await obtener<A.FilaMovimiento>('movimientos', id);
+  if (!actual) throw new Error('Ese movimiento ya no existe.');
+  if (actual.transfer_id) {
+    throw new Error(
+      'Esto es una transferencia entre cuentas: son dos movimientos espejo. ' +
+      'Bórrala —se van las dos patas— y vuélvela a capturar.',
+    );
+  }
+  if (actual.facturado && d.monto !== undefined && A.aCentavos(d.monto) !== actual.monto) {
+    throw new Error(
+      'Este movimiento ya tiene factura por ese importe. Quita la marca de facturado, ' +
+      'corrige el monto, y vuelve a capturar la factura.',
+    );
+  }
+
+  await cambiar('movimientos', id, {
+    tipo: d.tipo,
+    monto: d.monto === undefined ? undefined : A.aCentavos(d.monto),
+    fecha: d.fecha === undefined ? undefined : A.aDia(d.fecha),
+    cuenta_id: d.cuenta_id,
+    proyecto_id: d.proyecto_id === undefined ? undefined : oNulo(d.proyecto_id),
+    item_id: d.producto_id === undefined ? undefined : oNulo(d.producto_id),
+    contraparte_tipo: d.contraparte_tipo,
+    contraparte_id: d.contraparte_id === undefined ? undefined : oNulo(d.contraparte_id),
+    contraparte_nombre: d.contraparte_nombre === undefined ? undefined : oNulo(d.contraparte_nombre),
+    descripcion: d.descripcion === undefined ? undefined : oNulo(d.descripcion),
+    categoria: d.categoria === undefined ? undefined : oNulo(d.categoria),
+    requiere_factura: d.requiere_factura,
+  });
+}
+
 /** Si es parte de una transferencia, se van los dos. */
 export async function deleteMovimiento(id: string): Promise<void> {
   const m = await obtener<A.FilaMovimiento>('movimientos', id);

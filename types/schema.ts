@@ -170,6 +170,11 @@ export interface Movimiento {
   negocio_id: string;
   descripcion?: string;
   categoria?: string;
+  /** Lo fiscal. `facturado` dice que la factura ya llegó; `requiere_factura`,
+   *  que se espera. La pantalla de corregir los necesita: el monto de un
+   *  movimiento ya facturado no se toca sin quitar antes la marca. */
+  facturado?: boolean;
+  requiere_factura?: boolean;
   creado_por: string;
   creado_at: Timestamp | FieldValue;
 }

@@ -187,6 +187,14 @@ export async function createTransferencia(
  * Borra un movimiento. Si es parte de una transferencia (transfer_id no null),
  * también borra el par.
  */
+/** Corregir un movimiento. Sólo por la API: la fuente vieja de Firestore no
+ *  recalcula saldos al editar, y un saldo que no cuadra es peor que no poder
+ *  corregir. */
+export async function updateMovimiento(id: string, data: Partial<MovimientoInput>): Promise<void> {
+  if (fuente() !== 'api') throw new Error('Corregir un movimiento sólo está disponible con la suite.');
+  return escribir.updateMovimiento(id, data);
+}
+
 export async function deleteMovimiento(id: string): Promise<void> {
   if (fuente() === 'api') return escribir.deleteMovimiento(id);
   const snap = await getDoc(doc(db, "movimientos", id));
