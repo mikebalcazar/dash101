@@ -24,7 +24,7 @@
  *      un mensaje que la pantalla puede enseñar tal cual. */
 
 import * as A from './adaptar';
-import { ErrorApi, listar, obtener, pedir } from './cliente';
+import { ErrorApi, listar, listarCompleto, obtener, pedir } from './cliente';
 import { org } from '../fuente';
 import type { CuentaInput } from '../cuentas';
 import type { ClienteInput } from '../clientes';
@@ -318,7 +318,13 @@ export async function updateProyecto(
    *    qué. Lo que estaba mal no era cancelar: era CONTAR los cancelados
    *    contra el tope de 500 (punto 1) y tomar por nuevo un id que no salía
    *    en esa lista (punto 2). */
-  const vivos = await listar<A.FilaItem>('items', { proyecto_id: id, estado: 'vendido' });
+  /* `listarCompleto`, no `listar`: si de los vivos llegaran sólo los
+   * primeros 500, los que se quedaran fuera no aparecerían en `porId`, la
+   * pantalla los mandaría con id y —por el punto 2— se intentaría
+   * actualizarlos uno por uno. Funcionaría, pero el barrido de abajo
+   * («los que ya no vienen se cancelan») no los vería, y un ítem quitado
+   * seguiría vivo. Mejor tronar que guardar a medias. */
+  const vivos = await listarCompleto<A.FilaItem>('items', { proyecto_id: id, estado: 'vendido' });
   if (d.productos !== undefined || (d.precio_venta !== undefined && vivos.length === 0)) {
     const quiere = productosOPrecio(d.nombre ?? actual.nombre, d.precio_venta ?? A.aPesos(actual.precio_venta), d.productos);
     const porId = new Map(vivos.map((i) => [i.id, i]));
