@@ -38,7 +38,7 @@ beforeAll(async () => {
     nombre: "Casa Uno", cliente_id: ids.cliente, cliente_nombre: "Cliente Uno",
     negocio_id: ids.negocio, negocio_nombre: "Taller",
     precio_venta: 0, estado: "activo", fecha_inicio: new Date(2026, 8, 1), partidas: [],
-    productos: [
+    items: [
       { nombre: "Cocina", monto: 100 },
       { nombre: "Clóset", monto: 200 },
     ],
@@ -53,16 +53,16 @@ afterAll(async () => {
 describe("editar la lista de ítems de un proyecto", () => {
   it("nace con los dos que se pidieron, y el precio es su suma", async () => {
     const p = (await getProyecto(ids.proyecto))!;
-    expect(p.productos).toHaveLength(2);
+    expect(p.items).toHaveLength(2);
     expect(p.precio_venta).toBe(300);
   });
 
   it("se cambia uno, se borra otro y se agrega uno nuevo: queda LO QUE SE VE", async () => {
     const p = (await getProyecto(ids.proyecto))!;
-    const cocina = p.productos!.find((x) => x.nombre === "Cocina")!;
+    const cocina = p.items!.find((x) => x.nombre === "Cocina")!;
 
     await updateProyecto(ids.proyecto, {
-      productos: [
+      items: [
         // el que se queda, con otro monto
         { id: cocina.id, nombre: "Cocina", monto: 150 },
         // uno nuevo, sin id
@@ -72,28 +72,28 @@ describe("editar la lista de ítems de un proyecto", () => {
     });
 
     const d = (await getProyecto(ids.proyecto))!;
-    const nombres = d.productos!.map((x) => x.nombre).sort();
+    const nombres = d.items!.map((x) => x.nombre).sort();
     expect(nombres, "quedan exactamente los dos de la lista").toEqual(["Cocina", "Isla"]);
-    expect(d.productos!.find((x) => x.nombre === "Cocina")!.monto).toBe(150);
+    expect(d.items!.find((x) => x.nombre === "Cocina")!.monto).toBe(150);
     expect(d.precio_venta, "y el precio es la suma de lo que quedó").toBe(200);
   });
 
   it("guardar dos veces seguidas lo mismo no duplica nada", async () => {
     const antes = (await getProyecto(ids.proyecto))!;
-    const mismos = antes.productos!.map((x) => ({ id: x.id, nombre: x.nombre, monto: x.monto }));
-    await updateProyecto(ids.proyecto, { productos: mismos });
-    await updateProyecto(ids.proyecto, { productos: mismos });
+    const mismos = antes.items!.map((x) => ({ id: x.id, nombre: x.nombre, monto: x.monto }));
+    await updateProyecto(ids.proyecto, { items: mismos });
+    await updateProyecto(ids.proyecto, { items: mismos });
     const d = (await getProyecto(ids.proyecto))!;
-    expect(d.productos).toHaveLength(antes.productos!.length);
+    expect(d.items).toHaveLength(antes.items!.length);
     expect(d.precio_venta).toBe(antes.precio_venta);
   });
 
   it("guardar con la MISMA forma que manda la pantalla no duplica", async () => {
-    /* La pantalla no manda sólo `productos`: manda también nombre,
+    /* La pantalla no manda sólo `items`: manda también nombre,
      * descripción, precio_venta, estado, fecha y partidas, todo junto. Esta
      * prueba usa esa forma exacta, porque es la que reportó Mike. */
     const antes = (await getProyecto(ids.proyecto))!;
-    const filas = antes.productos!.map((x) => ({
+    const filas = antes.items!.map((x) => ({
       id: x.id, nombre: x.nombre, descripcion: x.descripcion || undefined,
       monto: x.monto, fecha_entrega: null,
     }));
@@ -103,11 +103,11 @@ describe("editar la lista de ítems de un proyecto", () => {
       precio_venta: antes.precio_venta,
       estado: antes.estado,
       fecha_inicio: new Date(2026, 8, 1),
-      productos: filas,
+      items: filas,
       partidas: [],
     });
     const d = (await getProyecto(ids.proyecto))!;
-    expect(d.productos!.map((x) => x.nombre).sort()).toEqual(antes.productos!.map((x) => x.nombre).sort());
+    expect(d.items!.map((x) => x.nombre).sort()).toEqual(antes.items!.map((x) => x.nombre).sort());
     expect(d.precio_venta).toBe(antes.precio_venta);
   });
 
@@ -117,19 +117,19 @@ describe("editar la lista de ítems de un proyecto", () => {
      * tratara como el precio de una, el precio de venta del proyecto saldría
      * multiplicado por veinte y nadie lo notaría hasta cobrarle al cliente. */
     await updateProyecto(ids.proyecto, {
-      productos: [{ nombre: "Puerta de clóset", monto: 30_000, cantidad: 20 }],
+      items: [{ nombre: "Puerta de clóset", monto: 30_000, cantidad: 20 }],
     });
     const d = (await getProyecto(ids.proyecto))!;
-    expect(d.productos).toHaveLength(1);
-    expect(d.productos![0].cantidad).toBe(20);
-    expect(d.productos![0].monto).toBe(30_000);
+    expect(d.items).toHaveLength(1);
+    expect(d.items![0].cantidad).toBe(20);
+    expect(d.items![0].monto).toBe(30_000);
     expect(d.precio_venta, "la suma es del importe de la línea").toBe(30_000);
   });
 
   it("sin decir cantidad, es uno: lo que ya existía no cambia", async () => {
-    await updateProyecto(ids.proyecto, { productos: [{ nombre: "Barra", monto: 8_000 }] });
+    await updateProyecto(ids.proyecto, { items: [{ nombre: "Barra", monto: 8_000 }] });
     const d = (await getProyecto(ids.proyecto))!;
-    expect(d.productos![0].cantidad).toBe(1);
+    expect(d.items![0].cantidad).toBe(1);
     expect(d.precio_venta).toBe(8_000);
   });
 
@@ -148,18 +148,18 @@ describe("editar la lista de ítems de un proyecto", () => {
      * verse, que siga existiendo cancelado —el rastro no se pierde— y que el
      * siguiente guardado no lo reviva ni agregue copias. */
     await updateProyecto(ids.proyecto, {
-      productos: [{ nombre: "Se queda", monto: 100 }, { nombre: "Se va", monto: 50 }],
+      items: [{ nombre: "Se queda", monto: 100 }, { nombre: "Se va", monto: 50 }],
     });
-    const antes = (await getProyecto(ids.proyecto))!.productos!;
+    const antes = (await getProyecto(ids.proyecto))!.items!;
     const seVa = antes.find((p) => p.nombre === "Se va")!;
     const sobreviven = antes
       .filter((p) => p.nombre !== "Se va")
       .map((p) => ({ id: p.id, nombre: p.nombre, monto: p.monto }));
 
-    await updateProyecto(ids.proyecto, { productos: sobreviven });
+    await updateProyecto(ids.proyecto, { items: sobreviven });
 
     const d = (await getProyecto(ids.proyecto))!;
-    expect(d.productos!.map((p) => p.nombre)).toEqual(["Se queda"]);
+    expect(d.items!.map((p) => p.nombre)).toEqual(["Se queda"]);
     expect(d.precio_venta).toBe(100);
 
     // Sigue existiendo, cancelado: el rastro no se pierde.
@@ -169,9 +169,9 @@ describe("editar la lista de ítems de un proyecto", () => {
     expect(todos.filas.find((i) => i.id === seVa.id)?.estado).toBe("cancelado");
 
     // Y guardar otra vez no lo revive ni agrega copias.
-    await updateProyecto(ids.proyecto, { productos: sobreviven });
+    await updateProyecto(ids.proyecto, { items: sobreviven });
     const otra = (await getProyecto(ids.proyecto))!;
-    expect(otra.productos!.map((p) => p.nombre)).toEqual(["Se queda"]);
+    expect(otra.items!.map((p) => p.nombre)).toEqual(["Se queda"]);
     expect(otra.precio_venta).toBe(100);
   });
 
@@ -180,24 +180,24 @@ describe("editar la lista de ítems de un proyecto", () => {
      * espalda —como pasaba solo cuando el tope de 500 dejaba fuera a los
      * vivos— y se guarda la pantalla con ese mismo id adentro. Antes se creaba
      * una copia; ahora se actualiza el que ya estaba. */
-    await updateProyecto(ids.proyecto, { productos: [{ nombre: "Cocina", monto: 100 }] });
-    const p1 = (await getProyecto(ids.proyecto))!.productos![0];
+    await updateProyecto(ids.proyecto, { items: [{ nombre: "Cocina", monto: 100 }] });
+    const p1 = (await getProyecto(ids.proyecto))!.items![0];
 
     await pedir(`/orgs/${ORG}/items/${p1.id}`, { method: "PATCH", body: { estado: "cancelado" } });
 
-    await updateProyecto(ids.proyecto, { productos: [{ id: p1.id, nombre: "Cocina", monto: 120 }] });
+    await updateProyecto(ids.proyecto, { items: [{ id: p1.id, nombre: "Cocina", monto: 120 }] });
 
     const d = (await getProyecto(ids.proyecto))!;
-    expect(d.productos, "uno solo, no dos").toHaveLength(1);
-    expect(d.productos![0].id, "y es el mismo de antes, revivido").toBe(p1.id);
-    expect(d.productos![0].monto).toBe(120);
+    expect(d.items, "uno solo, no dos").toHaveLength(1);
+    expect(d.items![0].id, "y es el mismo de antes, revivido").toBe(p1.id);
+    expect(d.items![0].monto).toBe(120);
     expect(d.precio_venta).toBe(120);
   });
 
   it("se pueden dejar en cero: un proyecto sin ítems vale cero", async () => {
-    await updateProyecto(ids.proyecto, { productos: [] });
+    await updateProyecto(ids.proyecto, { items: [] });
     const d = (await getProyecto(ids.proyecto))!;
-    expect(d.productos).toHaveLength(0);
+    expect(d.items).toHaveLength(0);
     expect(d.precio_venta).toBe(0);
   });
 });
@@ -221,12 +221,12 @@ describe("el tope de 500 no puede esconder ítems (lo de HOLCIM)", () => {
 
   it("la lectura del proyecto pide sólo los vivos: un cancelado no ocupa lugar", async () => {
     await updateProyecto(ids.proyecto, {
-      productos: [{ nombre: "Se queda", monto: 400 }, { nombre: "Se va", monto: 600 }],
+      items: [{ nombre: "Se queda", monto: 400 }, { nombre: "Se va", monto: 600 }],
     });
     const antes = (await getProyecto(ids.proyecto))!;
-    const seVa = antes.productos!.find((p) => p.nombre === "Se va")!;
+    const seVa = antes.items!.find((p) => p.nombre === "Se va")!;
     await updateProyecto(ids.proyecto, {
-      productos: antes.productos!.filter((p) => p.nombre !== "Se va").map((p) => ({ id: p.id, nombre: p.nombre, monto: p.monto })),
+      items: antes.items!.filter((p) => p.nombre !== "Se va").map((p) => ({ id: p.id, nombre: p.nombre, monto: p.monto })),
     });
 
     // La lista del proyecto, tal como la pide la pantalla: el cancelado no
@@ -238,7 +238,7 @@ describe("el tope de 500 no puede esconder ítems (lo de HOLCIM)", () => {
     expect(crudo.total, "«total» cuenta sólo los vivos cuando se filtra").toBe(crudo.filas.length);
 
     const d = (await getProyecto(ids.proyecto))!;
-    expect(d.productos!.map((p) => p.nombre)).toEqual(["Se queda"]);
+    expect(d.items!.map((p) => p.nombre)).toEqual(["Se queda"]);
     expect(d.precio_venta).toBe(400);
   });
 
@@ -247,7 +247,7 @@ describe("el tope de 500 no puede esconder ítems (lo de HOLCIM)", () => {
      * una completa —200, `filas`, y nada más—. Se comprueba con un tope
      * chiquito, que es el mismo mecanismo con el que se cae una de 500. */
     await updateProyecto(ids.proyecto, {
-      productos: [{ nombre: "Uno", monto: 10 }, { nombre: "Dos", monto: 20 }, { nombre: "Tres", monto: 30 }],
+      items: [{ nombre: "Uno", monto: 10 }, { nombre: "Dos", monto: 20 }, { nombre: "Tres", monto: 30 }],
     });
     const cortada = await pedir<{ total: number; filas: unknown[] }>(
       `/orgs/${ORG}/items?proyecto_id=${encodeURIComponent(ids.proyecto)}&estado=vendido&limite=1`,
@@ -257,7 +257,7 @@ describe("el tope de 500 no puede esconder ítems (lo de HOLCIM)", () => {
 
     // Y la pantalla, que usa `listarCompleto`, los trae todos de todos modos.
     const d = (await getProyecto(ids.proyecto))!;
-    expect(d.productos).toHaveLength(3);
+    expect(d.items).toHaveLength(3);
     expect(d.precio_venta).toBe(60);
   });
 });

@@ -10,7 +10,6 @@ import type {
   Proveedor,
   EstadoProyecto,
   PartidaProyecto,
-  ProductoProyecto,
 } from "@/types/schema";
 import { ESTADO_PROYECTO_LABELS } from "@/types/schema";
 import { formatMonto, formatMontoExact } from "@/lib/format";
@@ -41,7 +40,7 @@ interface PartidaForm {
   monto_acordado: string;
 }
 
-interface ProductoForm {
+interface ItemForm {
   id: string;
   nombre: string;
   descripcion: string;
@@ -85,7 +84,7 @@ export default function ProyectoDetallePage() {
   const [estado, setEstado] = useState<EstadoProyecto>("planeando");
   const [fechaInicio, setFechaInicio] = useState("");
   const [partidasEdit, setPartidasEdit] = useState<PartidaForm[]>([]);
-  const [productosEdit, setProductosEdit] = useState<ProductoForm[]>([]);
+  const [itemsEdit, setItemsEdit] = useState<ItemForm[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -117,8 +116,8 @@ export default function ProyectoDetallePage() {
           monto_acordado: String(pt.monto_acordado),
         }))
       );
-      setProductosEdit(
-        (p.productos ?? []).map((pr) => {
+      setItemsEdit(
+        (p.items ?? []).map((pr) => {
           // El precio por pieza sale de dividir: lo que se guarda es el
           // importe de la línea. Con cantidad 1 son el mismo número.
           const cant = pr.cantidad && pr.cantidad > 0 ? pr.cantidad : 1;
@@ -161,9 +160,9 @@ export default function ProyectoDetallePage() {
         }
       }
 
-      for (const pr of productosEdit) {
+      for (const pr of itemsEdit) {
         if (pr.nombre.trim() && !(parseFloat(pr.monto) > 0)) {
-          setError(`El producto «${pr.nombre}» necesita monto`);
+          setError(`El ítem «${pr.nombre}» necesita monto`);
           setSaving(false);
           return;
         }
@@ -175,7 +174,7 @@ export default function ProyectoDetallePage() {
         precio_venta: parseFloat(precioVenta) || 0,
         estado,
         fecha_inicio: fechaInicio ? new Date(fechaInicio) : undefined,
-        productos: productosEdit
+        items: itemsEdit
           .filter((pr) => pr.nombre.trim())
           .map((pr) => ({
             id: pr.id || undefined,
@@ -472,8 +471,8 @@ export default function ProyectoDetallePage() {
           setFechaInicio={setFechaInicio}
           partidas={partidasEdit}
           setPartidas={setPartidasEdit}
-          productos={productosEdit}
-          setProductos={setProductosEdit}
+          items={itemsEdit}
+          setItems={setItemsEdit}
           onSave={handleSave}
           onCancel={() => {
             setEditMode(false);
@@ -505,8 +504,8 @@ interface EditFormProps {
   setFechaInicio: (v: string) => void;
   partidas: PartidaForm[];
   setPartidas: React.Dispatch<React.SetStateAction<PartidaForm[]>>;
-  productos: ProductoForm[];
-  setProductos: React.Dispatch<React.SetStateAction<ProductoForm[]>>;
+  items: ItemForm[];
+  setItems: React.Dispatch<React.SetStateAction<ItemForm[]>>;
   onSave: (e: React.FormEvent) => void;
   onCancel: () => void;
   saving: boolean;
@@ -534,16 +533,16 @@ function ProyectoEditForm(props: EditFormProps) {
   );
   const precioNum = parseFloat(props.precioVenta) || 0;
 
-  const addProducto = () =>
-    props.setProductos((prev) => [
+  const addItem = () =>
+    props.setItems((prev) => [
       ...prev,
       { id: "", nombre: "", descripcion: "", cantidad: "1", unitario: "", monto: "", fecha_entrega: "" },
     ]);
   /** Tocar la cantidad o el precio por pieza recalcula el importe en el
    *  momento: si se guardara con el importe viejo, el precio de venta diría
    *  una cosa y la pantalla otra. */
-  const updateProducto = (i: number, patch: Partial<ProductoForm>) =>
-    props.setProductos((prev) =>
+  const updateItem = (i: number, patch: Partial<ItemForm>) =>
+    props.setItems((prev) =>
       prev.map((p, idx) => {
         if (idx !== i) return p;
         const nuevo = { ...p, ...patch };
@@ -553,9 +552,9 @@ function ProyectoEditForm(props: EditFormProps) {
         return nuevo;
       }),
     );
-  const removeProducto = (i: number) =>
-    props.setProductos((prev) => prev.filter((_, idx) => idx !== i));
-  const sumaProductos = props.productos.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
+  const removeItem = (i: number) =>
+    props.setItems((prev) => prev.filter((_, idx) => idx !== i));
+  const sumaItems = props.items.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
 
   return (
     <form onSubmit={props.onSave} className="space-y-4">
@@ -623,7 +622,7 @@ function ProyectoEditForm(props: EditFormProps) {
           <label className="text-xs font-medium text-ink-dim">Ítems del proyecto</label>
           <button
             type="button"
-            onClick={addProducto}
+            onClick={addItem}
             className="text-xs text-ink hover:underline flex items-center gap-1"
           >
             <IconPlus size={12} />
@@ -633,20 +632,20 @@ function ProyectoEditForm(props: EditFormProps) {
         <p className="text-[11px] text-ink-muted mb-2">
           Lo que el cliente ve en su estado de cuenta. Cada ingreso se asigna a un ítem.
         </p>
-        {props.productos.length === 0 ? (
+        {props.items.length === 0 ? (
           <div className="bg-cream/60 rounded-xl p-4 text-center text-xs text-ink-muted">
             Sin ítems.
           </div>
         ) : (
           <div className="space-y-2">
-            {props.productos.map((pr, i) => (
+            {props.items.map((pr, i) => (
               <div key={i} className="bg-white border border-black/10 rounded-xl p-3 space-y-2">
                 <div className="flex gap-2 items-start">
                   <input
                     type="text"
                     placeholder="Ítem (p. ej. Puerta de clóset)"
                     value={pr.nombre}
-                    onChange={(e) => updateProducto(i, { nombre: e.target.value })}
+                    onChange={(e) => updateItem(i, { nombre: e.target.value })}
                     className="flex-1 min-w-0 bg-bg border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
                   />
                   {/* Cantidad y precio POR PIEZA. «20 puertas del mismo
@@ -661,7 +660,7 @@ function ProyectoEditForm(props: EditFormProps) {
                     aria-label="Cantidad"
                     placeholder="Cant."
                     value={pr.cantidad}
-                    onChange={(e) => updateProducto(i, { cantidad: e.target.value })}
+                    onChange={(e) => updateItem(i, { cantidad: e.target.value })}
                     className="w-16 bg-bg border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none text-right"
                   />
                   <input
@@ -671,12 +670,12 @@ function ProyectoEditForm(props: EditFormProps) {
                     aria-label="Precio por pieza"
                     placeholder="$ c/u"
                     value={pr.unitario}
-                    onChange={(e) => updateProducto(i, { unitario: e.target.value })}
+                    onChange={(e) => updateItem(i, { unitario: e.target.value })}
                     className="w-24 bg-bg border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none text-right"
                   />
                   <button
                     type="button"
-                    onClick={() => removeProducto(i)}
+                    onClick={() => removeItem(i)}
                     className="text-ink-muted hover:text-mauve-900 p-1"
                   >
                     <IconTrash size={14} />
@@ -687,14 +686,14 @@ function ProyectoEditForm(props: EditFormProps) {
                     type="text"
                     placeholder="Descripción corta (material, medidas…)"
                     value={pr.descripcion}
-                    onChange={(e) => updateProducto(i, { descripcion: e.target.value })}
+                    onChange={(e) => updateItem(i, { descripcion: e.target.value })}
                     className="flex-1 min-w-0 bg-bg border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
                   />
                   <label className="text-[10px] text-ink-muted whitespace-nowrap">Entrega</label>
                   <input
                     type="date"
                     value={pr.fecha_entrega}
-                    onChange={(e) => updateProducto(i, { fecha_entrega: e.target.value })}
+                    onChange={(e) => updateItem(i, { fecha_entrega: e.target.value })}
                     className="w-36 bg-bg border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
                   />
                   <span className="text-xs text-ink-dim whitespace-nowrap tabular-nums w-28 text-right">
@@ -705,18 +704,18 @@ function ProyectoEditForm(props: EditFormProps) {
             ))}
           </div>
         )}
-        {props.productos.length > 0 && (
+        {props.items.length > 0 && (
           <div className="mt-2 flex justify-between text-xs px-1">
             <span className="text-ink-muted">Suma de los ítems</span>
             <span
               className={`font-medium ${
-                precioNum > 0 && Math.abs(sumaProductos - precioNum) > 0.5
+                precioNum > 0 && Math.abs(sumaItems - precioNum) > 0.5
                   ? "text-mauve-900"
                   : "text-ink-dim"
               }`}
             >
-              {formatMontoExact(sumaProductos)}
-              {precioNum > 0 && Math.abs(sumaProductos - precioNum) > 0.5 && (
+              {formatMontoExact(sumaItems)}
+              {precioNum > 0 && Math.abs(sumaItems - precioNum) > 0.5 && (
                 <span className="ml-2 font-normal text-mauve-900">
                   ≠ precio venta {formatMontoExact(precioNum)}
                 </span>

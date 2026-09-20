@@ -30,7 +30,7 @@ import type { CuentaInput } from '../cuentas';
 import type { ClienteInput } from '../clientes';
 import type { NegocioInput } from '../negocios';
 import type { ProveedorInput } from '../proveedores';
-import type { ProyectoInput, PartidaProyectoInput, ProductoProyectoInput } from '../proyectos';
+import type { ProyectoInput, PartidaProyectoInput, ItemProyectoInput } from '../proyectos';
 import type { MovimientoInput } from '../movimientos';
 import type { OpexInput } from '../opex';
 import type { EstadoProyecto } from '@/types/schema';
@@ -243,10 +243,10 @@ export async function deleteProveedor(id: string): Promise<void> {
 /** Cuántas piezas iguales. Uno cuando no se dice, y nunca cero ni fracción:
  *  media puerta no existe, y cero dejaría la cuenta de «sin ubicar» en
  *  negativo del lado de quell101. */
-const cantidadDe = (p: ProductoProyectoInput): number =>
+const cantidadDe = (p: ItemProyectoInput): number =>
   p.cantidad && p.cantidad > 0 ? Math.trunc(p.cantidad) : 1;
 
-function filaItem(p: ProductoProyectoInput, proyecto: { id: string; negocio_id: string; cliente_id: string }): Record<string, unknown> {
+function filaItem(p: ItemProyectoInput, proyecto: { id: string; negocio_id: string; cliente_id: string }): Record<string, unknown> {
   return {
     negocio_id: proyecto.negocio_id, cliente_id: proyecto.cliente_id, proyecto_id: proyecto.id,
     nombre: p.nombre, descripcion: oNulo(p.descripcion), monto: A.aCentavos(p.monto),
@@ -262,7 +262,7 @@ function filaPartida(p: PartidaProyectoInput, proyectoId: string): Record<string
   };
 }
 
-/** Regla 1: si NO se dicen productos, el precio es un solo ítem con el nombre
+/** Regla 1: si NO se dicen ítems, el precio es un solo ítem con el nombre
  *  del proyecto. Así un proyecto capturado «a precio cerrado» tiene algo que
  *  enseñarle al cliente en su portal.
  *
@@ -273,8 +273,8 @@ function filaPartida(p: PartidaProyectoInput, proyectoId: string): Record<string
  *  manera de borrar ítems», y «al guardar los duplica y los suma» —porque
  *  después de revivir ese ítem fantasma, al volver a capturar los suyos
  *  quedaban los suyos MÁS el fantasma, y el precio contaba doble—. */
-function productosOPrecio(nombre: string, precio: number, productos: ProductoProyectoInput[] | undefined): ProductoProyectoInput[] {
-  if (productos !== undefined) return productos;
+function itemsOPrecio(nombre: string, precio: number, items: ItemProyectoInput[] | undefined): ItemProyectoInput[] {
+  if (items !== undefined) return items;
   if (precio > 0) return [{ nombre, monto: precio }];
   return [];
 }
@@ -285,7 +285,7 @@ export async function createProyecto(_uid: string, d: ProyectoInput): Promise<st
     fecha_inicio: dia(d.fecha_inicio), fecha_fin_estimada: dia(d.fecha_fin_estimada),
   });
   const donde = { id: f.id, negocio_id: d.negocio_id, cliente_id: d.cliente_id };
-  for (const p of productosOPrecio(d.nombre, d.precio_venta, d.productos)) await crear('items', filaItem(p, donde));
+  for (const p of itemsOPrecio(d.nombre, d.precio_venta, d.items)) await crear('items', filaItem(p, donde));
   for (const p of d.partidas) await crear('partidas', filaPartida(p, f.id));
   return f.id;
 }
@@ -294,7 +294,7 @@ export async function updateProyecto(
   id: string,
   d: {
     nombre?: string; descripcion?: string; precio_venta?: number; partidas?: PartidaProyectoInput[];
-    productos?: ProductoProyectoInput[]; estado?: EstadoProyecto; fecha_inicio?: Date; fecha_fin_estimada?: Date | null;
+    items?: ItemProyectoInput[]; estado?: EstadoProyecto; fecha_inicio?: Date; fecha_fin_estimada?: Date | null;
   },
 ): Promise<void> {
   const actual = await obtener<A.FilaProyecto>('proyectos', id);
@@ -341,8 +341,8 @@ export async function updateProyecto(
    * («los que ya no vienen se cancelan») no los vería, y un ítem quitado
    * seguiría vivo. Mejor tronar que guardar a medias. */
   const vivos = await listarCompleto<A.FilaItem>('items', { proyecto_id: id, estado: 'vendido' });
-  if (d.productos !== undefined || (d.precio_venta !== undefined && vivos.length === 0)) {
-    const quiere = productosOPrecio(d.nombre ?? actual.nombre, d.precio_venta ?? A.aPesos(actual.precio_venta), d.productos);
+  if (d.items !== undefined || (d.precio_venta !== undefined && vivos.length === 0)) {
+    const quiere = itemsOPrecio(d.nombre ?? actual.nombre, d.precio_venta ?? A.aPesos(actual.precio_venta), d.items);
     const porId = new Map(vivos.map((i) => [i.id, i]));
     const quedan = new Set<string>();
     for (const p of quiere) {

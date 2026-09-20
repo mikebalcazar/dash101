@@ -50,7 +50,7 @@ import {
 import { fueraDeAlcance } from "@/lib/api/leer";
 import type { ItemFuera } from "@/lib/api/leer";
 import { formatDateShort, formatMonto } from "@/lib/format";
-import type { ProductoProyecto, Proyecto } from "@/types/schema";
+import type { ItemProyecto, Proyecto } from "@/types/schema";
 import type { Timestamp } from "firebase/firestore";
 
 const SIN = "__sin__";
@@ -70,14 +70,14 @@ const SOLO = "__solo__";
 type Opciones = { productos: Producto[]; unicos: ItemUnico[] };
 /** Un renglón de la tabla: un producto con sus piezas, o un ítem suelto. */
 type Bloque = { producto: Producto | null; filas: Fila[] };
-/** El dinero de la API viaja en CENTAVOS; el de `productos` ya viene en
+/** El dinero de la API viaja en CENTAVOS; el de `proyecto.items` ya viene en
  *  pesos. Esta es la única conversión de esta pantalla, y es de ida. */
 const pesos = (centavos: number) => formatMonto(Math.round(centavos) / 100, "MXN");
 
-type Fila = ProductoProyecto & { partida: string; orden: number };
+type Fila = ItemProyecto & { partida: string; orden: number };
 
 export function ItemsDelProyecto({ proyecto, alCambiar }: { proyecto: Proyecto; alCambiar: () => void }) {
-  const productos: ProductoProyecto[] = useMemo(() => proyecto.productos ?? [], [proyecto.productos]);
+  const items: ItemProyecto[] = useMemo(() => proyecto.items ?? [], [proyecto.items]);
   const [pestana, setPestana] = useState<string>("");
   const [modo, setModo] = useState<"ver" | "acomodar" | "juntar">("ver");
   const [error, setError] = useState("");
@@ -91,7 +91,7 @@ export function ItemsDelProyecto({ proyecto, alCambiar }: { proyecto: Proyecto; 
     try { setFuera(await fueraDeAlcance(proyecto.id!)); }
     catch { setFuera({ no_aprobados: [], cancelados: [] }); }
   };
-  useEffect(() => { void traerFuera(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [proyecto.id, proyecto.productos]);
+  useEffect(() => { void traerFuera(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [proyecto.id, proyecto.items]);
 
   /* Las opciones del dropdown y qué productos hay en la obra. Se vuelven a
    * pedir cuando cambia la lista: agrupar escribe un producto nuevo, y
@@ -100,7 +100,7 @@ export function ItemsDelProyecto({ proyecto, alCambiar }: { proyecto: Proyecto; 
     try { setOpciones(await productosDelProyecto(proyecto.id!)); }
     catch { setOpciones({ productos: [], unicos: [] }); }
   };
-  useEffect(() => { void traerOpciones(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [proyecto.id, proyecto.productos]);
+  useEffect(() => { void traerOpciones(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [proyecto.id, proyecto.items]);
 
   /** Cambiar un ítem de producto. El valor viene del `<select>`: `pr:` es un
    *  producto que ya existe, `it:` es otro ítem único —«somos el mismo
@@ -157,13 +157,13 @@ export function ItemsDelProyecto({ proyecto, alCambiar }: { proyecto: Proyecto; 
    *  partida, después `orden`, después como se capturaron: con todo en cero
    *  —que es como queda lo viejo— se ve igual que antes. */
   const filas: Fila[] = useMemo(() => {
-    const puestas = productos.map((p, i) => ({
+    const puestas = items.map((p, i) => ({
       ...p, partida: (p.partida ?? "").trim(), orden: Number(p.orden ?? 0) || 0, _i: i,
     }));
     return puestas
       .sort((a, b) => a.partida.localeCompare(b.partida, "es") || a.orden - b.orden || a._i - b._i)
       .map(({ _i, ...f }) => { void _i; return f; });
-  }, [productos]);
+  }, [items]);
 
   /** Las pestañas: «Todas» y una por partida, en el orden en que salen. */
   const partidas = useMemo(() => {

@@ -62,7 +62,7 @@ beforeAll(async () => {
     cliente_id: ids.cliente, cliente_nombre: "Familia",
     nombre: "Casa", estado: "activo", precio_venta: 50_000,
     partidas: [], fecha_inicio: new Date(2026, 2, 1),
-    productos: [{ nombre: "Cocina", monto: 50_000, cantidad: 1 }],
+    items: [{ nombre: "Cocina", monto: 50_000, cantidad: 1 }],
   });
 }, 120000);
 

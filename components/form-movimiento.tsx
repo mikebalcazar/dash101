@@ -233,8 +233,8 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
   }, [negocioId]);
 
   const proyectoSel = proyectos.find((p) => p.id === proyectoId);
-  const productosDelProyecto = proyectoSel?.productos ?? [];
-  const productoSel = productosDelProyecto.find((pr) => pr.id === productoId);
+  const itemsDelProyecto = proyectoSel?.items ?? [];
+  const productoSel = itemsDelProyecto.find((pr) => pr.id === productoId);
 
   const fechaFacturaTocada = useRef(false);
   const ivaTocado = useRef(false);
@@ -565,7 +565,7 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
               )}
 
               {/* Producto (ingreso a proyecto con productos) */}
-              {isIngreso && productosDelProyecto.length > 0 && (
+              {isIngreso && itemsDelProyecto.length > 0 && (
                 <div>
                   <label className="text-xs font-medium text-ink-dim block mb-1.5">
                     Producto <span className="text-ink-muted font-normal">(portal del cliente)</span>
@@ -576,7 +576,7 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
                     className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
                   >
                     <option value="">— Sin asignar (solo al proyecto) —</option>
-                    {productosDelProyecto.map((pr) => (
+                    {itemsDelProyecto.map((pr) => (
                       <option key={pr.id} value={pr.id}>
                         {pr.nombre} · {formatMonto(pr.pagado ?? 0)} / {formatMonto(pr.monto)}
                       </option>

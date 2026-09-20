@@ -115,7 +115,7 @@ describe("negocio, cuentas, cliente, proveedor", () => {
 });
 
 describe("el proyecto: precio, ítems, partidas y los cachés que la API recalcula", () => {
-  it("sin productos, el precio se guarda como un solo ítem con el nombre del proyecto", async () => {
+  it("sin ítems, el precio se guarda como un solo ítem con el nombre del proyecto", async () => {
     ids.proyecto = await createProyecto(uid, {
       nombre: "Cocina de prueba", cliente_id: ids.cliente, cliente_nombre: "Cliente de Prueba", negocio_id: ids.negocio, negocio_nombre: "Taller de prueba",
       precio_venta: 5000, partidas: [{ proveedor_id: ids.proveedor, proveedor_nombre: "Maderas de Prueba", concepto: "Tablero", monto_acordado: 1200.75 }],
@@ -123,9 +123,9 @@ describe("el proyecto: precio, ítems, partidas y los cachés que la API recalcu
     });
     const p = (await getProyecto(ids.proyecto))!;
     expect(p.precio_venta).toBe(5000);
-    expect(p.productos).toHaveLength(1);
-    expect(p.productos![0].nombre).toBe("Cocina de prueba");
-    expect(p.productos![0].monto).toBe(5000);
+    expect(p.items).toHaveLength(1);
+    expect(p.items![0].nombre).toBe("Cocina de prueba");
+    expect(p.items![0].monto).toBe(5000);
     expect(p.partidas).toHaveLength(1);
     expect(p.partidas[0]).toMatchObject({ monto_acordado: 1200.75, monto_pagado: 0, estado: "pendiente" });
     expect(p.compromiso_total).toBe(1200.75);
@@ -140,7 +140,7 @@ describe("el proyecto: precio, ítems, partidas y los cachés que la API recalcu
     ids.ingreso = await createMovimiento(uid, {
       tipo: "ingreso", monto: 2000, fecha: new Date(2026, 8, 2), cuenta_id: ids.banco, cuenta_nombre: "x", proyecto_id: ids.proyecto, proyecto_nombre: "x",
       contraparte_id: ids.cliente, contraparte_tipo: "cliente", contraparte_nombre: "Cliente de Prueba",
-      producto_id: antes.productos![0].id, producto_nombre: "x", negocio_id: ids.negocio, descripcion: "Anticipo",
+      producto_id: antes.items![0].id, producto_nombre: "x", negocio_id: ids.negocio, descripcion: "Anticipo",
     });
     ids.egreso = await createMovimiento(uid, {
       tipo: "egreso", monto: 700.25, fecha: new Date(2026, 8, 3), cuenta_id: ids.caja, cuenta_nombre: "x", proyecto_id: ids.proyecto, proyecto_nombre: "x",
@@ -151,7 +151,7 @@ describe("el proyecto: precio, ítems, partidas y los cachés que la API recalcu
     expect(p.cobrado).toBe(2000);
     expect(p.pagado).toBe(700.25);
     expect(p.disponible).toBe(2000 - 700.25);
-    expect(p.productos![0].pagado).toBe(2000);
+    expect(p.items![0].pagado).toBe(2000);
     expect(p.partidas[0]).toMatchObject({ monto_pagado: 700.25, estado: "parcial" });
 
     const cuentas = await listCuentas(ids.negocio);
@@ -165,22 +165,22 @@ describe("el proyecto: precio, ítems, partidas y los cachés que la API recalcu
     expect(movs[1]).toMatchObject({ producto_nombre: "Cocina de prueba", contraparte_tipo: "cliente" });
   });
 
-  it("editar: productos por id, partidas por proveedor; el precio es la suma de los productos", async () => {
+  it("editar: ítems por id, partidas por proveedor; el precio es la suma de los ítems", async () => {
     const antes = (await getProyecto(ids.proyecto))!;
-    const cocina = antes.productos![0].id;
+    const cocina = antes.items![0].id;
     await updateProyecto(ids.proyecto, {
       nombre: "Cocina de prueba II",
-      precio_venta: 999, // se ignora: hay productos
-      productos: [{ id: cocina, nombre: "Cocina", monto: 6000, fecha_entrega: new Date(2026, 9, 15) }, { nombre: "Isla", monto: 1500 }],
+      precio_venta: 999, // se ignora: hay ítems
+      items: [{ id: cocina, nombre: "Cocina", monto: 6000, fecha_entrega: new Date(2026, 9, 15) }, { nombre: "Isla", monto: 1500 }],
       partidas: [{ proveedor_id: ids.proveedor, proveedor_nombre: "Maderas de Prueba", concepto: "Tablero y chapa", monto_acordado: 700.25 }],
       estado: "pausado",
     });
     const p = (await getProyecto(ids.proyecto))!;
     expect(p.nombre).toBe("Cocina de prueba II");
     expect(p.estado).toBe("pausado");
-    expect(p.productos).toHaveLength(2);
+    expect(p.items).toHaveLength(2);
     expect(p.precio_venta).toBe(7500);
-    const c = p.productos!.find((x) => x.id === cocina)!;
+    const c = p.items!.find((x) => x.id === cocina)!;
     expect(c.nombre).toBe("Cocina");
     expect(c.pagado).toBe(2000); // el ingreso sigue apuntando al mismo ítem
     expect(dia(c.fecha_entrega).getDate()).toBe(15);
@@ -192,10 +192,10 @@ describe("el proyecto: precio, ítems, partidas y los cachés que la API recalcu
 
   it("quitar un producto lo cancela (no se borra) y deja de contar", async () => {
     const antes = (await getProyecto(ids.proyecto))!;
-    const cocina = antes.productos!.find((x) => x.nombre === "Cocina")!;
-    await updateProyecto(ids.proyecto, { productos: [{ id: cocina.id, nombre: "Cocina", monto: 6000 }] });
+    const cocina = antes.items!.find((x) => x.nombre === "Cocina")!;
+    await updateProyecto(ids.proyecto, { items: [{ id: cocina.id, nombre: "Cocina", monto: 6000 }] });
     const p = (await getProyecto(ids.proyecto))!;
-    expect(p.productos).toHaveLength(1);
+    expect(p.items).toHaveLength(1);
     expect(p.precio_venta).toBe(6000);
     const lista = await listProyectos(ids.negocio);
     expect(lista).toHaveLength(1);

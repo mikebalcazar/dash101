@@ -50,7 +50,7 @@ beforeAll(async () => {
     cliente_id: ids.holcim, cliente_nombre: "HOLCIM",
     nombre: "Planta Norte", estado: "activo", precio_venta: 500_000,
     partidas: [], fecha_inicio: new Date(2026, 0, 15),
-    productos: [{ nombre: "Alcance", monto: 500_000, cantidad: 1 }],
+    items: [{ nombre: "Alcance", monto: 500_000, cantidad: 1 }],
   });
 
   const cobrar = (monto: number, proyecto_id: string | null, fecha: Date) =>

@@ -14,7 +14,7 @@
  *     pieza; si viniera en pesos saldría cien veces más chico;
  *   · que juntar NO MUEVA el precio de venta del proyecto, leído por donde
  *     lo lee la pantalla (`getProyecto`), no por donde lo escribe la API;
- *   · que la partida y el orden LLEGUEN HASTA `productos`, que es el
+ *   · que la partida y el orden LLEGUEN HASTA `items`, que es el
  *     renglón con el que se pintan las pestañas. Una columna nueva que la
  *     API guarda y el adaptador no copia se ve igual que una que no se
  *     guardó;
@@ -48,7 +48,7 @@ const pieza = async (name: string) =>
     body: { op_id: crypto.randomUUID(), name, type: "Puerta", x: 0.3, y: 0.3 },
   })).id;
 
-const productos = async () => (await getProyecto(ids.proyecto))!.productos ?? [];
+const items = async () => (await getProyecto(ids.proyecto))!.items ?? [];
 const venta = async () => (await getProyecto(ids.proyecto))!.precio_venta;
 
 beforeAll(async () => {
@@ -69,7 +69,7 @@ beforeAll(async () => {
     partidas: [], fecha_inicio: new Date(2026, 2, 1),
     /* Tres renglones capturados por separado, que es justo el problema:
      * dos puertas iguales y una barra. */
-    productos: [
+    items: [
       { nombre: "Puerta de recámara", monto: 8_000, cantidad: 1 },
       { nombre: "Puerta de recámara", monto: 8_000, cantidad: 1 },
       { nombre: "Barra de cocina", monto: 10_000, cantidad: 1 },
@@ -120,7 +120,7 @@ describe("juntar varios renglones en un concepto", () => {
      * entendimiento que él corrigió. */
     const antes = await venta();
     const g = (await agrupables(ids.proyecto)).find((x) => x.nombre === "Puerta de recámara")!;
-    const cuantos = (await productos()).length;
+    const cuantos = (await items()).length;
     const r = await agrupar(ids.proyecto, {
       items: g.items.map((i) => i.id),
       nombre: "Puerta de recámara 0.90 × 2.40",
@@ -130,7 +130,7 @@ describe("juntar varios renglones en un concepto", () => {
     expect(r.producto.precio, "el precio del modelo es POR PIEZA y en centavos").toBe(8_000_00);
     expect(r.venta_antes, "y dice cuánto valía antes, para poder enseñarlo").toBe(r.venta_despues);
 
-    const lista = await productos();
+    const lista = await items();
     expect(lista.length, "ningún renglón se borró").toBe(cuantos);
     for (const id of g.items.map((i) => i.id)) {
       const fila = lista.find((x) => x.id === id);
@@ -165,7 +165,7 @@ describe("el dropdown del producto, y cambiarse de grupo", () => {
   it("meter un ítem al producto le hereda el costo y mueve la venta", async () => {
     const { productos: prods } = await productosDelProyecto(ids.proyecto);
     const modelo = prods[0];
-    const barra = (await productos()).find((p) => p.nombre === "Barra de cocina")!;
+    const barra = (await items()).find((p) => p.nombre === "Barra de cocina")!;
     const antes = await venta();
     const r = await asignarProducto(barra.id, { producto_id: modelo.id });
     expect(r.producto!.id).toBe(modelo.id);
@@ -176,25 +176,25 @@ describe("el dropdown del producto, y cambiarse de grupo", () => {
      * de la API en CENTAVOS. Dividir aquí es la conversión de siempre. */
     expect(r.venta_antes / 100).toBe(antes);
     expect(r.venta_despues).not.toBe(r.venta_antes);
-    const ya = (await productos()).find((p) => p.id === barra.id)!;
+    const ya = (await items()).find((p) => p.id === barra.id)!;
     expect(ya.monto, "en pesos del lado de la pantalla").toBe(modelo.precio / 100);
     expect(await venta()).toBe(r.venta_despues / 100);
   });
 
   it("sacarlo del grupo lo deja como su propio producto único, con su precio", async () => {
-    const barra = (await productos()).find((p) => p.nombre === "Barra de cocina")!;
+    const barra = (await items()).find((p) => p.nombre === "Barra de cocina")!;
     const antes = await venta();
     const r = await asignarProducto(barra.id, { solo: true });
     expect(r.producto).toBeNull();
-    const ya = (await productos()).find((p) => p.id === barra.id)!;
+    const ya = (await items()).find((p) => p.id === barra.id)!;
     expect(ya.producto_id ?? null, "ya no apunta a ninguno").toBeNull();
     expect(await venta(), "y salirse no le quita el precio que heredó").toBe(antes);
   });
 });
 
 describe("la partida y el orden", () => {
-  it("se guardan y llegan hasta `productos`, que es con lo que se pintan las pestañas", async () => {
-    const lista = await productos();
+  it("se guardan y llegan hasta `items`, que es con lo que se pintan las pestañas", async () => {
+    const lista = await items();
     const puerta = lista.find((p) => p.nombre.startsWith("Puerta"))!;
     const barra = lista.find((p) => p.nombre === "Barra de cocina")!;
     expect(puerta.partida ?? "", "nace sin partida: nada se acomoda solo").toBe("");
@@ -205,7 +205,7 @@ describe("la partida y el orden", () => {
     ]);
     expect(cuantos).toBe(2);
 
-    const luego = await productos();
+    const luego = await items();
     expect(luego.find((p) => p.id === barra.id)!.partida).toBe("Cocina");
     expect(luego.find((p) => p.id === puerta.id)!.partida).toBe("Recámaras");
     expect(luego.find((p) => p.id === puerta.id)!.orden).toBe(1);
@@ -213,7 +213,7 @@ describe("la partida y el orden", () => {
 
   it("acomodar no mueve un peso", async () => {
     const antes = await venta();
-    const lista = await productos();
+    const lista = await items();
     await acomodar(ids.proyecto, lista.map((p, i) => ({ id: p.id, orden: lista.length - i })));
     expect(await venta()).toBe(antes);
   });
@@ -233,7 +233,7 @@ describe("desde el plano", () => {
     expect(r.creados).toBe(1);
     expect(await venta(), "12,000 más, en pesos").toBe(antes + 12_000);
 
-    const nuevo = (await productos()).find((x) => x.nombre === "Clóset de blancos 1.20");
+    const nuevo = (await items()).find((x) => x.nombre === "Clóset de blancos 1.20");
     expect(nuevo, "y sale en la lista del proyecto").toBeTruthy();
     expect(nuevo!.descripcion).toBe("Nogal");
   });
@@ -253,7 +253,7 @@ describe("desde el plano", () => {
      * pieza cada uno —agrupar ya no borra—, así que el cupo se llena con la
      * primera y la segunda es la que no cabe. Lo que mide es lo mismo: que
      * pasarse del cupo NO sea silencioso, y que crecer el ítem cueste. */
-    const lista = await productos();
+    const lista = await items();
     const item = lista.find((p) => p.nombre.startsWith("Puerta"))!;
     expect(item.cantidad, "una pieza: agrupar ya no fusiona").toBe(1);
 
@@ -269,6 +269,6 @@ describe("desde el plano", () => {
     const r = await fusionarItemsDeLaObra(ids.obra, { ligar: [{ element_id: e2, item_id: item.id, sumar: true }] });
     expect(r.sumados).toBe(1);
     expect(await venta(), "una puerta más vale una puerta más").toBe(antes + 8_000);
-    expect((await productos()).find((p) => p.id === item.id)!.cantidad).toBe(2);
+    expect((await items()).find((p) => p.id === item.id)!.cantidad).toBe(2);
   });
 });

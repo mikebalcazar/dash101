@@ -2,7 +2,7 @@
  *
  * Cada función devuelve exactamente lo que devolvía su gemela de Firestore,
  * para que las pantallas no cambien. Lo que Firestore guardaba como caché
- * (`saldo_actual`, `productos[].pagado`, `cliente_nombre`…) aquí se arma con
+ * (`saldo_actual`, `items[].pagado`, `cliente_nombre`…) aquí se arma con
  * una lista por tabla y un join en memoria: una empresa de taller tiene
  * decenas de filas, no millones, y la API tope cada lista en 500.
  *
@@ -132,8 +132,8 @@ export async function getProyecto(id: string): Promise<Proyecto | null> {
 
 /** Los ítems del proyecto que TODAVÍA NO SE VENDEN: cotizados, sin precio.
  *
- *  Van aparte de `productos` y no revueltos con ellos, y es a propósito.
- *  `productos` es lo que el formulario del proyecto guarda, y el guardado
+ *  Van aparte de `items` y no revueltos con ellos, y es a propósito.
+ *  `items` es lo que el formulario del proyecto guarda, y el guardado
  *  marca VENDIDO todo lo que le llega. Si un cotizado entrara ahí, abrir el
  *  proyecto y guardar convertiría en venta una cotización que nadie cerró
  *  —las de quote101, sin ir más lejos— e inflaría el precio de venta con
@@ -159,7 +159,7 @@ export async function itemsSinPrecio(proyecto_id: string): Promise<Array<{ id: s
  *  luego cancelado. (…) Los no aprobados, a pesar de que tienen precio y toda
  *  la info, NO SUMAN en dash».
  *
- *  Se pide aparte de `productos` por lo mismo que `itemsSinPrecio`: el
+ *  Se pide aparte de `items` por lo mismo que `itemsSinPrecio`: el
  *  formulario del proyecto marca VENDIDO todo lo que le llega, así que un no
  *  aprobado metido ahí se volvería venta al primer guardado.
  *
