@@ -1,6 +1,6 @@
 "use client";
 
-/* La obra de quell101 de este proyecto · contrato 0.22.0 de la suite.
+/* La obra de quell101 de este proyecto · contrato 0.26.0 de la suite.
  *
  * Mike, 20-sep: «si ya se crearon de los 2 lados, se deberían poder ligar
  * para que el sistema los tome como el mismo proyecto».
@@ -14,6 +14,7 @@
 import { useEffect, useState } from "react";
 import { IconExternalLink, IconLink, IconUnlink } from "@tabler/icons-react";
 import { desligarObra, ligarObra, listObras, obraDeProyecto, urlObra, type Obra } from "@/lib/obras";
+import { JuntarItemsDeLaObra } from "./juntar-items-obra";
 
 export function ObraDelProyecto({ proyectoId }: { proyectoId: string }) {
   const [obra, setObra] = useState<Obra | null>(null);
@@ -134,6 +135,12 @@ export function ObraDelProyecto({ proyectoId }: { proyectoId: string }) {
           </div>
         </>
       )}
+
+      {/* Ligadas las dos, lo que sigue es juntar sus ítems: son la misma
+          lista de piezas capturada dos veces. Va aquí y no en otra pantalla
+          porque es el mismo momento: quien acaba de ligar la casa es quien
+          sabe si las piezas son las mismas. */}
+      {obra && <JuntarItemsDeLaObra obra={obra} alTerminar={refrescar} />}
 
       {error && <p className="text-xs text-mauve-900 mt-2">{error}</p>}
     </div>
