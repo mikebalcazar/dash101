@@ -518,7 +518,7 @@ test('editar los ítems del proyecto: se borra uno, se guarda, y NO vuelve', asy
 
   await pag.goto(`${URL}/proyectos/${proyecto.id}`, { waitUntil: 'load' });
   await pag.getByText('Ítems del proyecto').first().waitFor({ timeout: 20000 });
-  await pag.getByRole('button', { name: /^Editar$/ }).first().click();
+  await pag.getByRole('button', { name: /Editar la lista/ }).first().click();
 
   const renglones = pag.locator('input[placeholder^="Ítem ("]');
   await renglones.first().waitFor({ timeout: 15000 });
@@ -534,8 +534,13 @@ test('editar los ítems del proyecto: se borra uno, se guarda, y NO vuelve', asy
   /* Dos señales, y en este orden a propósito: el formulario se cierra —eso
    * es lo estable— y además sale el aviso. El aviso vivía DENTRO del
    * formulario, que se desmonta al guardar, así que no aparecía nunca;
-   * esta prueba lo cachó y por eso ahora se pinta en la vista. */
-  await pag.getByRole('button', { name: /^Editar$/ }).first().waitFor({ timeout: 30000 });
+   * esta prueba lo cachó y por eso ahora se pinta en la vista.
+   *
+   * Desde el 20-sep son DOS botones: «Editar el proyecto» arriba, para los
+   * datos de la obra, y «Editar la lista» abajo, junto a acomodar y
+   * agrupar. Lo pidió Mike con la pantalla enfrente. Por eso aquí se abre
+   * con uno y se espera al otro. */
+  await pag.getByRole('button', { name: /Editar el proyecto/ }).first().waitFor({ timeout: 30000 });
   await pag.getByText('Cambios guardados').waitFor({ timeout: 10000 });
   await pag.waitForTimeout(1000);
 
@@ -550,9 +555,9 @@ test('editar los ítems del proyecto: se borra uno, se guarda, y NO vuelve', asy
   assert.equal(p.precio_venta, 150_00, 'y el precio de venta es la suma de los que quedaron');
 
   // Guardar otra vez sin tocar nada tampoco duplica.
-  await pag.getByRole('button', { name: /^Editar$/ }).first().click();
+  await pag.getByRole('button', { name: /Editar la lista/ }).first().click();
   await pag.getByRole('button', { name: /Guardar cambios/ }).click();
-  await pag.getByRole('button', { name: /^Editar$/ }).first().waitFor({ timeout: 30000 });
+  await pag.getByRole('button', { name: /Editar el proyecto/ }).first().waitFor({ timeout: 30000 });
   await pag.waitForTimeout(1000);
   const otraVez = filas(await api(pag, `/orgs/${ORG}/items?proyecto_id=${proyecto.id}`))
     .filter((i) => i.estado !== 'cancelado');
@@ -581,7 +586,7 @@ test('la cantidad: 20 puertas a $1,500 son $30,000 de línea, no $600,000', asyn
 
   await pag.goto(`${URL}/proyectos/${proyecto.id}`, { waitUntil: 'load' });
   await pag.getByText('Ítems del proyecto').first().waitFor({ timeout: 20000 });
-  await pag.getByRole('button', { name: /^Editar$/ }).first().click();
+  await pag.getByRole('button', { name: /Editar la lista/ }).first().click();
   await pag.getByRole('button', { name: 'Agregar' }).first().click();
 
   await pag.locator('input[placeholder^="Ítem ("]').first().fill('Puerta de clóset');
@@ -589,7 +594,7 @@ test('la cantidad: 20 puertas a $1,500 son $30,000 de línea, no $600,000', asyn
   await pag.getByLabel('Precio por pieza').first().fill('1500');
 
   await pag.getByRole('button', { name: /Guardar cambios/ }).click();
-  await pag.getByRole('button', { name: /^Editar$/ }).first().waitFor({ timeout: 30000 });
+  await pag.getByRole('button', { name: /Editar el proyecto/ }).first().waitFor({ timeout: 30000 });
   await pag.waitForTimeout(1000);
 
   const item = filas(await api(pag, `/orgs/${ORG}/items?proyecto_id=${proyecto.id}`))

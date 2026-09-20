@@ -42,7 +42,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { IconArrowUp, IconArrowDown, IconCheck, IconX, IconArrowsSort, IconLayersSubtract, IconThumbUp, IconBan, IconChevronDown, IconChevronRight, IconArrowsSplit } from "@tabler/icons-react";
+import { IconArrowUp, IconArrowDown, IconCheck, IconX, IconArrowsSort, IconLayersSubtract, IconThumbUp, IconBan, IconChevronDown, IconChevronRight, IconArrowsSplit, IconEdit } from "@tabler/icons-react";
 import {
   acomodar, agrupables, agrupar, aprobarItem, asignarProducto, cancelarItem, productosDelProyecto,
   separarItem, separarProducto,
@@ -77,7 +77,16 @@ const pesos = (centavos: number) => formatMonto(Math.round(centavos) / 100, "MXN
 
 type Fila = ItemProyecto & { partida: string; orden: number };
 
-export function ItemsDelProyecto({ proyecto, alCambiar }: { proyecto: Proyecto; alCambiar: () => void }) {
+export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
+  proyecto: Proyecto;
+  alCambiar: () => void;
+  /** Abre el formulario en la parte de los ítems. Mike, 20-sep, con la
+   *  pantalla enfrente: «el botón de editar de arriba debería ser para la
+   *  info del proyecto. Abajo en la sección de la lista de ítems debería
+   *  haber otro botón de editar para editar la lista». Va aquí, junto a
+   *  acomodar y agrupar, que es donde se trabaja la lista. */
+  alEditarLista?: () => void;
+}) {
   const items: ItemProyecto[] = useMemo(() => proyecto.items ?? [], [proyecto.items]);
   const [pestana, setPestana] = useState<string>("");
   const [modo, setModo] = useState<"ver" | "acomodar" | "juntar">("ver");
@@ -287,7 +296,16 @@ export function ItemsDelProyecto({ proyecto, alCambiar }: { proyecto: Proyecto; 
         </div>
       )}
 
-      <div className="flex gap-2 mb-2">
+      <div className="flex gap-2 mb-2 flex-wrap">
+        {alEditarLista && (
+          <button
+            type="button"
+            onClick={alEditarLista}
+            className="text-xs px-2.5 py-1.5 rounded-xl border border-black/10 bg-white text-ink-dim inline-flex items-center gap-1"
+          >
+            <IconEdit size={13} /> Editar la lista
+          </button>
+        )}
         <button
           type="button"
           onClick={() => { setModo(modo === "acomodar" ? "ver" : "acomodar"); setHecho(""); setError(""); }}
