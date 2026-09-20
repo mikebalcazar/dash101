@@ -14,6 +14,7 @@ import type { Invitacion, Usuario, MembershipInfo } from "@/types/schema";
 import { ROL_LABELS } from "@/types/schema";
 import { Timestamp } from "firebase/firestore";
 import { formatDateShort } from "@/lib/format";
+import { Contadores } from "@/components/contadores";
 import {
   IconUsers,
   IconPlus,
@@ -168,6 +169,8 @@ export default function EquipoPage() {
           Solo el propietario puede invitar o remover miembros.
         </div>
       )}
+
+      <Contadores />
 
       {/* Miembros */}
       <section className="mb-6">
