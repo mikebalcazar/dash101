@@ -72,9 +72,14 @@ test('se entra con la cuenta de la suite', async () => {
   const llego = await pag.getByText('Ambiente de pruebas: el código se rellenó solo')
     .waitFor({ timeout: 15000 }).then(() => true, () => false);
   if (!llego) {
-    // La API pide esperar para reenviar (45 s). Se espera y se vuelve a pedir.
+    /* La API pide esperar unos 45 s entre un código y otro, y eso pasa
+     * seguido en el corredor: esta prueba corre justo después de la de
+     * dash101, con la misma cuenta. Se espera y se vuelve a pedir DESDE LA
+     * PANTALLA DEL CÓDIGO, que es donde está el botón de reenviar: al picar
+     * «Olvidé mi contraseña» la pantalla anterior ya se fue, y buscar ahí ese
+     * botón otra vez fue lo que dejó el flujo en rojo el 20-sep. */
     await pag.waitForTimeout(46000);
-    await pag.getByRole('button', { name: 'Olvidé mi contraseña' }).click();
+    await pag.getByRole('button', { name: 'Volver a mandar el código' }).click();
     await pag.getByText('Ambiente de pruebas: el código se rellenó solo').waitFor({ timeout: 15000 });
   }
   await pag.getByRole('button', { name: 'Continuar' }).click();
