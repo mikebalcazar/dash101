@@ -698,9 +698,20 @@ test('corregir un movimiento: se cambia el monto y el saldo se recalcula', async
   await campoMonto.waitFor({ timeout: 25000 });
   assert.equal(await campoMonto.inputValue(), '90000', 'llega prellenado con lo que había');
 
+  /* Este movimiento NO tiene proyecto a propósito: es el caso que tumbó el
+   * despliegue de las 06:10. El proyecto es obligatorio al capturar un
+   * ingreso, y al corregir eso bloqueaba el envío del formulario en
+   * silencio —se le picaba a «Guardar cambios» y no pasaba nada—. */
   await campoMonto.fill('9000');
   await pag.getByRole('button', { name: /^Guardar cambios$/ }).click();
-  await pag.waitForURL(/\/movimientos(\?|$)/, { timeout: 30000 });
+  try {
+    await pag.waitForURL(/\/movimientos(\?|$)/, { timeout: 30000 });
+  } catch (e) {
+    // Si no navegó, se dice POR QUÉ: lo que quedó en pantalla. Un timeout
+    // pelón obliga a adivinar, y adivinar ya costó dos despliegues.
+    const enPantalla = (await texto(pag)).replace(/\s+/g, ' ').slice(0, 400);
+    assert.fail(`no guardó. La pantalla decía: ${enPantalla}`);
+  }
 
   const d = await api(pag, `/orgs/${ORG}/movimientos/${mov.id}`);
   assert.equal(d.monto, 9_000_00, 'quedó corregido');

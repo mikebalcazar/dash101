@@ -128,6 +128,12 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
           );
           return;
         }
+        // Las llaves, antes de escribir: dicen a los efectos de limpieza que
+        // ese valor lo puso la carga y que no hay nada que tirar.
+        negocioDeLaCarga.current = m.negocio_id;
+        tipoDeLaCarga.current = m.tipo;
+        proyectoDeLaCarga.current = m.proyecto_id ?? "";
+
         setMontoFijo(Boolean(m.facturado));
         setTipo(m.tipo);
         setMonto(String(m.monto));
@@ -138,6 +144,7 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
         setProyectoId(m.proyecto_id ?? "");
         setContraparteId(m.contraparte_id ?? "");
         setProductoId(m.producto_id ?? "");
+        setFactura(m.facturado ? "ya" : m.requiere_factura ? "falta" : "no");
         if (m.descripcion) { setDescripcion(m.descripcion); setShowNota(true); }
       } catch (e) {
         if (vivo) setBloqueado(e instanceof Error ? e.message : "No se pudo abrir el movimiento.");
@@ -169,16 +176,25 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
     }
   };
 
-  /* Al cambiar de negocio se limpia lo que dependía del anterior. En modo
-   * corrección NO se limpia en la primera vuelta: el negocio lo acaba de
-   * poner la carga, y limpiar aquí borraría la cuenta y el proyecto que se
-   * acaban de prellenar. */
-  const primeraCarga = useRef(true);
+  /* Al cambiar de negocio se limpia lo que dependía del anterior —cuenta,
+   * proyecto, contraparte—, porque son de ese negocio y no del nuevo.
+   *
+   * PERO NO CUANDO EL CAMBIO LO HIZO LA CARGA DE UN MOVIMIENTO. Si el
+   * movimiento que se corrige es de OTRO negocio que el activo, cargarlo
+   * cambia el negocio, este efecto corre después y borraba la cuenta y el
+   * cliente recién prellenados: el botón de guardar se quedaba apagado y no
+   * pasaba nada al picarle.
+   *
+   * No se resuelve con una marca de «primera vuelta»: cuál vuelta es la
+   * primera depende del orden en que corren los efectos, y ese orden cambia
+   * según si el negocio del movimiento es el activo o no. La llave sí: dice
+   * «este valor lo puso la carga», y eso es cierto venga cuando venga. */
+  const negocioDeLaCarga = useRef<string | null>(null);
   useEffect(() => {
     if (!negocioId) return;
-    const saltar = editando && primeraCarga.current;
-    primeraCarga.current = false;
-    if (!saltar) {
+    const vieneDeLaCarga = negocioDeLaCarga.current === negocioId;
+    negocioDeLaCarga.current = null;
+    if (!vieneDeLaCarga) {
       setCuentaId("");
       setProyectoId("");
       setContraparteId("");
@@ -193,19 +209,19 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
   const productosDelProyecto = proyectoSel?.productos ?? [];
   const productoSel = productosDelProyecto.find((pr) => pr.id === productoId);
 
-  const primerTipo = useRef(true);
+  const tipoDeLaCarga = useRef<string | null>(null);
   useEffect(() => {
-    if (editando && primerTipo.current) { primerTipo.current = false; return; }
-    primerTipo.current = false;
+    if (tipoDeLaCarga.current === tipo) { tipoDeLaCarga.current = null; return; }
+    tipoDeLaCarga.current = null;
     setFactura(tipo === "ingreso" ? "falta" : "no");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tipo]);
 
   // Ingreso a un proyecto de un cliente: preselecciona al cliente del proyecto
-  const primerProyecto = useRef(true);
+  const proyectoDeLaCarga = useRef<string | null>(null);
   useEffect(() => {
-    if (editando && primerProyecto.current) { primerProyecto.current = false; return; }
-    primerProyecto.current = false;
+    if (proyectoDeLaCarga.current === proyectoId) { proyectoDeLaCarga.current = null; return; }
+    proyectoDeLaCarga.current = null;
     setProductoId("");
     if (tipo === "ingreso" && proyectoSel?.cliente_id) setContraparteId(proyectoSel.cliente_id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -437,8 +453,19 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
             <>
               {/* Proyecto */}
               <SelectConCrear
-                label={`Proyecto ${isIngreso ? "*" : "(opcional)"}`}
-                required={isIngreso}
+                /* Al CAPTURAR un ingreso el proyecto es obligatorio: un cobro
+                 * que no se sabe de qué obra es no sirve para nada después.
+                 *
+                 * Al CORREGIR no se obliga. Un ingreso sin proyecto puede
+                 * existir —los hay importados de antes, y los que se
+                 * capturaron cuando la regla no estaba—, y obligar aquí
+                 * dejaría esos movimientos sin manera de corregirse: el
+                 * navegador bloquea el envío del formulario en silencio, se
+                 * le pica a «Guardar cambios» y no pasa NADA. Quien viene a
+                 * arreglar un cero de más acabaría inventando un proyecto
+                 * para poder guardar, que es peor que el error original. */
+                label={`Proyecto ${isIngreso && !editando ? "*" : "(opcional)"}`}
+                required={isIngreso && !editando}
                 value={proyectoId}
                 onChange={setProyectoId}
                 emptyLabel={isIngreso ? "— Selecciona —" : "— Sin proyecto —"}
