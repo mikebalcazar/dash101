@@ -40,7 +40,7 @@ beforeAll(async () => {
   const proyecto = (nombre: string) => createProyecto(uid, {
     nombre, cliente_id: ids.cliente, cliente_nombre: "Familia Uno",
     negocio_id: ids.negocio, negocio_nombre: "Taller",
-    precio_venta: 0, estado: "activo", fecha_inicio: new Date(2026, 8, 1), partidas: [], productos: [],
+    precio_venta: 0, estado: "activo", fecha_inicio: new Date(2026, 8, 1), partidas: [], items: [],
   });
   ids.casaUno = await proyecto("Casa Uno");
   ids.casaDos = await proyecto("Casa Dos");

@@ -60,7 +60,7 @@ beforeAll(async () => {
     cliente_id: ids.cliente, cliente_nombre: "Familia",
     nombre: "Casa", estado: "activo", precio_venta: 60_000,
     partidas: [], fecha_inicio: new Date(2026, 2, 1),
-    productos: [{ nombre: "Barra de cocina", monto: 60_000, cantidad: 1 }],
+    items: [{ nombre: "Barra de cocina", monto: 60_000, cantidad: 1 }],
   });
 
   // El lado de la obra. La sesión de quell101 se abre con /me, como en la app.
@@ -127,10 +127,10 @@ describe("juntar los ítems de la obra con los del proyecto", () => {
      * que nadie tecleó. */
     const p = await getProyecto(ids.proyecto);
     expect(p!.precio_venta, "la proyección no se movió ni un peso").toBe(60_000);
-    /* Y NO está entre los `productos`, a propósito: ésa es la lista que el
+    /* Y NO está entre los `items`, a propósito: ésa es la lista que el
      * formulario guarda, y el guardado marca vendido todo lo que le llega.
      * Un cotizado ahí se volvería venta al primer «Guardar». */
-    expect((p!.productos ?? []).map((x) => x.nombre)).not.toContain("Clóset del pasillo");
+    expect((p!.items ?? []).map((x) => x.nombre)).not.toContain("Clóset del pasillo");
 
     /* Pero tiene que VERSE, o la pieza existe y no hay dónde tocarla. Sale
      * en su propia lista, la del bloque «traídos del plano». */

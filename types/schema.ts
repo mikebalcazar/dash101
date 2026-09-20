@@ -98,11 +98,13 @@ export interface PartidaProyecto {
 }
 
 /**
- * Producto/ítem que el cliente compra dentro del proyecto (lo que ve en su
+ * Un ítem del proyecto: la pieza física que el cliente compra (lo que ve en su
  * estado de cuenta). Distinto de PartidaProyecto, que es compromiso con proveedor.
+ * Y distinto del PRODUCTO de catálogo, que es el modelo al que pertenece y al
+ * que apunta `producto_id` (contrato 0.35.0): varios ítems pueden ser del mismo.
  * La etapa de fabricación NO vive aquí: viene de quell101 (quell_id la liga).
  */
-export interface ProductoProyecto {
+export interface ItemProyecto {
   id: string;
   nombre: string;
   descripcion?: string;
@@ -126,11 +128,11 @@ export interface ProductoProyecto {
    *  Vacío o nulo = el ítem es su propio producto único, que es como nacen
    *  todos.
    *
-   *  OJO CON EL NOMBRE. En esta app los renglones del proyecto se llaman
-   *  `productos` desde la época de Firestore, y NO son esto: son los ítems.
-   *  Mike separó las dos cosas el 20-sep-2026 —«una cosa es el código de
-   *  ítem (pieza física en obra) y otra diferente el código de producto de
-   *  catálogo»—, y el producto de verdad es el que apunta este campo. */
+   *  Éste es el único «producto» de este tipo, y es el del catálogo. Los
+   *  renglones del proyecto se llamaron `productos` hasta el 20-sep-2026, de
+   *  la época de Firestore; ese día Mike separó las dos cosas —«una cosa es
+   *  el código de ítem (pieza física en obra) y otra diferente el código de
+   *  producto de catálogo»— y los renglones pasaron a llamarse ítems. */
   producto_id?: string | null;
   /** El código de catálogo que le toca por su producto, o el suyo si todavía
    *  no es de ninguno. */
@@ -145,7 +147,7 @@ export interface Proyecto {
   cliente_nombre: string;
   /** uid del portal del cliente, denormalizado para rules de lectura */
   cliente_uid?: string | null;
-  productos?: ProductoProyecto[];
+  items?: ItemProyecto[];
   negocio_id: string;
   negocio_nombre: string;
   precio_venta: number;

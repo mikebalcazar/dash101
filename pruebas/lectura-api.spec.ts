@@ -127,7 +127,7 @@ describe("negocios, cuentas, clientes, proveedores", () => {
   });
 });
 
-describe("el proyecto: cachés, partidas y productos como los conoce la app", () => {
+describe("el proyecto: cachés, partidas e ítems como los conoce la app", () => {
   it("las cifras cuadran con la siembra y con las fórmulas de Firestore", async () => {
     const proyectos = await listProyectos(negocioId);
     expect(proyectos).toHaveLength(1);
@@ -156,16 +156,16 @@ describe("el proyecto: cachés, partidas y productos como los conoce la app", ()
     expect(herrajes).toMatchObject({ monto_acordado: 8500, monto_pagado: 8500, estado: "pagado" });
   });
 
-  it("los ítems de la suite son los productos de la app, con lo pagado por ítem", async () => {
+  it("los ítems de la suite llegan como `items`, con lo pagado por ítem", async () => {
     const p = await getProyecto((await listProyectos(negocioId))[0].id!);
-    expect(p!.productos).toHaveLength(4);
-    const cocina = p!.productos!.find((x) => x.nombre === "Cocina integral en L")!;
+    expect(p!.items).toHaveLength(4);
+    const cocina = p!.items!.find((x) => x.nombre === "Cocina integral en L")!;
     expect(cocina.monto).toBe(185000);
     expect(cocina.pagado).toBe(120000);
     expect(dia(cocina.fecha_entrega).getDate()).toBe(15);
-    const isla = p!.productos!.find((x) => x.nombre === "Isla con cubierta de cuarzo")!;
+    const isla = p!.items!.find((x) => x.nombre === "Isla con cubierta de cuarzo")!;
     expect(isla.pagado).toBe(20000);
-    const suma = p!.productos!.reduce((s, x) => s + x.monto, 0);
+    const suma = p!.items!.reduce((s, x) => s + x.monto, 0);
     expect(suma).toBe(p!.precio_venta);
   });
 });

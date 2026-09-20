@@ -44,7 +44,7 @@ beforeAll(async () => {
     nombre: "Cocina Luna", cliente_id: ids.enQuote, cliente_nombre: "Muebles Luna",
     negocio_id: ids.negocio, negocio_nombre: "Taller",
     precio_venta: 0, estado: "activo", fecha_inicio: new Date(2026, 8, 1), partidas: [],
-    productos: [{ nombre: "Cocina", monto: 100 }],
+    items: [{ nombre: "Cocina", monto: 100 }],
   });
 }, 120000);
 

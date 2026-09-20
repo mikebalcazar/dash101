@@ -13,14 +13,15 @@
  *      `AAAA-MM-DD` se toma como día local, no UTC: `new Date('2026-08-18')`
  *      es medianoche en Londres y todavía el 17 en la Ciudad de México.
  *
- * Lo demás son nombres: `correo` ↔ `email`, `usuario_id` ↔ `uid`, los
- * `productos` de Firestore son los `items` de la suite, y las partidas ya son
- * tabla propia desde el contrato 0.3.0. */
+ * Lo demás son nombres: `correo` ↔ `email`, `usuario_id` ↔ `uid`, y las
+ * partidas ya son tabla propia desde el contrato 0.3.0. Los ítems del
+ * proyecto se llaman `items` de los dos lados desde el 20-sep-2026; antes se
+ * llamaban `productos` aquí, de la época de Firestore. */
 
 import { Timestamp } from 'firebase/firestore';
 import type {
   Cliente, Conciliacion, ConciliacionCuenta, Cuenta, EstadisticaConciliacion, Movimiento, Negocio, Opex,
-  PartidaProyecto, ProductoProyecto, Proveedor, Proyecto, RolMiembro, TipoContraparte, Usuario,
+  ItemProyecto, PartidaProyecto, Proveedor, Proyecto, RolMiembro, TipoContraparte, Usuario,
 } from '@/types/schema';
 
 /* ─────────────── dinero ─────────────── */
@@ -144,7 +145,7 @@ export function proveedor(f: FilaProveedor): Proveedor {
   };
 }
 
-/* ─────────────── proyectos: cachés, partidas y productos ─────────────── */
+/* ─────────────── proyectos: cachés, partidas e ítems ─────────────── */
 
 export function partida(f: FilaPartida): PartidaProyecto {
   return {
@@ -153,9 +154,10 @@ export function partida(f: FilaPartida): PartidaProyecto {
   };
 }
 
-/** Un ítem de la suite, visto como el «producto» que la app ya enseña.
+/** Un ítem de la suite, tal como la pantalla del proyecto lo enseña. Ojo:
+ *  `producto_id` es el modelo de CATÁLOGO al que pertenece, otra cosa.
  *  `pagado` es Σ ingresos con ese `item_id`, que es lo que Firestore guardaba. */
-export function producto(f: FilaItem, movimientos: FilaMovimiento[]): ProductoProyecto {
+export function item(f: FilaItem, movimientos: FilaMovimiento[]): ItemProyecto {
   let pagado = 0;
   for (const m of movimientos) if (m.item_id === f.id && m.tipo === 'ingreso') pagado += m.monto;
   return {
@@ -179,7 +181,7 @@ export function proyecto(
   return {
     id: f.id, nombre: f.nombre, descripcion: f.descripcion ?? '', cliente_id: f.cliente_id,
     cliente_nombre: cli?.nombre ?? '', cliente_uid: cli?.portal_activo ? cli.usuario_id : null,
-    productos: partes.items.filter((i) => i.proyecto_id === f.id && i.estado !== 'cancelado').map((i) => producto(i, partes.movimientos)),
+    items: partes.items.filter((i) => i.proyecto_id === f.id && i.estado !== 'cancelado').map((i) => item(i, partes.movimientos)),
     negocio_id: f.negocio_id, negocio_nombre: partes.negocios.get(f.negocio_id)?.nombre ?? '',
     precio_venta: aPesos(f.precio_venta), compromiso_total: compromiso, cobrado, pagado,
     // Las mismas fórmulas que recalcularProyecto() tenía en Firestore.

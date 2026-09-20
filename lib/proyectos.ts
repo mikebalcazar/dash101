@@ -20,7 +20,7 @@ import * as escribir from "./api/escribir";
 import type {
   Proyecto,
   PartidaProyecto,
-  ProductoProyecto,
+  ItemProyecto,
   EstadoProyecto,
 } from "@/types/schema";
 import { getClienteUid } from "./clientes";
@@ -34,13 +34,13 @@ export interface ProyectoInput {
   negocio_nombre: string;
   precio_venta: number;
   partidas: PartidaProyectoInput[];
-  productos?: ProductoProyectoInput[];
+  items?: ItemProyectoInput[];
   estado: EstadoProyecto;
   fecha_inicio: Date;
   fecha_fin_estimada?: Date | null;
 }
 
-export interface ProductoProyectoInput {
+export interface ItemProyectoInput {
   id?: string; // vacío → se genera
   nombre: string;
   descripcion?: string;
@@ -58,11 +58,11 @@ function nuevoId(): string {
     : `p_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/** Normaliza productos del form; preserva `pagado` de los que ya existían (por id). */
-function armarProductos(
-  input: ProductoProyectoInput[],
-  previos: ProductoProyecto[] = []
-): ProductoProyecto[] {
+/** Normaliza los ítems del form; preserva `pagado` de los que ya existían (por id). */
+function armarItems(
+  input: ItemProyectoInput[],
+  previos: ItemProyecto[] = []
+): ItemProyecto[] {
   const prevById = new Map(previos.map((p) => [p.id, p]));
   return input.map((p) => {
     const id = p.id || nuevoId();
@@ -90,6 +90,19 @@ function calcCompromiso(partidas: { monto_acordado: number }[]): number {
   return partidas.reduce((sum, p) => sum + (p.monto_acordado || 0), 0);
 }
 
+/** Un documento de Firestore, visto como Proyecto.
+ *
+ *  EL CAMPO DE FIRESTORE SIGUE SIENDO `productos`. Los renglones del proyecto
+ *  se renombraron a `items` el 20-sep-2026 —para no chocar con los productos
+ *  de catálogo del contrato 0.35.0—, pero eso es del lado de la pantalla: los
+ *  documentos que ya viven en `contamaster-fs` no se migran (y
+ *  `scripts/cuadre-firestore.py` los cuenta por ese nombre). Se traduce aquí,
+ *  que es la única puerta por la que entran. */
+function desdeFirestore(id: string, data: Record<string, unknown>): Proyecto {
+  const { productos, ...resto } = data as { productos?: ItemProyecto[] };
+  return { id, ...resto, items: productos ?? [] } as Proyecto;
+}
+
 export async function listProyectos(negocioId: string): Promise<Proyecto[]> {
   if (fuente() === 'api') return leer.listProyectos(negocioId);
   const q = query(
@@ -98,20 +111,20 @@ export async function listProyectos(negocioId: string): Promise<Proyecto[]> {
     orderBy("creado_at", "desc")
   );
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Proyecto));
+  return snap.docs.map((d) => desdeFirestore(d.id, d.data()));
 }
 
 export async function getProyecto(id: string): Promise<Proyecto | null> {
   if (fuente() === 'api') return leer.getProyecto(id);
   const snap = await getDoc(doc(db, "proyectos", id));
   if (!snap.exists()) return null;
-  return { id: snap.id, ...snap.data() } as Proyecto;
+  return desdeFirestore(snap.id, snap.data());
 }
 
 /** Los ítems del proyecto que todavía no se venden: cotizados, sin precio.
  *
  *  Hoy son las piezas que se trajeron del plano de la obra. Van APARTE de
- *  `productos` porque el guardado del proyecto marca vendido todo lo que le
+ *  `items` porque el guardado del proyecto marca vendido todo lo que le
  *  llega, y una cotización que nadie cerró no es una venta. */
 export async function itemsSinPrecio(proyecto_id: string) {
   if (fuente() !== 'api') return [];
@@ -135,7 +148,7 @@ export async function createProyecto(uid: string, data: ProyectoInput): Promise<
     cliente_id: data.cliente_id,
     cliente_nombre: data.cliente_nombre,
     cliente_uid,
-    productos: armarProductos(data.productos ?? []),
+    productos: armarItems(data.items ?? []), // campo de Firestore, ver desdeFirestore()
     negocio_id: data.negocio_id,
     negocio_nombre: data.negocio_nombre,
     precio_venta: data.precio_venta,
@@ -165,7 +178,7 @@ export async function updateProyecto(
     descripcion?: string;
     precio_venta?: number;
     partidas?: PartidaProyectoInput[];
-    productos?: ProductoProyectoInput[];
+    items?: ItemProyectoInput[];
     estado?: EstadoProyecto;
     fecha_inicio?: Date;
     fecha_fin_estimada?: Date | null;
@@ -189,8 +202,10 @@ export async function updateProyecto(
         ? Timestamp.fromDate(data.fecha_fin_estimada)
         : null;
 
-    if (data.productos !== undefined) {
-      updates.productos = armarProductos(data.productos, current.productos ?? []);
+    if (data.items !== undefined) {
+      // `productos`, no `items`: es el nombre del campo en el documento de
+      // Firestore, que no se migra (ver desdeFirestore).
+      updates.productos = armarItems(data.items, current.items ?? []);
     }
 
     if (data.partidas !== undefined) {
@@ -341,7 +356,7 @@ export async function recalcularProyecto(proyectoId: string): Promise<void> {
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(proyectoRef);
     if (!snap.exists()) return;
-    const data = snap.data() as Proyecto;
+    const data = desdeFirestore(proyectoId, snap.data());
 
     const partidas: PartidaProyecto[] = (data.partidas ?? []).map((p) => {
       const pagoTotal = pagosPorProveedor.get(p.proveedor_id) ?? 0;
@@ -354,7 +369,7 @@ export async function recalcularProyecto(proyectoId: string): Promise<void> {
       return { ...p, monto_pagado: pagoTotal, estado };
     });
 
-    const productos: ProductoProyecto[] = (data.productos ?? []).map((p) => ({
+    const productos: ItemProyecto[] = (data.items ?? []).map((p) => ({
       ...p,
       pagado: cobrosPorProducto.get(p.id) ?? 0,
     }));
@@ -364,7 +379,7 @@ export async function recalcularProyecto(proyectoId: string): Promise<void> {
       pagado,
       disponible: cobrado - pagado,
       partidas,
-      productos,
+      productos, // campo de Firestore, ver desdeFirestore()
       actualizado_at: serverTimestamp(),
     });
   });
