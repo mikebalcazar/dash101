@@ -99,79 +99,168 @@ export default function DashboardPage() {
     );
   }
 
-  const capitalTotal = cuentas.reduce((s, c) => s + (c.saldo_actual ?? 0), 0);
+  /* Los cuatro números del inicio, y de dónde sale cada uno. Se escriben
+   * también en la pantalla, debajo de cada cifra: un tablero que no dice qué
+   * suma y qué resta obliga a creerle, y nadie le cree dos veces a un número
+   * que no cuadra con el banco.
+   *
+   *   líquido    = lo que hay en las cuentas, hoy
+   *   por cobrar = lo vendido que el cliente todavía no paga
+   *   por pagar  = lo comprometido con proveedores que todavía no sale
+   *   total      = líquido + por cobrar − por pagar
+   *
+   * El total NO suma las cuentas por pagar: son una deuda. Sumarlas daría un
+   * número más grande y más falso. */
+  const liquido = cuentas.reduce((s, c) => s + (c.saldo_actual ?? 0), 0);
   const proyectosActivos = proyectos.filter((p) => p.estado !== "cerrado");
-  const totalDisponibleProyectos = proyectosActivos.reduce(
-    (s, p) => s + (p.disponible ?? 0),
-    0
-  );
 
-  const now = new Date();
-  const mesActual = now.getMonth();
-  const anoActual = now.getFullYear();
-  const totalesMes = movimientos.reduce(
-    (acc, m) => {
-      const f = m.fecha as Timestamp | undefined;
-      if (!f || typeof f.toDate !== "function") return acc;
-      const d = f.toDate();
-      if (d.getMonth() !== mesActual || d.getFullYear() !== anoActual) return acc;
-      if (m.tipo === "ingreso") acc.ingresos += m.monto;
-      else if (m.tipo === "egreso") acc.egresos += m.monto;
-      return acc;
-    },
-    { ingresos: 0, egresos: 0 }
+  /** Por proyecto, el mismo corte que el de arriba. Nunca en negativo: un
+   *  proyecto cobrado de más no es dinero «por cobrar» en contra. */
+  const balance = (p: Proyecto) => {
+    const porCobrar = Math.max(0, (p.precio_venta ?? 0) - (p.cobrado ?? 0));
+    const porPagar = Math.max(0, (p.compromiso_total ?? 0) - (p.pagado ?? 0));
+    const liq = (p.cobrado ?? 0) - (p.pagado ?? 0);
+    return { porCobrar, porPagar, liquido: liq, total: liq + porCobrar - porPagar };
+  };
+  const balances = proyectosActivos.map((p) => ({ proyecto: p, ...balance(p) }));
+  const porCobrar = balances.reduce((s, b) => s + b.porCobrar, 0);
+  const porPagar = balances.reduce((s, b) => s + b.porPagar, 0);
+  const capitalTotal = liquido + porCobrar - porPagar;
+  const sumaProyectos = balances.reduce(
+    (a, b) => ({
+      liquido: a.liquido + b.liquido,
+      porCobrar: a.porCobrar + b.porCobrar,
+      porPagar: a.porPagar + b.porPagar,
+      total: a.total + b.total,
+    }),
+    { liquido: 0, porCobrar: 0, porPagar: 0, total: 0 },
   );
 
   return (
     <div className="space-y-3">
-      <section className="bg-cream rounded-3xl p-6 flex justify-between items-center gap-4">
-        <div>
-          <p className="text-xs text-ink-muted mb-2 font-medium">
-            Capital en cuentas de {activo.nombre}
-          </p>
-          <p className="text-4xl font-medium tracking-tight text-ink-dim leading-none">
-            {formatMonto(capitalTotal, activo.moneda)}
-          </p>
-          <p className="text-xs text-ink-muted mt-2">
-            {cuentas.length === 0
-              ? "Sin cuentas registradas"
-              : `Suma de ${cuentas.length} ${cuentas.length === 1 ? "cuenta" : "cuentas"}`}
-          </p>
-        </div>
-        <div className="w-20 h-20 rounded-full bg-sky-50 flex items-center justify-center text-ink shrink-0">
-          <IconLeaf size={32} />
+      <section className="bg-cream rounded-3xl p-6">
+        <div className="flex justify-between items-start gap-4">
+          <div>
+            <p className="text-xs text-ink-muted mb-2 font-medium">
+              Capital total de {activo.nombre}
+            </p>
+            <p className="text-4xl font-medium tracking-tight text-ink-dim leading-none">
+              {formatMonto(capitalTotal, activo.moneda)}
+            </p>
+            <p className="text-xs text-ink-muted mt-2">
+              Líquido + por cobrar − por pagar
+            </p>
+          </div>
+          <div className="w-20 h-20 rounded-full bg-sky-50 flex items-center justify-center text-ink shrink-0">
+            <IconLeaf size={32} />
+          </div>
         </div>
       </section>
 
-      <div className="grid grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+        <div className="bg-white border border-black/5 rounded-2xl p-4">
+          <p className="text-xs text-ink-muted font-medium">Capital líquido</p>
+          <p className="text-xl font-medium text-ink-dim mt-1 tabular-nums">
+            {formatMonto(liquido, activo.moneda)}
+          </p>
+          <p className="text-[11px] text-ink-muted mt-1">
+            Lo que hay hoy en {cuentas.length} {cuentas.length === 1 ? "cuenta" : "cuentas"}
+          </p>
+        </div>
         <div className="bg-mint-50 rounded-2xl p-4">
-          <p className="text-xs text-mint-label font-medium">Cobrado mes</p>
-          <p className="text-xl font-medium text-mint-900 mt-1">
-            {formatMonto(totalesMes.ingresos, activo.moneda, { short: true })}
+          <p className="text-xs text-mint-label font-medium">Cuentas por cobrar</p>
+          <p className="text-xl font-medium text-mint-900 mt-1 tabular-nums">
+            {formatMonto(porCobrar, activo.moneda)}
           </p>
           <p className="text-[11px] text-mint-label mt-1 opacity-75">
-            {new Intl.DateTimeFormat("es-MX", { month: "long" }).format(now)}
+            Vendido que el cliente no ha pagado
           </p>
         </div>
         <div className="bg-mauve-50 rounded-2xl p-4">
-          <p className="text-xs text-mauve-label font-medium">Pagado mes</p>
-          <p className="text-xl font-medium text-mauve-900 mt-1">
-            {formatMonto(totalesMes.egresos, activo.moneda, { short: true })}
+          <p className="text-xs text-mauve-label font-medium">Cuentas por pagar</p>
+          <p className="text-xl font-medium text-mauve-900 mt-1 tabular-nums">
+            {formatMonto(porPagar, activo.moneda)}
           </p>
           <p className="text-[11px] text-mauve-label mt-1 opacity-75">
-            {new Intl.DateTimeFormat("es-MX", { month: "long" }).format(now)}
-          </p>
-        </div>
-        <div className="bg-sky-50 rounded-2xl p-4">
-          <p className="text-xs text-sky-label font-medium">Disponible proyectos</p>
-          <p className="text-xl font-medium text-sky-900 mt-1">
-            {formatMonto(totalDisponibleProyectos, activo.moneda, { short: true })}
-          </p>
-          <p className="text-[11px] text-sky-label mt-1 opacity-75">
-            {proyectosActivos.length} activos
+            Comprometido con proveedores que no ha salido
           </p>
         </div>
       </div>
+
+      {/* El mismo corte, proyecto por proyecto. */}
+      <section className="pt-2">
+        <div className="flex justify-between items-baseline mb-3">
+          <h2 className="text-sm font-medium text-ink-dim">Balance por proyecto</h2>
+          <Link href="/proyectos" className="text-xs text-ink-muted hover:text-ink-dim">
+            Ver todos →
+          </Link>
+        </div>
+        {balances.length === 0 ? (
+          <div className="bg-white border border-black/5 rounded-2xl p-6 text-center">
+            <IconFolder size={20} className="text-ink-muted mx-auto mb-2" />
+            <p className="text-sm text-ink-dim">Todavía no hay proyectos abiertos</p>
+          </div>
+        ) : (
+          <div className="bg-white border border-black/5 rounded-2xl overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[11px] text-ink-muted uppercase tracking-wide">
+                  <th className="text-left font-medium px-4 py-2">Proyecto</th>
+                  <th className="text-right font-medium px-3 py-2">Líquido</th>
+                  <th className="text-right font-medium px-3 py-2">Por cobrar</th>
+                  <th className="text-right font-medium px-3 py-2">Por pagar</th>
+                  <th className="text-right font-medium px-4 py-2">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {balances.map((b) => (
+                  <tr key={b.proyecto.id} className="border-t border-black/5">
+                    <td className="px-4 py-2.5 min-w-0">
+                      <Link href={`/proyectos/${b.proyecto.id}`} className="text-ink-dim hover:underline">
+                        {b.proyecto.nombre}
+                      </Link>
+                      <p className="text-[11px] text-ink-muted truncate">{b.proyecto.cliente_nombre}</p>
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-ink-dim">
+                      {formatMonto(b.liquido, activo.moneda)}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-mint-900">
+                      {formatMonto(b.porCobrar, activo.moneda)}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-mauve-900">
+                      {formatMonto(b.porPagar, activo.moneda)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums font-medium text-ink-dim">
+                      {formatMonto(b.total, activo.moneda)}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="border-t border-black/10 bg-cream/50">
+                  <td className="px-4 py-2.5 text-xs text-ink-muted">
+                    {balances.length} {balances.length === 1 ? "proyecto abierto" : "proyectos abiertos"}
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-ink-dim">
+                    {formatMonto(sumaProyectos.liquido, activo.moneda)}
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-ink-dim">
+                    {formatMonto(sumaProyectos.porCobrar, activo.moneda)}
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-ink-dim">
+                    {formatMonto(sumaProyectos.porPagar, activo.moneda)}
+                  </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums font-medium text-ink-dim">
+                    {formatMonto(sumaProyectos.total, activo.moneda)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="text-[11px] text-ink-muted mt-2">
+          El líquido del proyecto es lo cobrado menos lo pagado a proveedores; no es dinero
+          apartado en el banco. El capital líquido de arriba sale de las cuentas.
+        </p>
+      </section>
 
       <section className="pt-2">
         <div className="flex justify-between items-baseline mb-3">
