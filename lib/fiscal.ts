@@ -36,8 +36,8 @@ export interface IvaDelMes {
   facturas: { emitidas: number; recibidas: number; canceladas: number };
 }
 
-export async function getIva(rango: Rango): Promise<IvaDelMes> {
-  const r = await pedir<IvaDelMes>(`${base()}/iva${query(rango)}`);
+export async function getIva(rango: Rango, negocio_id?: string | null): Promise<IvaDelMes> {
+  const r = await pedir<IvaDelMes>(`${base()}/iva${query(rango, negocio_id)}`);
   return {
     ...r,
     trasladado: aPesos(r.trasladado),
@@ -65,8 +65,8 @@ export interface Cuadre {
   egresos: LadoDelCuadre;
 }
 
-export async function getCuadre(rango: Rango): Promise<Cuadre> {
-  const r = await pedir<Cuadre>(`${base()}/cuadre${query(rango)}`);
+export async function getCuadre(rango: Rango, negocio_id?: string | null): Promise<Cuadre> {
+  const r = await pedir<Cuadre>(`${base()}/cuadre${query(rango, negocio_id)}`);
   const lado = (l: LadoDelCuadre): LadoDelCuadre => ({
     total: aPesos(l.total), facturado: aPesos(l.facturado), fuera: aPesos(l.fuera),
   });
@@ -89,8 +89,9 @@ export interface PendienteDeFactura {
   orden_proveedor: string | null;
 }
 
-export async function listPendientes(): Promise<PendienteDeFactura[]> {
-  const r = await pedir<{ filas: (Omit<PendienteDeFactura, 'monto'> & { monto: number })[] }>(`${base()}/pendientes`);
+export async function listPendientes(negocio_id?: string | null): Promise<PendienteDeFactura[]> {
+  const q = negocio_id ? `?negocio_id=${encodeURIComponent(negocio_id)}` : '';
+  const r = await pedir<{ filas: (Omit<PendienteDeFactura, 'monto'> & { monto: number })[] }>(`${base()}/pendientes${q}`);
   return r.filas.map((f) => ({ ...f, monto: aPesos(f.monto) }));
 }
 
@@ -145,11 +146,12 @@ export interface CfdiInput {
 }
 
 export async function listCfdi(
-  rango: Rango, filtros: { tipo?: TipoCfdi; estado?: EstadoCfdi } = {},
+  rango: Rango, filtros: { tipo?: TipoCfdi; estado?: EstadoCfdi; negocio_id?: string | null } = {},
 ): Promise<Cfdi[]> {
   const q = new URLSearchParams(parametros(rango));
   if (filtros.tipo) q.set('tipo', filtros.tipo);
   if (filtros.estado) q.set('estado', filtros.estado);
+  if (filtros.negocio_id) q.set('negocio_id', filtros.negocio_id);
   const s = q.toString();
   const r = await pedir<{ filas: FilaCfdi[] }>(`${base()}/cfdi${s ? '?' + s : ''}`);
   return r.filas.map(cfdiDePesos);
@@ -212,8 +214,13 @@ export type Rango = { mes: string } | { desde: string; hasta: string };
 function parametros(r: Rango): Record<string, string> {
   return 'mes' in r ? { mes: r.mes } : { desde: r.desde, hasta: r.hasta };
 }
-function query(r: Rango): string {
-  return `?${new URLSearchParams(parametros(r)).toString()}`;
+function query(r: Rango, negocio_id?: string | null): string {
+  const q = new URLSearchParams(parametros(r));
+  // El RFC vive en el negocio: el IVA de un mes es el de UN negocio, no la
+  // suma de los que tenga la empresa. El filtro lo aplica el servidor,
+  // dentro de las mismas consultas que suman.
+  if (negocio_id) q.set('negocio_id', negocio_id);
+  return `?${q.toString()}`;
 }
 
 /** El mes de hoy, en `AAAA-MM`, por día local. */

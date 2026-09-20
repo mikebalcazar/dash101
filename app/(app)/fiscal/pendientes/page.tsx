@@ -31,13 +31,13 @@ export default function PendientesPage() {
     setCargando(true);
     setError("");
     try {
-      setFilas(await listPendientes());
+      setFilas(await listPendientes(activo?.id));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error");
     } finally {
       setCargando(false);
     }
-  }, []);
+  }, [activo]);
 
   useEffect(() => { void cargar(); }, [cargar]);
 

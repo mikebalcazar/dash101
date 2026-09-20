@@ -67,6 +67,14 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 
+/* SI CORRES ESTO DESDE EL CONTENEDOR DE UNA SESIÓN DE CHAT, hazlo contra un
+ * `next start` en 127.0.0.1 con NO_PROXY puesto, no contra el Worker: el proxy
+ * de salida vuelve a codificar los paréntesis de `_next/static/chunks/app/(app)/…`,
+ * Cloudflare contesta 307 a la forma sin codificar, y el navegador entra en un
+ * bucle que se ve como «ChunkLoadError» en TODAS las pantallas. No es un
+ * defecto de dash101: en un navegador de verdad, y en el corredor de GitHub,
+ * las mismas direcciones dan 200. Se midió el 20-sep-2026, en staging y en
+ * producción, contra el mismo commit que aquí pasa en verde. */
 const URL = (process.env.URL_DASH || 'http://127.0.0.1:8797').replace(/\/$/, '');
 const ORG = 'demo';
 const CORREO = process.env.CORREO_PRUEBAS || 'prueba.admin@ejemplo.mx';

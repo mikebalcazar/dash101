@@ -204,6 +204,34 @@ describe("devolver y corregir", () => {
   });
 });
 
+describe("un negocio a la vez", () => {
+  it("el buzón, mis órdenes y lo fiscal se piden del negocio activo", async () => {
+    /* dash101 trabaja con un negocio activo a la vez. Sin este filtro el
+     * buzón mezcla negocios y su «hay por pagar» suma dinero de otro lado;
+     * en lo fiscal es peor, porque el RFC vive en el negocio y ese número
+     * es con el que se entera al SAT. */
+    const otro = await createNegocio(uid, { nombre: "Otro negocio", moneda: "MXN" });
+    await crearOrden({
+      negocio_id: otro, proveedor_nombre: "Ajena", concepto: "De otro negocio",
+      monto: 700, con_factura: false,
+    });
+
+    const mias = await listMisOrdenes(ids.negocio);
+    expect(mias.every((o) => o.negocio_id === ids.negocio)).toBe(true);
+    expect((await listMisOrdenes(otro)).length).toBe(1);
+
+    const suyo = await getBuzon(otro);
+    expect(suyo.filas.length).toBe(1);
+    expect(suyo.total, "y el total es el de esa sola, en pesos").toBe(700);
+    expect((await getBuzon()).total, "sin filtro suma los dos negocios").toBeGreaterThan(700);
+
+    const fiscalOtro = await getCuadre({ mes: mesDeHoy() }, otro);
+    expect(fiscalOtro.egresos.total, "ese negocio no ha pagado nada").toBe(0);
+    expect((await getCuadre({ mes: mesDeHoy() }, ids.negocio)).egresos.total).toBeGreaterThan(0);
+    expect((await listPendientes(otro)).length).toBe(0);
+  });
+});
+
 describe("la factura que llega después", () => {
   it("el pago con factura prometida sale en la lista de pendientes", async () => {
     const pendientes = await listPendientes();
