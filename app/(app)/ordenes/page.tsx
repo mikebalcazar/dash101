@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { getBuzon, listMisOrdenes, type Orden } from "@/lib/ordenes";
+import { useNegocioActivo } from "@/lib/negocio-activo-context";
 import { ErrorApi } from "@/lib/api/cliente";
 import { Dinero, Estado, Vence } from "@/components/ordenes-ui";
 import { IconInbox, IconPlus, IconShoppingCart } from "@tabler/icons-react";
@@ -19,6 +20,7 @@ const ORDEN_DE_LA_LISTA: Record<Orden["estado"], number> = {
 };
 
 export default function MisOrdenesPage() {
+  const { activo, loading: cargandoNegocio } = useNegocioActivo();
   const [filas, setFilas] = useState<Orden[]>([]);
   const [puedoPagar, setPuedoPagar] = useState(false);
   const [porPagar, setPorPagar] = useState(0);
@@ -29,7 +31,7 @@ export default function MisOrdenesPage() {
     setCargando(true);
     setError("");
     try {
-      setFilas(await listMisOrdenes());
+      setFilas(await listMisOrdenes(activo?.id));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error");
     } finally {
@@ -39,16 +41,19 @@ export default function MisOrdenesPage() {
     // contador?»: la respuesta del buzón ES la respuesta, y de paso trae
     // cuántas hay esperando.
     try {
-      const b = await getBuzon();
+      const b = await getBuzon(activo?.id);
       setPuedoPagar(true);
       setPorPagar(b.filas.length);
     } catch (e) {
       if (!(e instanceof ErrorApi && e.error === "sin_permiso")) throw e;
       setPuedoPagar(false);
     }
-  }, []);
+  }, [activo]);
 
-  useEffect(() => { void cargar(); }, [cargar]);
+  useEffect(() => {
+    if (cargandoNegocio) return;
+    void cargar();
+  }, [cargandoNegocio, cargar]);
 
   const lista = [...filas].sort(
     (a, b) => ORDEN_DE_LA_LISTA[a.estado] - ORDEN_DE_LA_LISTA[b.estado] || b.creado_at.localeCompare(a.creado_at),
@@ -106,7 +111,7 @@ export default function MisOrdenesPage() {
               className="flex items-start gap-3 px-4 py-3 border-b border-black/5 last:border-b-0 hover:bg-cream/50 transition"
             >
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-ink-dim truncate">
+                <p className="text-sm font-medium text-ink-dim line-clamp-2">
                   {o.concepto}
                 </p>
                 <p className="text-[11px] text-ink-muted truncate">

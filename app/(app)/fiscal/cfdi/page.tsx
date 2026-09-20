@@ -33,13 +33,13 @@ export default function CfdiPage() {
     setCargando(true);
     setError("");
     try {
-      setFilas(await listCfdi({ mes }, { tipo: tipo || undefined, estado: estado || undefined }));
+      setFilas(await listCfdi({ mes }, { tipo: tipo || undefined, estado: estado || undefined, negocio_id: activo?.id }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error");
     } finally {
       setCargando(false);
     }
-  }, [mes, tipo, estado]);
+  }, [mes, tipo, estado, activo]);
 
   useEffect(() => { void cargar(); }, [cargar]);
 
@@ -59,7 +59,9 @@ export default function CfdiPage() {
       <div className="flex justify-between items-baseline mb-4 gap-3">
         <div>
           <h2 className="text-lg font-medium text-ink-dim">Facturas</h2>
-          <p className="text-xs text-ink-muted mt-0.5">{nombreDelMes(mes)}</p>
+          <p className="text-xs text-ink-muted mt-0.5">
+            {activo?.nombre ? `${activo.nombre} · ` : ""}{nombreDelMes(mes)}
+          </p>
         </div>
         <div className="flex gap-2 shrink-0">
           <SelectorDeMes mes={mes} alCambiar={setMes} />

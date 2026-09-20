@@ -14,12 +14,14 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { getBuzon, vencida, type Buzon } from "@/lib/ordenes";
+import { useNegocioActivo } from "@/lib/negocio-activo-context";
 import { ErrorApi } from "@/lib/api/cliente";
 import { formatMontoExact } from "@/lib/format";
 import { Dinero, Estado, Vence } from "@/components/ordenes-ui";
 import { IconInbox, IconAlertTriangle } from "@tabler/icons-react";
 
 export default function BuzonPage() {
+  const { activo, loading: cargandoNegocio } = useNegocioActivo();
   const [buzon, setBuzon] = useState<Buzon | null>(null);
   const [sinPermiso, setSinPermiso] = useState(false);
   const [cargando, setCargando] = useState(true);
@@ -29,7 +31,7 @@ export default function BuzonPage() {
     setCargando(true);
     setError("");
     try {
-      setBuzon(await getBuzon());
+      setBuzon(await getBuzon(activo?.id));
       setSinPermiso(false);
     } catch (e) {
       if (e instanceof ErrorApi && e.error === "sin_permiso") setSinPermiso(true);
@@ -37,9 +39,12 @@ export default function BuzonPage() {
     } finally {
       setCargando(false);
     }
-  }, []);
+  }, [activo]);
 
-  useEffect(() => { void cargar(); }, [cargar]);
+  useEffect(() => {
+    if (cargandoNegocio) return;
+    void cargar();
+  }, [cargandoNegocio, cargar]);
 
   if (cargando) return <div className="text-sm text-ink-muted">Cargando…</div>;
 
@@ -63,7 +68,7 @@ export default function BuzonPage() {
       <div className="mb-5">
         <h2 className="text-lg font-medium text-ink-dim">Por pagar</h2>
         <p className="text-xs text-ink-muted mt-0.5">
-          Todo lo que pidió la empresa y todavía no se paga.
+          Lo que se pidió en {activo?.nombre ?? "este negocio"} y todavía no se paga.
         </p>
       </div>
 
@@ -110,7 +115,7 @@ export default function BuzonPage() {
               }`}
             >
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-ink-dim truncate">{o.concepto}</p>
+                <p className="text-sm font-medium text-ink-dim line-clamp-2">{o.concepto}</p>
                 <p className="text-[11px] text-ink-muted truncate">
                   {o.folio} · {o.proveedor_nombre || "sin proveedor"} ·{" "}
                   {o.solicitante_nombre || o.solicitante_correo || "alguien"}

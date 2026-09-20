@@ -12,9 +12,11 @@ import { useCallback, useEffect, useState } from "react";
 import { getCuadre, getIva, mesDeHoy, nombreDelMes, type Cuadre, type IvaDelMes } from "@/lib/fiscal";
 import { formatMontoExact } from "@/lib/format";
 import { AvisoFiscal, SelectorDeMes, TabsFiscal, bajarCsv } from "@/components/fiscal-ui";
+import { useNegocioActivo } from "@/lib/negocio-activo-context";
 import { IconDownload } from "@tabler/icons-react";
 
 export default function FiscalPage() {
+  const { activo, loading: cargandoNegocio } = useNegocioActivo();
   const [mes, setMes] = useState(mesDeHoy());
   const [iva, setIva] = useState<IvaDelMes | null>(null);
   const [cuadre, setCuadre] = useState<Cuadre | null>(null);
@@ -25,7 +27,7 @@ export default function FiscalPage() {
     setCargando(true);
     setError("");
     try {
-      const [i, c] = await Promise.all([getIva({ mes }), getCuadre({ mes })]);
+      const [i, c] = await Promise.all([getIva({ mes }, activo?.id), getCuadre({ mes }, activo?.id)]);
       setIva(i);
       setCuadre(c);
     } catch (e) {
@@ -33,14 +35,17 @@ export default function FiscalPage() {
     } finally {
       setCargando(false);
     }
-  }, [mes]);
+  }, [mes, activo]);
 
-  useEffect(() => { void cargar(); }, [cargar]);
+  useEffect(() => {
+    if (cargandoNegocio) return;
+    void cargar();
+  }, [cargandoNegocio, cargar]);
 
   const exportar = () => {
     if (!iva || !cuadre) return;
     bajarCsv(`fiscal-${mes}.csv`, [
-      ["Reporte fiscal", nombreDelMes(mes)],
+      ["Reporte fiscal", activo?.nombre ?? "", nombreDelMes(mes)],
       [],
       ["IVA"],
       ["IVA que cobraste (trasladado)", iva.trasladado],
@@ -67,7 +72,9 @@ export default function FiscalPage() {
       <div className="flex justify-between items-baseline mb-4 gap-3">
         <div>
           <h2 className="text-lg font-medium text-ink-dim">Fiscal</h2>
-          <p className="text-xs text-ink-muted mt-0.5">{nombreDelMes(mes)}</p>
+          <p className="text-xs text-ink-muted mt-0.5">
+            {activo?.nombre ? `${activo.nombre} · ` : ""}{nombreDelMes(mes)}
+          </p>
         </div>
         <div className="flex gap-2 shrink-0">
           <SelectorDeMes mes={mes} alCambiar={setMes} />

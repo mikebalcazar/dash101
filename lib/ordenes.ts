@@ -89,8 +89,11 @@ const orden = (f: FilaOrden): Orden => ({
 
 /* ─────────────── lo que ve quien pide ─────────────── */
 
-export async function listMisOrdenes(): Promise<Orden[]> {
-  const r = await pedir<{ filas: FilaOrden[] }>(base());
+/** Con `negocio_id`, sólo las de ese negocio. dash101 trabaja con un negocio
+ *  activo a la vez y el filtro lo hace el servidor, no la pantalla: filtrar
+ *  aquí dejaría los totales del buzón contando dinero de otro negocio. */
+export async function listMisOrdenes(negocio_id?: string | null): Promise<Orden[]> {
+  const r = await pedir<{ filas: FilaOrden[] }>(`${base()}${negocio_id ? `?negocio_id=${encodeURIComponent(negocio_id)}` : ''}`);
   return r.filas.map(orden);
 }
 
@@ -158,8 +161,10 @@ export async function corregirOrden(id: string, d: Partial<OrdenInput>): Promise
 
 /* ─────────────── lo que ve quien paga ─────────────── */
 
-export async function getBuzon(): Promise<Buzon> {
-  const r = await pedir<{ filas: FilaOrden[]; total: number; vence_esta_semana: number; vencidas: number }>(`${base()}/buzon`);
+export async function getBuzon(negocio_id?: string | null): Promise<Buzon> {
+  const r = await pedir<{ filas: FilaOrden[]; total: number; vence_esta_semana: number; vencidas: number }>(
+    `${base()}/buzon${negocio_id ? `?negocio_id=${encodeURIComponent(negocio_id)}` : ''}`,
+  );
   return {
     filas: r.filas.map(orden),
     total: aPesos(r.total),
