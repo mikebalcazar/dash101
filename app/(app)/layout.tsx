@@ -26,7 +26,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <NegocioActivoProvider>
       <div className="min-h-screen p-4">
-        <div className="max-w-6xl mx-auto bg-bg border border-black/5 rounded-2xl overflow-hidden grid grid-cols-[64px_1fr] min-h-[calc(100vh-2rem)]">
+        <div className="max-w-6xl mx-auto bg-bg border border-black/5 rounded-2xl overflow-hidden grid grid-cols-[64px_1fr] sm:grid-cols-[13rem_1fr] min-h-[calc(100vh-2rem)]">
           <Sidebar />
           <main className="p-6 min-w-0">
             <Topbar />

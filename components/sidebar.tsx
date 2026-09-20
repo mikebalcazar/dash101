@@ -20,6 +20,10 @@ import {
   IconReceiptTax,
 } from "@tabler/icons-react";
 
+/* El menú lleva el nombre al lado del ícono desde el 20-sep (lo pidió Mike):
+ * un ícono sin texto se adivina, y adivinar cuesta. En el teléfono el texto se
+ * esconde y queda sólo la tira de íconos: a 390 puntos, un menú de 208 se come
+ * más de la mitad de la pantalla y deja las tablas sin lugar. */
 type NavItem = { href: string; icon: typeof IconHome; label: string };
 
 const items: NavItem[] = [
@@ -51,9 +55,12 @@ export function Sidebar() {
     .join("");
 
   return (
-    <aside className="w-16 bg-cream flex flex-col items-center py-4 gap-1">
-      <div className="w-9 h-9 rounded-xl bg-ink text-cream flex items-center justify-center text-sm font-medium mb-4">
-        CM
+    <aside className="w-16 sm:w-52 bg-cream flex flex-col items-center sm:items-stretch py-4 px-0 sm:px-3 gap-1">
+      <div className="flex items-center gap-2 mb-4 sm:px-1">
+        <div className="w-9 h-9 rounded-xl bg-ink text-cream flex items-center justify-center text-sm font-medium shrink-0">
+          CM
+        </div>
+        <span className="hidden sm:block text-sm font-medium text-ink-dim">dash101</span>
       </div>
 
       {items.map((item) => {
@@ -64,13 +71,14 @@ export function Sidebar() {
             key={item.href}
             onClick={() => router.push(item.href)}
             title={item.label}
-            className={`w-10 h-10 rounded-xl flex items-center justify-center transition ${
+            className={`h-10 w-10 sm:w-full rounded-xl flex items-center justify-center sm:justify-start gap-2.5 sm:px-3 transition ${
               active
                 ? "bg-ink text-cream"
                 : "text-ink-muted hover:bg-black/5 hover:text-ink-dim"
             }`}
           >
-            <Icon size={19} />
+            <Icon size={19} className="shrink-0" />
+            <span className="hidden sm:block text-sm">{item.label}</span>
           </button>
         );
       })}
@@ -80,24 +88,29 @@ export function Sidebar() {
       <button
         onClick={() => router.push("/settings")}
         title="Configuración"
-        className="w-10 h-10 rounded-xl flex items-center justify-center text-ink-muted hover:bg-black/5 hover:text-ink-dim transition"
+        className="h-10 w-10 sm:w-full rounded-xl flex items-center justify-center sm:justify-start gap-2.5 sm:px-3 text-ink-muted hover:bg-black/5 hover:text-ink-dim transition"
       >
-        <IconSettings size={19} />
+        <IconSettings size={19} className="shrink-0" />
+        <span className="hidden sm:block text-sm">Configuración</span>
       </button>
 
       <button
         onClick={signOut}
         title="Cerrar sesión"
-        className="w-10 h-10 rounded-xl flex items-center justify-center text-ink-muted hover:bg-black/5 hover:text-ink-dim transition"
+        className="h-10 w-10 sm:w-full rounded-xl flex items-center justify-center sm:justify-start gap-2.5 sm:px-3 text-ink-muted hover:bg-black/5 hover:text-ink-dim transition"
       >
-        <IconLogout size={19} />
+        <IconLogout size={19} className="shrink-0" />
+        <span className="hidden sm:block text-sm">Cerrar sesión</span>
       </button>
 
-      <div
-        title={user?.email || ""}
-        className="w-9 h-9 rounded-full bg-mint-50 text-mint-900 flex items-center justify-center text-xs font-medium mt-1"
-      >
-        {initials}
+      <div className="flex items-center gap-2 mt-1 sm:px-1 min-w-0">
+        <div
+          title={user?.email || ""}
+          className="w-9 h-9 rounded-full bg-mint-50 text-mint-900 flex items-center justify-center text-xs font-medium shrink-0"
+        >
+          {initials}
+        </div>
+        <span className="hidden sm:block text-[11px] text-ink-muted truncate">{user?.email}</span>
       </div>
     </aside>
   );
