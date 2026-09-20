@@ -19,6 +19,8 @@ import type {
   TipoMovimiento,
 } from "@/types/schema";
 import { formatMonto } from "@/lib/format";
+import { crearCfdi, ligarCfdi } from "@/lib/fiscal";
+import { subirArchivo } from "@/lib/ordenes";
 import {
   IconArrowLeft,
   IconArrowDownLeft,
@@ -84,6 +86,17 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
    * siempre pasa. Un egreso arranca en «no lleva»: los que sí la llevan
    * vienen de una orden de compra, que ya trae el dato desde que se pidió. */
   const [factura, setFactura] = useState<"ya" | "falta" | "no">("falta");
+  /* Los datos de la factura, cuando se escoge «Ya se facturó».
+   *
+   * Se capturan AQUÍ y no en otra pantalla. El texto de ayuda prometía
+   * «te llevo a capturar el folio fiscal», y lo que hacía era mandar a la
+   * lista de pendientes a buscar el renglón: eso no es capturar una
+   * factura. Mike lo dijo con todas sus letras el 20-sep. */
+  const [uuid, setUuid] = useState("");
+  const [rfcFactura, setRfcFactura] = useState("");
+  const [fechaFactura, setFechaFactura] = useState("");
+  const [ivaFactura, setIvaFactura] = useState("");
+  const [archivoFactura, setArchivoFactura] = useState<File | null>(null);
   const [quickCreate, setQuickCreate] = useState<QuickCreate>(null);
 
   const [submitting, setSubmitting] = useState(false);
@@ -209,6 +222,21 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
   const productosDelProyecto = proyectoSel?.productos ?? [];
   const productoSel = productosDelProyecto.find((pr) => pr.id === productoId);
 
+  const fechaFacturaTocada = useRef(false);
+  const ivaTocado = useRef(false);
+  useEffect(() => {
+    if (!fechaFacturaTocada.current) setFechaFactura(fecha);
+  }, [fecha]);
+
+  /* El IVA se propone al 16 % desde el total, que es lo que es casi
+   * siempre; si no, se corrige antes de guardar. El subtotal sale de la
+   * resta, así que la factura siempre cuadra con el movimiento al centavo. */
+  useEffect(() => {
+    if (ivaTocado.current) return;
+    const total = parseFloat(monto);
+    setIvaFactura(total > 0 ? (Math.round(total * 100 * 16 / 116) / 100).toFixed(2) : "");
+  }, [monto]);
+
   const tipoDeLaCarga = useRef<string | null>(null);
   useEffect(() => {
     if (tipoDeLaCarga.current === tipo) { tipoDeLaCarga.current = null; return; }
@@ -326,13 +354,30 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
          * de pendientes es `facturado`, que se marca aparte con su UUID. */
         requiere_factura: factura !== "no",
       };
-      if (movimientoId) {
-        await updateMovimiento(movimientoId, datos);
-        router.push("/movimientos");
-      } else {
-        await createMovimiento(user.uid, datos);
-        router.push(factura === "ya" ? "/fiscal/pendientes" : "/movimientos");
+      const id = movimientoId
+        ? (await updateMovimiento(movimientoId, datos), movimientoId)
+        : await createMovimiento(user.uid, datos);
+
+      /* Si dijo «ya se facturó», la factura se captura y se cuelga AQUÍ
+       * mismo, del movimiento que se acaba de guardar. Nunca se crea otro
+       * movimiento: una factura no es un cobro aparte.
+       *
+       * El total de la factura es el del movimiento, siempre. Así no puede
+       * quedar una factura por una cifra y su movimiento por otra, que es
+       * de donde sale el IVA que se entera. */
+      if (factura === "ya" && uuid.trim()) {
+        const ivaNum = Number(ivaFactura) || 0;
+        const c = await crearCfdi({
+          negocio_id: negocio.id!, uuid: uuid.trim(), tipo,
+          rfc: rfcFactura.trim().toUpperCase() || null,
+          subtotal: montoNum - ivaNum, iva: ivaNum, retenciones: 0,
+          total: montoNum, fecha: fechaFactura || fecha,
+        });
+        await ligarCfdi(c.id, id);
+        if (archivoFactura) await subirArchivo("movimientos", id, archivoFactura);
       }
+
+      router.push("/movimientos");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al crear movimiento");
     } finally {
@@ -640,11 +685,88 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
                 </div>
                 <p className="text-[11px] text-ink-muted mt-1.5">
                   {factura === "ya"
-                    ? "Al guardar te llevo a capturar el folio fiscal y a colgar el archivo."
+                    ? "Captura aquí el folio fiscal y, si quieres, cuelga el archivo."
                     : factura === "falta"
                       ? "Se queda en «pendientes de facturar» hasta que la captures."
                       : "No aparece en pendientes. Para un préstamo, un traspaso o una devolución."}
                 </p>
+
+                {factura === "ya" && (
+                  <div className="mt-3 bg-cream rounded-xl p-3 space-y-3">
+                    <div>
+                      <label htmlFor="uuid-factura" className="text-xs font-medium text-ink-dim block mb-1.5">
+                        Folio fiscal (UUID)
+                      </label>
+                      <input
+                        id="uuid-factura"
+                        type="text"
+                        value={uuid}
+                        onChange={(e) => setUuid(e.target.value)}
+                        placeholder="A1B2C3D4-…"
+                        className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label htmlFor="rfc-factura" className="text-xs font-medium text-ink-dim block mb-1.5">
+                          RFC
+                        </label>
+                        <input
+                          id="rfc-factura"
+                          type="text"
+                          value={rfcFactura}
+                          onChange={(e) => setRfcFactura(e.target.value.toUpperCase())}
+                          className="w-full bg-white border border-black/10 rounded-xl px-2 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="fecha-factura" className="text-xs font-medium text-ink-dim block mb-1.5">
+                          Fecha
+                        </label>
+                        <input
+                          id="fecha-factura"
+                          type="date"
+                          value={fechaFactura}
+                          onChange={(e) => { fechaFacturaTocada.current = true; setFechaFactura(e.target.value); }}
+                          className="w-full bg-white border border-black/10 rounded-xl px-2 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="iva-factura" className="text-xs font-medium text-ink-dim block mb-1.5">
+                          IVA
+                        </label>
+                        <input
+                          id="iva-factura"
+                          type="number"
+                          step="0.01"
+                          value={ivaFactura}
+                          onChange={(e) => { ivaTocado.current = true; setIvaFactura(e.target.value); }}
+                          className="w-full bg-white border border-black/10 rounded-xl px-2 py-2 text-sm tabular-nums focus:outline-none focus:border-ink/40 transition"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label htmlFor="archivo-factura" className="text-xs font-medium text-ink-dim block mb-1.5">
+                        El archivo (XML o PDF) — opcional
+                      </label>
+                      <input
+                        id="archivo-factura"
+                        type="file"
+                        accept=".xml,.pdf,application/xml,text/xml,application/pdf"
+                        onChange={(e) => setArchivoFactura(e.target.files?.[0] ?? null)}
+                        className="w-full text-xs text-ink-dim file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-1.5 file:text-xs file:text-ink-dim"
+                      />
+                    </div>
+
+                    <p className="text-[11px] text-ink-muted">
+                      El total de la factura es el del movimiento: {formatMonto(parseFloat(monto) || 0, negocio?.moneda ?? "MXN")}.
+                      El subtotal sale de restarle el IVA, así que siempre cuadran al centavo.
+                      {!uuid.trim() && " Sin folio fiscal se guarda como «falta facturar»."}
+                    </p>
+                  </div>
+                )}
               </div>
             </>
           )}

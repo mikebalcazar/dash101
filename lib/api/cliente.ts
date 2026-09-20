@@ -29,12 +29,16 @@ const enNavegador = typeof window !== 'undefined';
 /** El viaje: cabeceras, galleta y `fetch`. Lo comparten las dos formas de
  *  pedir, para que la sesión se guarde en un solo lugar. */
 async function llamar(ruta: string, opciones: { method?: string; body?: unknown }): Promise<Response> {
-  const cabeceras: Record<string, string> = { 'Content-Type': 'application/json', 'X-App': 'dash101' };
+  /* Una forma multipart se manda tal cual: `fetch` le pone su propio
+   * `Content-Type` con la frontera, y si se la ponemos nosotros la rompemos. */
+  const esForma = typeof FormData !== 'undefined' && opciones.body instanceof FormData;
+  const cabeceras: Record<string, string> = { 'X-App': 'dash101' };
+  if (!esForma) cabeceras['Content-Type'] = 'application/json';
   if (!enNavegador && galleta) cabeceras.Cookie = galleta;
   const r = await fetch(`${apiBase()}${ruta}`, {
     method: opciones.method ?? 'GET',
     headers: cabeceras,
-    body: opciones.body === undefined ? undefined : JSON.stringify(opciones.body),
+    body: opciones.body === undefined ? undefined : esForma ? (opciones.body as FormData) : JSON.stringify(opciones.body),
     credentials: 'include',
   });
   if (!enNavegador) {
@@ -210,7 +214,18 @@ export async function entrarDePrueba(correo: string, intentos = 4): Promise<Yo['
       ultimo = e;
       const reintentable = e instanceof ErrorApi && (e.error === 'codigo_invalido' || e.error === 'demasiados_intentos');
       if (!reintentable) throw e;
-      await new Promise((r) => setTimeout(r, 3000 * (i + 1)));
+      /* Cuando el freno de códigos contesta 429, DICE cuánto hay que
+       * esperar. Hasta hoy esto esperaba 3, 6, 9 y 12 segundos —30 en
+       * total— y el freno pide 45: se rendía justo antes de que cediera, y
+       * la prueba que le tocara el turno malo salía roja sin que nada
+       * estuviera mal. Pasó el 20-sep con toda la suite corriendo a la vez.
+       *
+       * Es el mismo arreglo que ya lleva la prueba de humo de la API: se
+       * espera lo que la API pide, no lo que uno supone. */
+      const espera = e instanceof ErrorApi
+        ? Number((e.detalle as { espera_segundos?: number } | undefined)?.espera_segundos) || 0
+        : 0;
+      await new Promise((r) => setTimeout(r, espera > 0 ? (espera + 1) * 1000 : 3000 * (i + 1)));
     }
   }
   throw ultimo;
