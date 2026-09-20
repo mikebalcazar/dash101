@@ -195,6 +195,17 @@ async function staging() {
     const pide = await traer(STAGING, '/s101/auth/codigo', { method: 'POST', body: { correo: CORREO } });
     const codigo = pide.cuerpo?.codigo_prueba;
     if (!codigo) {
+      /* 429 `demasiados_intentos` NO es una caída: la API deja pedir un
+       * código por correo cada 45 s, y la medición corre pegada a las
+       * pruebas, que entran con el mismo correo. La API dice cuánto hay que
+       * esperar en `espera_segundos`; se espera eso y se vuelve, en vez de
+       * pintar el despliegue de rojo por hacer cola. Si después de las
+       * cuatro vueltas sigue, entonces sí se reporta. */
+      const espera = Number(pide.cuerpo?.detalle?.espera_segundos) || 45;
+      if (pide.estado === 429 && i < 3) {
+        await new Promise((r) => setTimeout(r, (espera + 5) * 1000));
+        continue;
+      }
       rev(false, 'staging devuelve codigo_prueba', `${pide.estado} ${pide.cuerpo?.error ?? ''}`);
       return;
     }

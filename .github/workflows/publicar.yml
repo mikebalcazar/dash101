@@ -145,8 +145,13 @@ jobs:
       # portada y una ruta [id] mientras se escucha, y lo que diga se pega a
       # la medición para que vuelva en el comentario del commit. El 12-sep
       # esto fue la diferencia entre adivinar y leer.
+      # `continue-on-error` porque esto es un DIAGNÓSTICO. El 20-sep tumbó el
+      # despliegue él solo —terminó en 1 y se llevó el paso entero—, y con
+      # eso tapó el error de verdad que venía a explicar. Un paso que existe
+      # para contar qué pasó no puede ser el que decide si se publica.
       - name: Leer los errores del Worker de staging
         if: steps.medir_staging.outcome == 'failure'
+        continue-on-error: true
         env:
           STAGING: ${{ steps.staging.outputs.url }}
         run: |
