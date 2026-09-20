@@ -40,6 +40,11 @@ export interface MovimientoInput {
   categoria?: string;
   /** Si es parte de una transferencia, ambos movs (egreso+ingreso) comparten este id */
   transfer_id?: string | null;
+  /** Que se ESPERA factura por este movimiento. No es lo mismo que decir que
+   *  ya llegó (`facturado`, que se marca aparte): esto es la decisión de quien
+   *  captura, y es lo que hace que el movimiento salga en «pendientes de
+   *  facturar» hasta que la factura exista. */
+  requiere_factura?: boolean;
 }
 
 export async function listMovimientos(

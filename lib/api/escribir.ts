@@ -394,6 +394,7 @@ export async function createMovimiento(_uid: string, d: MovimientoInput): Promis
     proyecto_id: oNulo(d.proyecto_id), item_id: oNulo(d.producto_id),
     contraparte_tipo: d.contraparte_tipo, contraparte_id: oNulo(d.contraparte_id), contraparte_nombre: oNulo(d.contraparte_nombre),
     transfer_id: oNulo(d.transfer_id), descripcion: oNulo(d.descripcion), categoria: oNulo(d.categoria),
+    requiere_factura: d.requiere_factura === true,
   });
   return f.id;
 }

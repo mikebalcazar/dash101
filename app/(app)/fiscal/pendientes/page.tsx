@@ -1,14 +1,22 @@
 "use client";
 
-/* Pagos con factura prometida cuya factura todavía no llega.
+/* Lo que falta facturar, de los dos lados.
  *
  * Es la lista que hay que perseguir cada mes, y por eso trae el folio de la
- * orden y el proveedor: sin ellos no se sabe a quién marcarle.
+ * orden y con quién fue: sin eso no se sabe a quién marcarle.
  *
  * Y es la razón entera de que no haya dos contabilidades: la factura casi
- * siempre llega DESPUÉS del pago, así que aquí se captura y se le cuelga al
- * movimiento que ya existe. No se crea otro pago.
- */
+ * siempre llega DESPUÉS del movimiento, así que aquí se captura y se le
+ * cuelga al que ya existe. No se crea otro.
+ *
+ * Desde el 20-sep también trae los COBROS que faltan facturar, que fue lo que
+ * pidió Mike. Antes no podían salir: la espera de la factura se leía de la
+ * orden de compra, y un cobro al cliente no tiene orden de compra.
+ *
+ * Los dos lados se pintan aparte a propósito. No es adorno: de un cobro sale
+ * el IVA que TRASLADAS y de un pago el que ACREDITAS, y son los dos números
+ * que deciden cuánto enteras. Revueltos, una equivocación al capturar se ve
+ * igual que un acierto. */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNegocioActivo } from "@/lib/negocio-activo-context";
@@ -41,7 +49,9 @@ export default function PendientesPage() {
 
   useEffect(() => { void cargar(); }, [cargar]);
 
-  const total = filas.reduce((s, f) => s + f.monto, 0);
+  const cobros = useMemo(() => filas.filter((f) => f.tipo === 'ingreso'), [filas]);
+  const pagos = useMemo(() => filas.filter((f) => f.tipo !== 'ingreso'), [filas]);
+  const suma = (xs: PendienteDeFactura[]) => xs.reduce((s, f) => s + f.monto, 0);
 
   return (
     <div>
@@ -49,13 +59,18 @@ export default function PendientesPage() {
         <div>
           <h2 className="text-lg font-medium text-ink-dim">Falta la factura</h2>
           <p className="text-xs text-ink-muted mt-0.5">
-            Se pagaron con factura prometida y el CFDI no ha llegado.
+            Cobros que falta facturar y pagos cuyo CFDI no ha llegado.
           </p>
         </div>
         <button
           onClick={() => bajarCsv("pendientes-de-factura.csv", [
-            ["Folio", "Proveedor", "Fecha del pago", "Monto"],
-            ...filas.map((f) => [f.orden_folio ?? "", f.orden_proveedor ?? f.contraparte_nombre ?? "", f.fecha, f.monto]),
+            ["Tipo", "Folio", "Con quién", "Fecha", "Monto"],
+            ...filas.map((f) => [
+              f.tipo === "ingreso" ? "Cobro" : "Pago",
+              f.orden_folio ?? "",
+              f.orden_proveedor ?? f.contraparte_nombre ?? "",
+              f.fecha, f.monto,
+            ]),
           ])}
           disabled={filas.length === 0}
           title="Bajar la lista en CSV"
@@ -76,51 +91,61 @@ export default function PendientesPage() {
         <div className="bg-white border border-black/5 rounded-2xl p-10 text-center">
           <IconCheck size={22} className="text-mint-900 mx-auto mb-2" />
           <p className="text-sm font-medium text-ink-dim mb-1">No falta ninguna factura</p>
-          <p className="text-xs text-ink-muted">Todo lo que se pagó con factura ya la tiene capturada.</p>
+          <p className="text-xs text-ink-muted">Todo lo que lleva factura, de los dos lados, ya la tiene capturada.</p>
         </div>
       ) : (
         <>
-          <div className="bg-white border border-black/5 rounded-2xl px-4 py-3 mb-3">
-            <p className="text-[11px] text-ink-muted">Falta factura por</p>
-            <p className="text-lg font-medium text-ink-dim tabular-nums">{formatMontoExact(total)}</p>
-            <p className="text-[11px] text-ink-muted">
-              {filas.length} {filas.length === 1 ? "pago" : "pagos"}
-            </p>
-          </div>
-
-          <div className="bg-white border border-black/5 rounded-2xl overflow-hidden">
-            {filas.map((f) => (
-              <div key={f.id} className="px-4 py-3 border-b border-black/5 last:border-b-0">
-                <div className="flex items-start gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-ink-dim truncate">
-                      {f.orden_proveedor || f.contraparte_nombre || "sin proveedor"}
-                    </p>
-                    <p className="text-[11px] text-ink-muted truncate">
-                      {f.orden_folio ?? "sin folio"} · {f.fecha} · {f.descripcion ?? ""}
-                    </p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-sm font-medium text-ink-dim tabular-nums">{formatMontoExact(f.monto)}</p>
-                    <button
-                      className="text-[11px] text-ink-muted underline"
-                      onClick={() => setAbierta(abierta === f.id ? "" : f.id)}
-                    >
-                      {abierta === f.id ? "Cerrar" : "Ya llegó la factura"}
-                    </button>
-                  </div>
+          {([
+            ["Cobros que falta facturar", cobros, "Tú se la debes al cliente. De aquí sale el IVA que trasladas.", "cobro", "cobros"],
+            ["Pagos cuya factura no llega", pagos, "Te la deben. De aquí sale el IVA que acreditas.", "pago", "pagos"],
+          ] as const).map(([titulo, grupo, pie, uno, varios]) =>
+            grupo.length === 0 ? null : (
+              <section key={titulo} className="mb-5">
+                <div className="bg-white border border-black/5 rounded-2xl px-4 py-3 mb-3">
+                  <p className="text-[11px] text-ink-muted">{titulo}</p>
+                  <p className="text-lg font-medium text-ink-dim tabular-nums">{formatMontoExact(suma(grupo))}</p>
+                  <p className="text-[11px] text-ink-muted">
+                    {grupo.length} {grupo.length === 1 ? uno : varios} · {pie}
+                  </p>
                 </div>
 
-                {abierta === f.id && (
-                  <CapturaDeFactura
-                    pago={f}
-                    negocioId={activo?.id ?? ""}
-                    alTerminar={async (m) => { setAbierta(""); setAviso(m); await cargar(); }}
-                  />
-                )}
-              </div>
-            ))}
-          </div>
+                <div className="bg-white border border-black/5 rounded-2xl overflow-hidden">
+                  {grupo.map((f) => (
+                    <div key={f.id} className="px-4 py-3 border-b border-black/5 last:border-b-0">
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-ink-dim truncate">
+                            {f.orden_proveedor || f.contraparte_nombre ||
+                              (f.tipo === "ingreso" ? "sin cliente" : "sin proveedor")}
+                          </p>
+                          <p className="text-[11px] text-ink-muted truncate">
+                            {f.orden_folio ?? "sin folio"} · {f.fecha} · {f.descripcion ?? ""}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-medium text-ink-dim tabular-nums">{formatMontoExact(f.monto)}</p>
+                          <button
+                            className="text-[11px] text-ink-muted underline"
+                            onClick={() => setAbierta(abierta === f.id ? "" : f.id)}
+                          >
+                            {abierta === f.id ? "Cerrar" : f.tipo === "ingreso" ? "Ya la facturé" : "Ya llegó la factura"}
+                          </button>
+                        </div>
+                      </div>
+
+                      {abierta === f.id && (
+                        <CapturaDeFactura
+                          pago={f}
+                          negocioId={activo?.id ?? ""}
+                          alTerminar={async (m) => { setAbierta(""); setAviso(m); await cargar(); }}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ),
+          )}
         </>
       )}
 
@@ -153,12 +178,24 @@ function CapturaDeFactura({
     setError("");
     setGuardando(true);
     try {
+      /* El tipo sale del movimiento, NO fijo en «egreso».
+       *
+       * Es lo que decide de qué lado cae el IVA: el de una factura de
+       * ingreso se traslada —lo cobraste— y el de una de egreso se acredita
+       * —lo pagaste—. Con el tipo equivocado, el IVA del mes sale mal en las
+       * dos direcciones a la vez y con cara de correcto, y es el número que
+       * se entera al SAT. Quedó fijo mientras esta lista sólo podía traer
+       * pagos; desde que trae cobros, tiene que seguir al movimiento. */
       const c = await crearCfdi({
-        negocio_id: negocioId, uuid, tipo: "egreso", rfc: rfc || null,
+        negocio_id: negocioId, uuid, tipo: pago.tipo, rfc: rfc || null,
         subtotal, iva, retenciones: retenciones || 0, total: pago.monto, fecha,
       });
       await ligarCfdi(c.id, pago.id);
-      await alTerminar(`La factura ${uuid.slice(0, 8)}… quedó colgada del pago que ya existía. No se creó otro pago.`);
+      await alTerminar(
+        pago.tipo === "ingreso"
+          ? `La factura ${uuid.slice(0, 8)}… quedó colgada del cobro que ya existía. No se creó otro ingreso.`
+          : `La factura ${uuid.slice(0, 8)}… quedó colgada del pago que ya existía. No se creó otro pago.`,
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error");
       setGuardando(false);
@@ -176,7 +213,9 @@ function CapturaDeFactura({
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className={ETIQUETA} htmlFor={`rfc-${pago.id}`}>RFC de quien factura</label>
+          <label className={ETIQUETA} htmlFor={`rfc-${pago.id}`}>
+            {pago.tipo === "ingreso" ? "RFC del cliente" : "RFC de quien factura"}
+          </label>
           <input id={`rfc-${pago.id}`} className={CAJA} value={rfc} onChange={(e) => setRfc(e.target.value.toUpperCase())} />
         </div>
         <div>
@@ -199,11 +238,11 @@ function CapturaDeFactura({
         </div>
       </div>
       <p className="text-[11px] text-ink-muted">
-        El total de la factura se toma del pago: {formatMontoExact(pago.monto)}.
+        El total de la factura se toma del {pago.tipo === "ingreso" ? "cobro" : "pago"}: {formatMontoExact(pago.monto)}.
       </p>
       {error && <p className="text-[11px] text-mauve-900">{error}</p>}
       <button className={`${BOTON} w-full`} disabled={!uuid.trim() || !negocioId || guardando} onClick={() => void guardar()}>
-        {guardando ? "Guardando…" : "Guardar y colgarla del pago"}
+        {guardando ? "Guardando…" : `Guardar y colgarla del ${pago.tipo === "ingreso" ? "cobro" : "pago"}`}
       </button>
     </div>
   );
