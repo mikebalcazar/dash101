@@ -35,9 +35,11 @@ corredor contra staging en cada publicación, antes de construir producción):
 - entra por el propio Worker como `prueba.admin@ejemplo.mx` (admin de `demo`,
   creado en la master de staging para esto: conciliar exige owner o admin) y
   la sesión aguanta seis pantallas, comprobada con `/yo` en cada una;
-- el dinero se lee de la API y se calcula como la app: Banco Demo 36 500 000
-  centavos → «$365,000» en el tablero, «$365,000.00» en la conciliación, y
-  nunca «$36,500,000»;
+- el dinero se lee de la API y se calcula como la app: Banco Demo 36 036 000
+  centavos → «$360,360» en el tablero, «$360,360.00» en la conciliación, y
+  nunca «$36,036,000». Las cifras esperadas no están escritas en la prueba:
+  se leen de la API y se calculan con la fórmula de la app, y por eso el
+  guion de la siembra puede cambiarlas sin romperla;
 - la conciliación de punta a punta en un negocio aparte, «Pruebas de
   navegador», para no mover Taller Demo (de ahí salen las capturas): la que
   cuadra no deja ajuste; con $800.00 de menos deja exactamente un egreso de
@@ -445,7 +447,7 @@ que se fije la variable en Netlify. Semáforo previo: `eea16fb`.
   superadmin se ve como owner de todos los negocios de la org.
 
 **Cómo se midió:** `pruebas/lectura-api.spec.ts` (vitest, node) contra la org
-`demo` de staging, con guarda en `/salud`. Banco 365,000 y Caja −3,500;
+`demo` de staging, con guarda en `/salud`. Banco 360,360 y Caja −3,500;
 Cocina Ramírez 262,000 / 140,000 / 33,500 / 50,500 con `disponible` y `margen`
 por las fórmulas de Firestore; partidas parcial y pagado con lo que calculó
 la API; ítems con lo pagado por ítem (120,000 y 20,000) y Σ montos =

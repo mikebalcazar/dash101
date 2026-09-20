@@ -102,8 +102,9 @@ describe("negocios, cuentas, clientes, proveedores", () => {
     const banco = cuentas.find((c) => c.nombre === "Banco Demo")!;
     const caja = cuentas.find((c) => c.nombre === "Caja chica")!;
     expect(banco.saldo_inicial).toBe(250000);
-    // 250,000 + 120,000 + 20,000 − 25,000
-    expect(banco.saldo_actual).toBe(365000);
+    // 250,000 + 120,000 + 20,000 − 25,000, y desde el 20-sep menos las dos
+    // compras que la siembra paga por este banco: −3,480 y −1,160.
+    expect(banco.saldo_actual).toBe(360360);
     // 5,000 − 8,500: una caja en negativo se ve, no se esconde
     expect(caja.saldo_actual).toBe(-3500);
     expect(banco.tipo).toBe("banco");
@@ -172,7 +173,10 @@ describe("el proyecto: cachés, partidas y productos como los conoce la app", ()
 describe("movimientos y gastos fijos", () => {
   it("los movimientos traen los nombres que la app enseña, ordenados del más reciente al más viejo", async () => {
     const movs = await listMovimientos(negocioId);
-    expect(movs).toHaveLength(4);
+    // Cuatro de la siembra vieja y dos que nacieron al pagar órdenes de
+    // compra: un egreso por orden pagada, que es justamente lo que no hay
+    // que capturar dos veces.
+    expect(movs).toHaveLength(6);
     for (let i = 1; i < movs.length; i++) expect(dia(movs[i - 1].fecha) >= dia(movs[i].fecha)).toBe(true);
     const anticipo = movs.find((m) => m.descripcion === "Anticipo 50% cocina e isla")!;
     expect(anticipo).toMatchObject({ tipo: "ingreso", monto: 120000, cuenta_nombre: "Banco Demo", proyecto_nombre: "Cocina Ramírez", contraparte_tipo: "cliente", producto_nombre: "Cocina integral en L" });
