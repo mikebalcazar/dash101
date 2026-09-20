@@ -792,16 +792,22 @@ test('corregir un movimiento SIN contraparte: el botón no se queda apagado', as
   await ctx.close();
 });
 
-test('juntar dos renglones iguales en un concepto: queda uno de dos piezas y la venta no se mueve', async () => {
+test('agrupar dos renglones en un producto: NO se borra ninguno y se pueden mover de grupo', async () => {
   /* Mike, 20-sep: «son varias puertas iguales en diferente ubicación pero
    * el producto es el mismo, y no tiene caso tener 21 ítems idénticos
-   * enlistados en dash».
+   * enlistados en dash». Y esa misma tarde: «debe poder moverse de grupo de
+   * producto un ítem ya agrupado. Todos los ítems deberían tener un
+   * dropdown para seleccionar qué producto es».
    *
-   * Lo que este paso mide y ninguna prueba de API alcanza: que el botón
-   * exista, que la propuesta se pinte, y que al juntarlos desde la PANTALLA
-   * el precio de venta quede igual. Se espera por condición, nunca por
-   * instante: esta pantalla se arma en partes y una aserción a destiempo
-   * acusa a código que sí sirve. */
+   * Este paso decía «queda uno de dos piezas»: era cierto mientras agrupar
+   * FUSIONABA. Ya no borra renglones —un renglón borrado no se puede mover
+   * de grupo—, así que mide lo de ahora.
+   *
+   * Lo que alcanza y ninguna prueba de API ve: que el botón exista, que la
+   * propuesta se pinte, que después de agrupar la lista enseñe UN renglón
+   * de producto que se abre, y que cada pieza traiga su dropdown. Se espera
+   * por condición, nunca por instante: esta pantalla se arma en partes y
+   * una aserción a destiempo acusa a código que sí sirve. */
   const { ctx, pag, errores } = await pestana();
   await entrar(pag, CORREO);
 
@@ -810,7 +816,7 @@ test('juntar dos renglones iguales en un concepto: queda uno de dos piezas y la 
     ?? await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS, negocio_id: neg.id } });
   const proyecto = await api(pag, `/orgs/${ORG}/proyectos`, {
     method: 'POST',
-    body: { nombre: `Juntar ${Date.now().toString(36).slice(-5)}`, cliente_id: cliente.id, negocio_id: neg.id, estado: 'activo' },
+    body: { nombre: `Agrupar ${Date.now().toString(36).slice(-5)}`, cliente_id: cliente.id, negocio_id: neg.id, estado: 'activo' },
   });
   for (let i = 0; i < 2; i++) {
     await api(pag, `/orgs/${ORG}/items`, {
@@ -830,6 +836,13 @@ test('juntar dos renglones iguales en un concepto: queda uno de dos piezas y la 
     assert.fail(`no cargó el proyecto. La pantalla decía: ${(await texto(pag)).replace(/\s+/g, ' ').slice(0, 400)}`);
   }
 
+  /* Antes de agrupar, cada ítem ya trae su dropdown: los dos son su propio
+   * producto único y cada uno puede escoger al otro. */
+  assert.ok(
+    await pag.locator('select').filter({ hasText: 'Es su propio producto' }).first().isVisible(),
+    'cada ítem trae su dropdown de producto',
+  );
+
   await pag.getByRole('button', { name: /Juntar los iguales/ }).click();
   const juntar = pag.getByRole('button', { name: /^Juntar 2$/ });
   await juntar.waitFor({ timeout: 20000 });
@@ -840,15 +853,22 @@ test('juntar dos renglones iguales en un concepto: queda uno de dos piezas y la 
   let quedaron = [];
   for (let i = 0; i < 40; i++) {
     quedaron = filas(await api(pag, `/orgs/${ORG}/items?proyecto_id=${proyecto.id}`)).filter((x) => x.estado !== 'cancelado');
-    if (quedaron.length === 1) break;
+    if (quedaron.length === 2 && quedaron.every((x) => x.producto_id)) break;
     await pag.waitForTimeout(500);
   }
-  assert.equal(quedaron.length, 1, 'quedó un solo renglón');
-  assert.equal(quedaron[0].cantidad, 2, 'que dice ser dos piezas');
-  assert.equal(quedaron[0].monto, 6_000_00, 'y vale la suma');
+  assert.equal(quedaron.length, 2, 'los DOS renglones siguen ahí: agrupar ya no borra');
+  assert.ok(quedaron.every((x) => x.cantidad === 1), 'cada uno sigue siendo una pieza');
+  assert.equal(new Set(quedaron.map((x) => x.producto_id)).size, 1, 'y los dos apuntan al mismo producto');
 
   const p = await api(pag, `/orgs/${ORG}/proyectos/${proyecto.id}`);
-  assert.equal(p.precio_venta, antes, 'acomodar la lista no cambia lo que se cobra');
+  assert.equal(p.precio_venta, antes, 'agruparlos al mismo precio no cambia lo que se cobra');
+
+  /* Y en la pantalla queda UN renglón de producto que se abre. Es el
+   * encargo original: no tener 21 puertas idénticas enlistadas. */
+  const abrir = pag.getByRole('button', { name: /toca para ver cuáles/ });
+  await abrir.first().waitFor({ timeout: 20000 });
+  await abrir.first().click();
+  await pag.getByText('Puerta igualita').first().waitFor({ timeout: 10000 });
 
   assert.deepEqual(errores, [], 'cero errores de JavaScript');
   await ctx.close();
