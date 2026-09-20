@@ -210,7 +210,18 @@ export async function entrarDePrueba(correo: string, intentos = 4): Promise<Yo['
       ultimo = e;
       const reintentable = e instanceof ErrorApi && (e.error === 'codigo_invalido' || e.error === 'demasiados_intentos');
       if (!reintentable) throw e;
-      await new Promise((r) => setTimeout(r, 3000 * (i + 1)));
+      /* Cuando el freno de códigos contesta 429, DICE cuánto hay que
+       * esperar. Hasta hoy esto esperaba 3, 6, 9 y 12 segundos —30 en
+       * total— y el freno pide 45: se rendía justo antes de que cediera, y
+       * la prueba que le tocara el turno malo salía roja sin que nada
+       * estuviera mal. Pasó el 20-sep con toda la suite corriendo a la vez.
+       *
+       * Es el mismo arreglo que ya lleva la prueba de humo de la API: se
+       * espera lo que la API pide, no lo que uno supone. */
+      const espera = e instanceof ErrorApi
+        ? Number((e.detalle as { espera_segundos?: number } | undefined)?.espera_segundos) || 0
+        : 0;
+      await new Promise((r) => setTimeout(r, espera > 0 ? (espera + 1) * 1000 : 3000 * (i + 1)));
     }
   }
   throw ultimo;
