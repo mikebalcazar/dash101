@@ -122,6 +122,19 @@ export interface ProductoProyecto {
   /** Su lugar dentro de la partida. Con todos en cero manda el orden en que
    *  se capturaron. */
   orden?: number;
+  /** A qué modelo del catálogo pertenece esta pieza (contrato 0.35.0).
+   *  Vacío o nulo = el ítem es su propio producto único, que es como nacen
+   *  todos.
+   *
+   *  OJO CON EL NOMBRE. En esta app los renglones del proyecto se llaman
+   *  `productos` desde la época de Firestore, y NO son esto: son los ítems.
+   *  Mike separó las dos cosas el 20-sep-2026 —«una cosa es el código de
+   *  ítem (pieza física en obra) y otra diferente el código de producto de
+   *  catálogo»—, y el producto de verdad es el que apunta este campo. */
+  producto_id?: string | null;
+  /** El código de catálogo que le toca por su producto, o el suyo si todavía
+   *  no es de ninguno. */
+  clave?: string | null;
 }
 
 export interface Proyecto {

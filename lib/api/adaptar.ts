@@ -77,7 +77,10 @@ export interface FilaItem { id: string; proyecto_id: string | null; nombre: stri
    * estado aprobado primero»— vive en un solo lugar, el contrato, y las tres
    * apps la leen en vez de reescribirla cada una. */
   alcance?: 'dentro' | 'no_aprobado' | 'cancelado' | 'descartado';
-  cancelado_motivo?: string | null; aprobado_at?: string | null }
+  cancelado_motivo?: string | null; aprobado_at?: string | null;
+  /* 0.35.0 · a qué modelo del catálogo pertenece la pieza. NULL = es su
+   * propio producto único. */
+  producto_id?: string | null }
 export interface FilaPartida { id: string; proyecto_id: string; item_id: string | null; proveedor_id: string | null; proveedor_nombre: string | null; concepto: string | null; monto_acordado: number; monto_pagado: number; estado: 'pendiente' | 'parcial' | 'pagado' }
 export interface FilaMovimiento {
   id: string; negocio_id: string; tipo: 'ingreso' | 'egreso'; monto: number; fecha: string; cuenta_id: string;
@@ -161,6 +164,7 @@ export function producto(f: FilaItem, movimientos: FilaMovimiento[]): ProductoPr
     cantidad: Number(f.cantidad ?? 1) || 1, pagado: aPesos(pagado),
     fecha_entrega: aTimestamp(f.fecha_entrega), quell_id: f.origen?.quell_id ?? null,
     partida: String(f.partida ?? ''), orden: Number(f.orden ?? 0) || 0,
+    producto_id: f.producto_id ?? null, clave: f.clave ?? null,
   };
 }
 

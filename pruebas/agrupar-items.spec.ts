@@ -28,7 +28,7 @@ import { createNegocio } from "@/lib/negocios";
 import { createCliente } from "@/lib/clientes";
 import { createProyecto, getProyecto } from "@/lib/proyectos";
 import { ligarObra, itemsDeLaObra, fusionarItemsDeLaObra } from "@/lib/obras";
-import { acomodar, agrupables, agrupar } from "@/lib/items-grupo";
+import { acomodar, agrupables, agrupar, asignarProducto, productosDelProyecto } from "@/lib/items-grupo";
 
 const CORREO = process.env.CORREO_SUPERADMIN ?? "mike@forespot.com";
 const ORG = `ag-${(process.env.GITHUB_RUN_ID ?? Date.now().toString(36)).toString().toLowerCase().slice(-12)}`;
@@ -111,23 +111,84 @@ describe("juntar varios renglones en un concepto", () => {
     expect(await venta()).toBe(antes);
   });
 
-  it("al juntarlas queda un renglón de dos piezas, y la venta sigue igual", async () => {
+  it("al agruparlas NO se borra ningún renglón: los dos apuntan al producto", async () => {
+    /* Esta prueba decía «queda un renglón de dos piezas» y era cierta hasta
+     * el contrato 0.34.0, cuando agrupar fusionaba. Mike pidió el 20-sep
+     * poder mover de grupo un ítem ya agrupado —imposible con un renglón
+     * borrado— y escogió que el grupo de producto reemplace a la fusión.
+     * Se reescribe en vez de borrarse: dejarla habría dejado en pie el
+     * entendimiento que él corrigió. */
     const antes = await venta();
     const g = (await agrupables(ids.proyecto)).find((x) => x.nombre === "Puerta de recámara")!;
+    const cuantos = (await productos()).length;
     const r = await agrupar(ids.proyecto, {
-      queda_id: g.items[0].id,
-      se_van: g.items.slice(1).map((i) => i.id),
+      items: g.items.map((i) => i.id),
       nombre: "Puerta de recámara 0.90 × 2.40",
     });
-    expect(r.absorbidos).toBe(1);
+    expect(r.items, "las dos entraron").toBe(2);
+    expect(r.producto.nombre).toBe("Puerta de recámara 0.90 × 2.40");
+    expect(r.producto.precio, "el precio del modelo es POR PIEZA y en centavos").toBe(8_000_00);
+    expect(r.venta_antes, "y dice cuánto valía antes, para poder enseñarlo").toBe(r.venta_despues);
 
     const lista = await productos();
-    const concepto = lista.find((p) => p.nombre === "Puerta de recámara 0.90 × 2.40");
-    expect(concepto, `quedó el concepto: ${JSON.stringify(lista.map((l) => l.nombre))}`).toBeTruthy();
-    expect(concepto!.cantidad).toBe(2);
-    expect(concepto!.monto, "el importe es la suma, en pesos del lado de la pantalla").toBe(16_000);
-    expect(lista.length, "y un renglón menos").toBe(2);
-    expect(await venta(), "acomodar la lista no cambia lo que se cobra").toBe(antes);
+    expect(lista.length, "ningún renglón se borró").toBe(cuantos);
+    for (const id of g.items.map((i) => i.id)) {
+      const fila = lista.find((x) => x.id === id);
+      expect(fila, `${id} sigue en la lista`).toBeTruthy();
+      expect(fila!.producto_id, "y apunta al producto").toBe(r.producto.id);
+      expect(fila!.cantidad, "cada renglón sigue siendo una pieza").toBe(1);
+    }
+    expect(await venta(), "agruparlas al mismo precio no cambia lo que se cobra").toBe(antes);
+  });
+
+  it("y ya no se vuelven a proponer", async () => {
+    const g = await agrupables(ids.proyecto);
+    expect(g.find((x) => x.nombre.startsWith("Puerta"))).toBeFalsy();
+  });
+});
+
+describe("el dropdown del producto, y cambiarse de grupo", () => {
+  /* Mike, 20-sep: «todos los ítems deberían tener un dropdown para
+   * seleccionar qué producto es, o nuevo si el ítem es su mismo producto
+   * único. El dropdown debe tener 1) los ítems que son únicos en el proyecto
+   * 2) los productos que ya tienen varios ítems agrupados». */
+  it("trae los productos de la obra y los ítems todavía únicos", async () => {
+    const { productos: prods, unicos } = await productosDelProyecto(ids.proyecto);
+    expect(prods.length, "el de las puertas ya está").toBeGreaterThan(0);
+    expect(prods[0].items, "dice cuántas piezas trae, que es lo que se lee al escoger").toBe(2);
+    const nombres = unicos.map((u) => u.nombre);
+    expect(nombres, "la barra sigue siendo su propio producto único").toContain("Barra de cocina");
+    expect(nombres, "y las puertas ya no, porque ya están agrupadas").not.toContain("Puerta de recámara");
+    expect(unicos[0].precio_pieza, "cada único trae su precio por pieza, en centavos").toBeGreaterThan(0);
+  });
+
+  it("meter un ítem al producto le hereda el costo y mueve la venta", async () => {
+    const { productos: prods } = await productosDelProyecto(ids.proyecto);
+    const modelo = prods[0];
+    const barra = (await productos()).find((p) => p.nombre === "Barra de cocina")!;
+    const antes = await venta();
+    const r = await asignarProducto(barra.id, { producto_id: modelo.id });
+    expect(r.producto!.id).toBe(modelo.id);
+    /* La venta se mueve por la diferencia entre lo que costaba la barra y lo
+     * que cuesta el modelo. Es la regla de Mike —«adquiere en automático ese
+     * costo»— y la única de esto con consecuencia en dinero. */
+    /* `venta()` está en PESOS —es lo que pinta la pantalla— y la respuesta
+     * de la API en CENTAVOS. Dividir aquí es la conversión de siempre. */
+    expect(r.venta_antes / 100).toBe(antes);
+    expect(r.venta_despues).not.toBe(r.venta_antes);
+    const ya = (await productos()).find((p) => p.id === barra.id)!;
+    expect(ya.monto, "en pesos del lado de la pantalla").toBe(modelo.precio / 100);
+    expect(await venta()).toBe(r.venta_despues / 100);
+  });
+
+  it("sacarlo del grupo lo deja como su propio producto único, con su precio", async () => {
+    const barra = (await productos()).find((p) => p.nombre === "Barra de cocina")!;
+    const antes = await venta();
+    const r = await asignarProducto(barra.id, { solo: true });
+    expect(r.producto).toBeNull();
+    const ya = (await productos()).find((p) => p.id === barra.id)!;
+    expect(ya.producto_id ?? null, "ya no apunta a ninguno").toBeNull();
+    expect(await venta(), "y salirse no le quita el precio que heredó").toBe(antes);
   });
 });
 
@@ -185,27 +246,29 @@ describe("desde el plano", () => {
     expect(await venta()).toBe(antes);
   });
 
-  it("una pieza más al concepto: sin pedirlo se rechaza; pidiéndolo, sube la venta", async () => {
-    /* El concepto de las puertas dice dos piezas y ya tiene dos… si están
-     * ubicadas. Aquí no lo están, así que primero se ubican las dos y la
-     * tercera es la que no cabe. */
+  it("una pieza más al ítem: sin pedirlo se rechaza; pidiéndolo, sube la venta", async () => {
+    /* Esta prueba decía «el concepto de las puertas dice dos piezas» porque
+     * antes agrupar FUSIONABA y dejaba un renglón de cantidad 2. Desde el
+     * contrato 0.35.0 las dos puertas siguen siendo dos renglones de una
+     * pieza cada uno —agrupar ya no borra—, así que el cupo se llena con la
+     * primera y la segunda es la que no cabe. Lo que mide es lo mismo: que
+     * pasarse del cupo NO sea silencioso, y que crecer el ítem cueste. */
     const lista = await productos();
-    const concepto = lista.find((p) => p.nombre.startsWith("Puerta"))!;
-    const e1 = await pieza("Puerta 1");
-    const e2 = await pieza("Puerta 2");
-    await fusionarItemsDeLaObra(ids.obra, { ligar: [
-      { element_id: e1, item_id: concepto.id }, { element_id: e2, item_id: concepto.id },
-    ] });
+    const item = lista.find((p) => p.nombre.startsWith("Puerta"))!;
+    expect(item.cantidad, "una pieza: agrupar ya no fusiona").toBe(1);
 
-    const e3 = await pieza("Puerta 3");
+    const e1 = await pieza("Puerta 1");
+    await fusionarItemsDeLaObra(ids.obra, { ligar: [{ element_id: e1, item_id: item.id }] });
+
+    const e2 = await pieza("Puerta 2");
     await expect(
-      fusionarItemsDeLaObra(ids.obra, { ligar: [{ element_id: e3, item_id: concepto.id }] }),
+      fusionarItemsDeLaObra(ids.obra, { ligar: [{ element_id: e2, item_id: item.id }] }),
     ).rejects.toThrow();
 
     const antes = await venta();
-    const r = await fusionarItemsDeLaObra(ids.obra, { ligar: [{ element_id: e3, item_id: concepto.id, sumar: true }] });
+    const r = await fusionarItemsDeLaObra(ids.obra, { ligar: [{ element_id: e2, item_id: item.id, sumar: true }] });
     expect(r.sumados).toBe(1);
     expect(await venta(), "una puerta más vale una puerta más").toBe(antes + 8_000);
-    expect((await productos()).find((p) => p.id === concepto.id)!.cantidad).toBe(3);
+    expect((await productos()).find((p) => p.id === item.id)!.cantidad).toBe(2);
   });
 });

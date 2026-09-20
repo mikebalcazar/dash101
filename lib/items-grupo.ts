@@ -63,18 +63,95 @@ export async function agrupables(proyecto_id: string): Promise<GrupoDeItems[]> {
   return r.grupos ?? [];
 }
 
-/** Juntarlos. `queda_id` se queda con todo; los de `se_van` desaparecen y le
- *  dejan sus piezas del plano, movimientos, partidas y avances. El precio de
- *  venta del proyecto no se mueve: el importe del concepto es la suma. */
+/** Agruparlos: se escribe el PRODUCTO y las piezas le apuntan.
+ *
+ *  YA NO FUSIONA. Hasta el contrato 0.34.0 esto borraba los renglones que se
+ *  juntaban y dejaba uno solo con `cantidad = 21`. Mike pidió el 20-sep
+ *  poder mover de grupo un ítem ya agrupado, y un renglón borrado no se
+ *  puede mover; escogió con botones que el grupo de producto reemplace a la
+ *  fusión.
+ *
+ *  Las piezas heredan el precio del producto, así que el precio de venta del
+ *  proyecto SÍ se puede mover. Por eso vuelve el antes y el después: la
+ *  pantalla lo enseña y quien agrupó ve lo que hizo. En CENTAVOS. */
 export async function agrupar(
   proyecto_id: string,
-  args: { queda_id: string; se_van: string[]; nombre?: string },
-): Promise<{ absorbidos: number; movidos: Record<string, number> }> {
-  const r = await pedir<{ absorbidos: number; movidos: Record<string, number> }>(
+  args: { items: string[]; nombre?: string; codigo?: string; precio?: number },
+): Promise<{ producto: Producto; items: number; venta_antes: number; venta_despues: number }> {
+  const r = await pedir<{ producto: Producto; items: unknown[]; venta_antes: number; venta_despues: number }>(
     `${base(proyecto_id)}/agrupar`,
     { method: 'POST', body: args },
   );
-  return { absorbidos: r.absorbidos, movidos: r.movidos };
+  return { producto: r.producto, items: r.items?.length ?? 0, venta_antes: r.venta_antes, venta_despues: r.venta_despues };
+}
+
+/* ────────── el producto de cada ítem (contrato 0.35.0) ──────────
+ *
+ * Mike, 20-sep: «todos los ítems, aparte del tipo de ítem, deberían tener un
+ * dropdown para seleccionar qué producto es, o nuevo si el ítem es su mismo
+ * producto único. A lo mejor un ítem pasó de ser modelo A a modelo B y sólo
+ * se cambia de grupo. El dropdown debe tener 1) los ítems que son únicos en
+ * el proyecto 2) los productos que ya tienen varios ítems agrupados».
+ */
+
+/** Un modelo del catálogo. `precio` es POR PIEZA y viene en CENTAVOS. */
+export interface Producto {
+  id: string;
+  codigo: string;
+  nombre: string;
+  descripcion: string | null;
+  tipo: string;
+  precio: number;
+  moneda: string;
+  /** Cuántos ítems del proyecto le apuntan, y cuántas piezas son en total.
+   *  Sólo vienen en la lista del dropdown. */
+  items?: number;
+  piezas?: number;
+}
+
+/** Un ítem que todavía es su propio producto único. Escogerlo desde otro
+ *  ítem es decir «somos el mismo modelo», y eso es lo que escribe el
+ *  producto. */
+export interface ItemUnico {
+  id: string;
+  clave: string | null;
+  nombre: string;
+  tipo: string;
+  cantidad: number;
+  /** En CENTAVOS. */
+  monto: number;
+  precio_pieza: number;
+  moneda: string;
+  estado: string;
+}
+
+/** Las dos listas del dropdown. No escribe nada. */
+export async function productosDelProyecto(
+  proyecto_id: string,
+): Promise<{ productos: Producto[]; unicos: ItemUnico[] }> {
+  const r = await pedir<{ productos: Producto[]; unicos: ItemUnico[] }>(`${base(proyecto_id)}/productos`);
+  return { productos: r.productos ?? [], unicos: r.unicos ?? [] };
+}
+
+/** Cambiar un ítem de grupo. Tres formas de decirlo:
+ *
+ *   · `{ producto_id }`  entra a un producto que ya existe;
+ *   · `{ desde_item }`   «es el mismo modelo que aquél»: escribe el producto
+ *                        a partir de ese ítem único y mete a los dos;
+ *   · `{ solo: true }`   se sale y vuelve a ser su propio producto único.
+ *
+ *  Entrar HEREDA EL PRECIO del producto. Salirse no se lo quita: la pieza se
+ *  queda con el que ya tenía. Vuelve el precio de venta del proyecto antes y
+ *  después, en CENTAVOS. */
+export async function asignarProducto(
+  item_id: string,
+  args: { producto_id?: string; desde_item?: string; solo?: boolean },
+): Promise<{ producto: Producto | null; venta_antes: number; venta_despues: number }> {
+  const r = await pedir<{ producto: Producto | null; venta_antes: number; venta_despues: number }>(
+    `/orgs/${org()}/items/${encodeURIComponent(item_id)}/producto`,
+    { method: 'POST', body: args },
+  );
+  return { producto: r.producto, venta_antes: r.venta_antes, venta_despues: r.venta_despues };
 }
 
 /** La partida de cada ítem y su lugar dentro de ella, en un solo envío. Lo
