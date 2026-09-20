@@ -1,4 +1,4 @@
-/* Las obras de quell101, del lado de dash101 · contrato 0.26.0 de la suite.
+/* Las obras de quell101, del lado de dash101 · contrato 0.28.0 de la suite.
  *
  * Mike, 20-sep: la obra que se abre en quell101 y el proyecto que se abre
  * aquí son la misma casa. Este módulo habla con `/orgs/:o/obras/*`, que la
@@ -111,26 +111,59 @@ export interface ItemSinPieza {
   estado: string;
 }
 
+/** Un ítem que todavía admite una pieza. Es lo que llena el desplegable
+ *  para emparejar a mano: sin esta lista sólo se podía aceptar o rechazar lo
+ *  que el parecido adivinó. */
+export interface CandidatoDeItem {
+  id: string;
+  clave: string | null;
+  nombre: string;
+  /** En CENTAVOS, como todo el dinero de la API. */
+  monto: number;
+  cantidad: number;
+  /** Cuántas piezas suyas ya están en un plano, y cuántas le caben. */
+  ubicados: number;
+  cupo: number;
+  estado: string;
+}
+
 export interface PropuestaDeItems {
   parejas: ParejaDeItem[];
   nuevos: PiezaSinItem[];
   sueltos: ItemSinPieza[];
+  candidatos: CandidatoDeItem[];
+}
+
+/** Lo que se manda por cada pieza que se liga.
+ *
+ *  `clave` sólo hace falta cuando los dos lados traen código y son
+ *  distintos: es qué código gana, y queda en los dos lados. Sin ella la API
+ *  no toca ninguno, a propósito.
+ *
+ *  `nombre` es aparte y siempre opcional: los dos lados traen nombre, así
+ *  que no hay hueco que llenar —o cada uno conserva el suyo, o alguien
+ *  escoge—. La descripción no entra: sólo dash101 la tiene. */
+export interface LigaDeItem {
+  element_id: string;
+  item_id: string;
+  clave?: 'quell' | 'dash';
+  nombre?: 'quell' | 'dash';
 }
 
 /** Qué se emparejaría con qué. NO escribe nada. */
 export async function itemsDeLaObra(obra_id: string): Promise<PropuestaDeItems> {
   const r = await pedir<PropuestaDeItems>(`${base()}/${encodeURIComponent(obra_id)}/items`);
-  return { parejas: r.parejas, nuevos: r.nuevos, sueltos: r.sueltos };
+  return { parejas: r.parejas, nuevos: r.nuevos, sueltos: r.sueltos, candidatos: r.candidatos ?? [] };
 }
 
 /** Aplicar lo que se aceptó. Lo que no se mande, no se toca. */
 export async function fusionarItemsDeLaObra(
   obra_id: string,
-  plan: { ligar?: Array<{ element_id: string; item_id: string }>; crear?: string[] },
-): Promise<{ ligados: number; creados: number }> {
-  const r = await pedir<{ ligados: number; creados: number }>(
+  plan: { ligar?: LigaDeItem[]; crear?: string[] },
+): Promise<{ ligados: number; creados: number; renombrados: number }> {
+  const r = await pedir<{ ligados: number; creados: number; renombrados: number }>(
     `${base()}/${encodeURIComponent(obra_id)}/items`,
     { method: 'POST', body: plan },
   );
-  return { ligados: r.ligados, creados: r.creados };
+  return { ligados: r.ligados, creados: r.creados, renombrados: r.renombrados ?? 0 };
 }

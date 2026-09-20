@@ -1,27 +1,39 @@
 "use client";
 
-/* Juntar los ítems del proyecto con las piezas del plano · contrato 0.26.0.
+/* Juntar los ítems del proyecto con las piezas del plano · contrato 0.28.0.
  *
  * Mike, 20-sep: los ítems de la obra y los del proyecto son la misma lista de
- * piezas capturada dos veces, y nadie sabe cuál manda.
+ * piezas capturada dos veces. Y después, al ver la primera versión:
+ * «necesito una opción de hacer match de los que ya existen. Que pueda
+ * escoger de la lista qué ítem corresponde al de quell».
  *
- * Esta pantalla NO junta sola. Enseña lo que la API propone y espera un sí.
- * Emparejar por parecido acierta casi siempre; la vez que falla le cuelga el
- * dinero de una pieza a otra, y eso se arregla a mano, renglón por renglón,
- * cuando alguien lo note. Por eso cada pareja dice POR QUÉ se emparejó —por
- * código o por nombre— y cada una se puede quitar antes de aplicar.
+ * Por eso esta pantalla NO es aceptar o rechazar. Es UNA FILA POR PIEZA del
+ * plano, con un desplegable de todos los ítems que todavía caben. El
+ * parecido llega preseleccionado —acierta casi siempre— y se cambia con un
+ * clic cuando no.
+ *
+ * Y lo que de verdad los hace uno es el CÓDIGO, no el nombre. Mike lo
+ * precisó: «lo que va a ser lo mismo es el código de ítem, ej. CAR-01,
+ * PT-09, porque el nombre descriptivo viene en el detalle de dash y en el
+ * detalle de quell». Así que el código se unifica, y el nombre sólo si
+ * alguien lo escoge.
  */
 
-import { useEffect, useState } from "react";
-import { IconExternalLink, IconCheck, IconPlus } from "@tabler/icons-react";
+import { useEffect, useMemo, useState } from "react";
+import { IconExternalLink, IconCheck, IconAlertTriangle } from "@tabler/icons-react";
 import {
   fusionarItemsDeLaObra, itemsDeLaObra, urlObra,
-  type Obra, type PropuestaDeItems,
+  type LigaDeItem, type Obra, type PropuestaDeItems,
 } from "@/lib/obras";
 import { formatMonto } from "@/lib/format";
 
 /** El dinero llega en CENTAVOS de la API; aquí se pinta en pesos, una vez. */
 const pesos = (centavos: number) => formatMonto(Math.round(centavos) / 100, "MXN");
+
+/** Lo que se decidió para una pieza. `item` vacío = no hacer nada con ella;
+ *  `nuevo` = crearle su propio ítem. */
+type Decision = { item: string; clave?: "quell" | "dash"; nombre?: "quell" | "dash" };
+const NUEVO = "__nuevo__";
 
 export function JuntarItemsDeLaObra({ obra, alTerminar }: { obra: Obra; alTerminar: () => void }) {
   const [prop, setProp] = useState<PropuestaDeItems | null>(null);
@@ -29,19 +41,20 @@ export function JuntarItemsDeLaObra({ obra, alTerminar }: { obra: Obra; alTermin
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [hecho, setHecho] = useState("");
-  /* Lo que sigue aceptado. Arranca con TODO palomeado porque la propuesta
-   * casi siempre está bien; lo que hay que poder hacer rápido es quitar la
-   * que no. */
-  const [ligar, setLigar] = useState<Set<string>>(new Set());
-  const [crear, setCrear] = useState<Set<string>>(new Set());
+  const [decidido, setDecidido] = useState<Record<string, Decision>>({});
 
   const traer = async () => {
     setCargando(true); setError("");
     try {
       const p = await itemsDeLaObra(obra.id);
       setProp(p);
-      setLigar(new Set(p.parejas.map((x) => x.element_id)));
-      setCrear(new Set(p.nuevos.map((x) => x.element_id)));
+      /* Se arranca con lo que el parecido propuso, ya escogido: acierta casi
+       * siempre y lo que hay que poder hacer rápido es cambiar la que no.
+       * Las piezas sin parecido arrancan en «crearle su ítem». */
+      const d: Record<string, Decision> = {};
+      for (const par of p.parejas) d[par.element_id] = { item: par.item_id };
+      for (const n of p.nuevos) d[n.element_id] = { item: NUEVO };
+      setDecidido(d);
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo leer la propuesta.");
     } finally {
@@ -51,24 +64,54 @@ export function JuntarItemsDeLaObra({ obra, alTerminar }: { obra: Obra; alTermin
 
   useEffect(() => { void traer(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [obra.id]);
 
-  const alterna = (set: Set<string>, poner: (s: Set<string>) => void, id: string) => {
-    const copia = new Set(set);
-    if (copia.has(id)) copia.delete(id); else copia.add(id);
-    poner(copia);
-  };
+  /** Todas las piezas sueltas, en una sola lista: las que el parecido
+   *  emparejó y las que no. Partirlas en dos montones obligaba a buscar en
+   *  cuál está la que uno quiere cambiar. */
+  const piezas = useMemo(() => {
+    if (!prop) return [];
+    return [
+      ...prop.parejas.map((p) => ({ element_id: p.element_id, codigo: p.codigo, pieza: p.pieza, tipo: p.tipo, sugerido: p.item_id, por: p.por })),
+      ...prop.nuevos.map((n) => ({ element_id: n.element_id, codigo: n.codigo, pieza: n.pieza, tipo: n.tipo, sugerido: "", por: "" as const })),
+    ];
+  }, [prop]);
+
+  /** Cuántas veces se escogió cada ítem, para no pasarse del cupo antes de
+   *  mandar. La API lo rechaza igual; es mejor no llegar hasta allá. */
+  const usos = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const d of Object.values(decidido)) if (d.item && d.item !== NUEVO) m[d.item] = (m[d.item] ?? 0) + 1;
+    return m;
+  }, [decidido]);
+
+  const porId = useMemo(
+    () => Object.fromEntries((prop?.candidatos ?? []).map((c) => [c.id, c])),
+    [prop],
+  );
+
+  const excedidos = (prop?.candidatos ?? []).filter((c) => (usos[c.id] ?? 0) > c.cupo);
+
+  const cambiar = (eid: string, patch: Partial<Decision>) =>
+    setDecidido((p) => ({ ...p, [eid]: { ...(p[eid] ?? { item: "" }), ...patch } }));
 
   const aplicar = async () => {
     if (!prop) return;
     setGuardando(true); setError(""); setHecho("");
     try {
-      const r = await fusionarItemsDeLaObra(obra.id, {
-        ligar: prop.parejas.filter((p) => ligar.has(p.element_id)).map((p) => ({ element_id: p.element_id, item_id: p.item_id })),
-        crear: prop.nuevos.filter((n) => crear.has(n.element_id)).map((n) => n.element_id),
-      });
-      setHecho(
-        `Quedaron ${r.ligados} pieza${r.ligados === 1 ? "" : "s"} colgada${r.ligados === 1 ? "" : "s"} de su ítem` +
-        (r.creados ? ` y ${r.creados} ítem${r.creados === 1 ? "" : "s"} nuevo${r.creados === 1 ? "" : "s"}, sin precio todavía.` : "."),
-      );
+      const ligar: LigaDeItem[] = [];
+      const crear: string[] = [];
+      for (const pz of piezas) {
+        const d = decidido[pz.element_id];
+        if (!d || !d.item) continue;
+        if (d.item === NUEVO) crear.push(pz.element_id);
+        else ligar.push({ element_id: pz.element_id, item_id: d.item, clave: d.clave, nombre: d.nombre });
+      }
+      const r = await fusionarItemsDeLaObra(obra.id, { ligar, crear });
+      const partes = [
+        `${r.ligados} pieza${r.ligados === 1 ? "" : "s"} quedó${r.ligados === 1 ? "" : "aron"} con su ítem`,
+        r.creados ? `${r.creados} ítem${r.creados === 1 ? "" : "s"} nuevo${r.creados === 1 ? "" : "s"}, sin precio todavía` : "",
+        r.renombrados ? `${r.renombrados} nombre${r.renombrados === 1 ? "" : "s"} igualado${r.renombrados === 1 ? "" : "s"} en los dos lados` : "",
+      ].filter(Boolean);
+      setHecho(`${partes.join(" · ")}.`);
       await traer();
       alTerminar();
     } catch (e) {
@@ -82,98 +125,159 @@ export function JuntarItemsDeLaObra({ obra, alTerminar }: { obra: Obra; alTermin
   if (error && !prop) return <p className="text-xs text-mauve-900 mt-2">{error}</p>;
   if (!prop) return null;
 
-  const nadaQueHacer = prop.parejas.length === 0 && prop.nuevos.length === 0;
-
-  return (
-    <div className="mt-3 border-t border-black/5 pt-3">
-      {nadaQueHacer ? (
+  if (piezas.length === 0) {
+    return (
+      <div className="mt-3 border-t border-black/5 pt-3">
         <p className="text-xs text-ink-muted">
           Todas las piezas del plano ya están colgadas de su ítem.
           {prop.sueltos.length > 0 && (
             <> Quedan {prop.sueltos.length} ítem{prop.sueltos.length === 1 ? "" : "es"} sin ubicar en el plano; eso se hace en quell101, poniendo el punto en el dibujo.</>
           )}
         </p>
-      ) : (
-        <>
-          <p className="text-xs text-ink-muted mb-2">
-            Esto es una propuesta: nada se guarda hasta que le piques a aplicar. Quita la
-            palomita de lo que no cuadre.
-          </p>
+      </div>
+    );
+  }
 
-          {prop.parejas.length > 0 && (
-            <>
-              <h4 className="text-xs font-medium text-ink-dim mb-1">Se parecen — se colgarían del mismo ítem</h4>
-              <ul className="mb-3 space-y-1">
-                {prop.parejas.map((p) => (
-                  <li key={p.element_id} className="flex items-start gap-2 text-xs">
-                    <input
-                      type="checkbox"
-                      aria-label={`Juntar ${p.pieza} con ${p.item_nombre}`}
-                      checked={ligar.has(p.element_id)}
-                      onChange={() => alterna(ligar, setLigar, p.element_id)}
-                      className="mt-0.5"
-                    />
-                    <span className="flex-1 min-w-0">
-                      <span className="text-ink-dim">{p.codigo ? `${p.codigo} · ` : ""}{p.pieza}</span>
-                      <span className="text-ink-muted"> → </span>
-                      <span className="text-ink-dim">{p.item_nombre}</span>
-                      <span className="text-ink-muted"> · {pesos(p.monto)}</span>
-                      <span className="text-ink-muted"> · se parecen por {p.por === "codigo" ? "código" : "nombre"}</span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
+  const cuantas = Object.values(decidido).filter((d) => d.item).length;
 
-          {prop.nuevos.length > 0 && (
-            <>
-              <h4 className="text-xs font-medium text-ink-dim mb-1">Están en el plano y no en el proyecto</h4>
-              <p className="text-[11px] text-ink-muted mb-1">
-                Se les crea su ítem, <b>sin precio</b>: una pieza del plano no trae cuánto cuesta. Salen
-                como cotizados y no mueven el monto de venta hasta que les pongas precio.
-              </p>
-              <ul className="mb-3 space-y-1">
-                {prop.nuevos.map((n) => (
-                  <li key={n.element_id} className="flex items-start gap-2 text-xs">
-                    <input
-                      type="checkbox"
-                      aria-label={`Crear ítem para ${n.pieza}`}
-                      checked={crear.has(n.element_id)}
-                      onChange={() => alterna(crear, setCrear, n.element_id)}
-                      className="mt-0.5"
-                    />
-                    <span className="flex-1 min-w-0 text-ink-dim">
-                      {n.codigo ? `${n.codigo} · ` : ""}{n.pieza}
-                      <span className="text-ink-muted"> · {n.tipo}</span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
+  return (
+    <div className="mt-3 border-t border-black/5 pt-3">
+      <h4 className="text-xs font-medium text-ink-dim mb-1">Juntar las piezas del plano con los ítems</h4>
+      <p className="text-xs text-ink-muted mb-3">
+        Nada se guarda hasta que le piques a aplicar. Lo que ves escogido es lo que el sistema
+        cree; cámbialo cuando no cuadre. Lo que dejes en <b>«no hacer nada»</b> se queda como está.
+      </p>
 
-          <button
-            type="button"
-            onClick={aplicar}
-            disabled={guardando || (ligar.size === 0 && crear.size === 0)}
-            className="bg-ink text-white text-xs px-3 py-2 rounded-xl inline-flex items-center gap-1 disabled:opacity-40"
-          >
-            {crear.size > 0 ? <IconPlus size={13} /> : <IconCheck size={13} />}
-            {guardando ? "Juntando…" : `Aplicar (${ligar.size + crear.size})`}
-          </button>
-        </>
-      )}
+      <div className="space-y-3">
+        {piezas.map((pz) => {
+          const d = decidido[pz.element_id] ?? { item: "" };
+          const item = d.item && d.item !== NUEVO ? porId[d.item] : null;
+          const claveItem = (item?.clave ?? "").trim();
+          const clavePieza = (pz.codigo ?? "").trim();
+          const chocanClaves = Boolean(claveItem && clavePieza && claveItem !== clavePieza);
+          const difierenNombres = Boolean(item && item.nombre !== pz.pieza);
 
-      {prop.sueltos.length > 0 && !nadaQueHacer && (
-        <p className="text-[11px] text-ink-muted mt-2">
-          Y {prop.sueltos.length} ítem{prop.sueltos.length === 1 ? "" : "es"} del proyecto todavía no
-          está{prop.sueltos.length === 1 ? "" : "n"} en el plano.{" "}
-          <a href={urlObra(obra)} target="_blank" rel="noreferrer" className="text-marca hover:underline inline-flex items-center gap-0.5">
-            Ubicarlos en quell101 <IconExternalLink size={11} />
-          </a>
+          return (
+            <div key={pz.element_id} className="bg-cream/40 rounded-xl p-2.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-ink-dim flex-1 min-w-[10rem]">
+                  <b>{pz.codigo ? `${pz.codigo} · ` : ""}{pz.pieza}</b>
+                  <span className="text-ink-muted"> · {pz.tipo}</span>
+                </span>
+                <select
+                  aria-label={`Ítem para ${pz.pieza}`}
+                  value={d.item}
+                  onChange={(e) => cambiar(pz.element_id, { item: e.target.value, clave: undefined, nombre: undefined })}
+                  className="flex-1 min-w-[12rem] bg-white border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-ink/40"
+                >
+                  <option value="">— No hacer nada con ésta —</option>
+                  <option value={NUEVO}>Crearle su ítem, sin precio</option>
+                  {(prop.candidatos ?? []).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.clave ? `${c.clave} · ` : ""}{c.nombre} · {pesos(c.monto)}
+                      {c.cantidad > 1 ? ` · caben ${c.cupo} de ${c.cantidad}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {pz.sugerido && d.item === pz.sugerido && (
+                <p className="text-[11px] text-ink-muted mt-1">
+                  Se parecen por {pz.por === "codigo" ? "código" : "nombre"}.
+                </p>
+              )}
+
+              {/* El código es la identidad, y sólo hay que decidir cuando los
+                  dos lados traen uno distinto. Cuando falta de un lado, la
+                  API lo copia sin preguntar: eso es llenar un hueco. */}
+              {chocanClaves && (
+                <div className="mt-1.5 text-[11px] text-ink-dim">
+                  <span className="inline-flex items-center gap-1 text-pend-900">
+                    <IconAlertTriangle size={12} /> Dos códigos distintos. ¿Cuál queda en los dos lados?
+                  </span>
+                  <div className="flex gap-1.5 mt-1">
+                    {(["quell", "dash"] as const).map((lado) => (
+                      <button
+                        key={lado}
+                        type="button"
+                        onClick={() => cambiar(pz.element_id, { clave: lado })}
+                        className={`px-2 py-1 rounded-lg border text-[11px] ${
+                          d.clave === lado ? "bg-ink text-cream border-ink" : "bg-white border-black/10 text-ink-dim"
+                        }`}
+                      >
+                        {lado === "quell" ? `${clavePieza} (plano)` : `${claveItem} (proyecto)`}
+                      </button>
+                    ))}
+                    {d.clave && (
+                      <button type="button" onClick={() => cambiar(pz.element_id, { clave: undefined })}
+                        className="px-2 py-1 text-[11px] text-ink-muted">Dejar cada uno</button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* El nombre es otra cosa: los dos lados lo traen, y el
+                  descriptivo largo vive en el detalle de cada app. Por eso
+                  por omisión cada uno conserva el suyo. */}
+              {difierenNombres && (
+                <div className="mt-1.5 text-[11px] text-ink-dim">
+                  <span className="text-ink-muted">Nombres distintos. Puedes dejar cada uno con el suyo, o igualarlos:</span>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {(["quell", "dash"] as const).map((lado) => (
+                      <button
+                        key={lado}
+                        type="button"
+                        onClick={() => cambiar(pz.element_id, { nombre: lado })}
+                        className={`px-2 py-1 rounded-lg border text-[11px] ${
+                          d.nombre === lado ? "bg-ink text-cream border-ink" : "bg-white border-black/10 text-ink-dim"
+                        }`}
+                      >
+                        «{lado === "quell" ? pz.pieza : item!.nombre}» {lado === "quell" ? "(plano)" : "(proyecto)"}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => cambiar(pz.element_id, { nombre: undefined })}
+                      className={`px-2 py-1 rounded-lg border text-[11px] ${
+                        !d.nombre ? "bg-ink text-cream border-ink" : "bg-white border-black/10 text-ink-dim"
+                      }`}
+                    >
+                      Dejar cada uno con el suyo
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {excedidos.length > 0 && (
+        <p className="text-xs text-mauve-900 bg-mauve-50 px-3 py-2 rounded-xl mt-3">
+          {excedidos.map((c) => `«${c.nombre}» admite ${c.cupo} pieza${c.cupo === 1 ? "" : "s"} y escogiste ${usos[c.id]}`).join(". ")}.
+          Quítale a alguna antes de aplicar.
         </p>
       )}
+
+      <div className="flex flex-wrap items-center gap-3 mt-3">
+        <button
+          type="button"
+          onClick={aplicar}
+          disabled={guardando || cuantas === 0 || excedidos.length > 0}
+          className="bg-ink text-white text-xs px-3 py-2 rounded-xl inline-flex items-center gap-1 disabled:opacity-40"
+        >
+          <IconCheck size={13} />
+          {guardando ? "Juntando…" : `Aplicar (${cuantas})`}
+        </button>
+        {prop.sueltos.length > 0 && (
+          <span className="text-[11px] text-ink-muted">
+            {prop.sueltos.length} ítem{prop.sueltos.length === 1 ? "" : "es"} del proyecto todavía sin pieza en el plano.{" "}
+            <a href={urlObra(obra)} target="_blank" rel="noreferrer" className="text-marca hover:underline inline-flex items-center gap-0.5">
+              Ubicarlos en quell101 <IconExternalLink size={11} />
+            </a>
+          </span>
+        )}
+      </div>
 
       {hecho && <p className="text-xs text-mint-900 mt-2">{hecho}</p>}
       {error && <p className="text-xs text-mauve-900 mt-2">{error}</p>}
