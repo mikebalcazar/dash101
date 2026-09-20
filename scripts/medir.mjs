@@ -45,6 +45,9 @@ const VERSION_ESPERADA = process.env.VERSION_ESPERADA || '';
 const ORG_STAGING = process.env.ORG_STAGING || 'demo';
 const ORG_PROD = process.env.ORG_PROD || 'forespot';
 
+/** El logotipo oficial, el mismo del escaparate. */
+const LOGOTIPO = '/marca/dash101.svg';
+
 const FUENTES = [
   '/fonts/fira-cifras-400.woff2',
   '/fonts/fira-cifras-600.woff2',
@@ -113,7 +116,22 @@ async function laCascara(base, quien) {
     intentos++;
   }
   rev(portada.estado === 200, 'la portada contesta', `${portada.estado} en ${portada.ms} ms · ${intentos} intento${intentos === 1 ? '' : 's'}`);
-  rev(portada.texto.includes('Conta Master'), 'la portada trae la marca');
+  /* La marca. Hasta el 20-sep esto buscaba el texto «Conta Master» —el nombre
+   * viejo— en la portada, y se quedó buscándolo después de que el logotipo
+   * oficial lo sustituyera: el despliegue se fue en rojo dos merges seguidos
+   * por una cadena que la app ya no dice, y la medición no lo distinguía de
+   * una caída de verdad.
+   *
+   * Ahora se mide lo que de veras tiene que estar, y en el lugar donde está:
+   * el nombre en el título de la portada, y el logotipo en la pantalla de
+   * entrada —la portada es sólo el desvío, se pinta en el navegador y no lo
+   * trae—. La tercera es la que un texto nunca iba a cachar: que el archivo
+   * del logotipo se sirva de verdad. */
+  rev(portada.texto.includes('<title>dash101</title>'), 'la portada trae la marca en el título');
+  const entrada = await traer(base, '/login');
+  rev(entrada.estado === 200 && entrada.texto.includes(LOGOTIPO), 'la pantalla de entrada apunta al logotipo', `${entrada.estado}`);
+  const marca = await traer(base, LOGOTIPO);
+  rev(marca.estado === 200 && marca.tipo.includes('svg'), 'y el logotipo se sirve', `${marca.estado} ${marca.tipo}`);
   if (VERSION_ESPERADA) {
     const m = portada.texto.match(/name="dash101-version" content="([^"]*)"/);
     rev(m?.[1] === VERSION_ESPERADA, 'la portada es la versión que se acaba de construir', `sirve ${m?.[1]?.slice(0, 8) ?? '(sin versión)'}, se esperaba ${VERSION_ESPERADA.slice(0, 8)}`);
