@@ -721,6 +721,61 @@ test('corregir un movimiento: se cambia el monto y el saldo se recalcula', async
   await ctx.close();
 });
 
+test('corregir un movimiento SIN contraparte: el botón no se queda apagado', async () => {
+  /* Mike, 20-sep: «cuando quiero editar un movimiento, a la hora de guardar
+   * no me hace nada». Sin mensaje: nada.
+   *
+   * Un movimiento puede no tener contraparte de a de veras —un ajuste, un
+   * gasto fijo, la caseta, algo importado— y el formulario lo daba por
+   * imposible sin decirlo: el botón de guardar se apagaba cuando faltaba la
+   * contraparte, y un botón apagado sin explicación se ve igual que uno
+   * descompuesto.
+   *
+   * Esto no lo puede atrapar una prueba de datos: la escritura SÍ acepta el
+   * cambio (se mide en pruebas/editar-sin-contraparte.spec.ts). Lo que
+   * estorbaba era la pantalla, y la pantalla sólo se ve con un navegador. */
+  const { ctx, pag, errores } = await pestana({ width: 390, height: 844 }, true);
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  const { neg } = await negocioDePruebas(pag);
+  await elegirNegocio(pag, neg.id);
+
+  const cuenta = filas(await api(pag, `/orgs/${ORG}/cuentas?negocio_id=${neg.id}`))[0];
+  const mov = await api(pag, `/orgs/${ORG}/movimientos`, {
+    method: 'POST',
+    body: {
+      negocio_id: neg.id, tipo: 'egreso', monto: 4_500_00, fecha: '2026-03-24',
+      cuenta_id: cuenta.id, contraparte_tipo: 'otro', contraparte_id: null,
+      contraparte_nombre: 'Caseta', descripcion: 'Sin proveedor',
+    },
+  });
+
+  await pag.goto(`${URL}/movimientos/${mov.id}/editar`, { waitUntil: 'load' });
+  const campoMonto = pag.locator('input[type="number"]').first();
+  await campoMonto.waitFor({ timeout: 25000 });
+
+  const boton = pag.getByRole('button', { name: /^Guardar cambios$/ });
+  assert.equal(await boton.isDisabled(), false, 'el botón de guardar está vivo, no apagado');
+
+  await campoMonto.fill('5200');
+  await boton.click();
+  try {
+    await pag.waitForURL(/\/movimientos(\?|$)/, { timeout: 30000 });
+  } catch (e) {
+    const enPantalla = (await texto(pag)).replace(/\s+/g, ' ').slice(0, 400);
+    assert.fail(`no guardó. La pantalla decía: ${enPantalla}`);
+  }
+
+  const d = await api(pag, `/orgs/${ORG}/movimientos/${mov.id}`);
+  assert.equal(d.monto, 5_200_00, 'quedó corregido');
+  // Y no se le inventó un proveedor con tal de poder guardar: un pago
+  // atribuido a quien nunca lo cobró es peor que no poder corregirlo.
+  assert.equal(d.contraparte_id, null, 'sigue sin contraparte');
+  assert.equal(d.contraparte_nombre, 'Caseta', 'y conserva a quién se le pagó');
+
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
 /* ═══════════════ 7 · el otro sentido de la puerta, al final ═══════════════ */
 
 test('un código equivocado NO entra', async () => {

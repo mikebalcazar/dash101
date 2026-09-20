@@ -111,6 +111,16 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
    * es CAMBIARLO, no corregirle la nota o el proyecto. */
   const [montoFijo, setMontoFijo] = useState(false);
   const [montoOriginal, setMontoOriginal] = useState("");
+  /* Hay movimientos que legítimamente NO tienen contraparte: un ajuste, un
+   * gasto fijo, la caseta de la carretera, algo importado de antes. El
+   * formulario los daba por imposibles sin decirlo —el botón de guardar se
+   * quedaba apagado y picarle no hacía nada—, y encima la única salida
+   * habría sido colgarle un proveedor inventado: un pago atribuido a quien
+   * nunca lo cobró, que es peor que no poder corregirlo.
+   *
+   * Aquí se guarda lo que traía para poder conservarlo tal cual. */
+  const [contraparteOriginal, setContraparteOriginal] =
+    useState<{ tipo: string; nombre: string } | null>(null);
 
   const negocio = useMemo<Negocio | null>(
     () => negocios.find((n) => n.id === negocioId) ?? null,
@@ -156,6 +166,9 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
         setCuentaId(m.cuenta_id);
         setProyectoId(m.proyecto_id ?? "");
         setContraparteId(m.contraparte_id ?? "");
+        if (!m.contraparte_id) {
+          setContraparteOriginal({ tipo: m.contraparte_tipo ?? "otro", nombre: m.contraparte_nombre ?? "" });
+        }
         setProductoId(m.producto_id ?? "");
         setFactura(m.facturado ? "ya" : m.requiere_factura ? "falta" : "no");
         if (m.descripcion) { setDescripcion(m.descripcion); setShowNota(true); }
@@ -265,6 +278,8 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
   const proyectosActivos = proyectos.filter((p) => p.estado !== "cerrado");
   const contrapartes = tipo === "ingreso" ? clientes : proveedoresDelProyecto;
   const contraparteLabel = tipo === "ingreso" ? "Cliente" : "Proveedor";
+  /* Se queda sin contraparte sólo si así venía Y el usuario no le puso una. */
+  const sinContraparte = Boolean(contraparteOriginal) && !contraparteId;
 
   if (editando && (cargandoMov || bloqueado)) {
     return (
@@ -327,8 +342,12 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
       tipo === "ingreso"
         ? clientes.find((c) => c.id === contraparteId)
         : proveedores.find((p) => p.id === contraparteId);
-    if (!contraparteObj) {
-      setError(`Selecciona un ${contraparteLabel.toLowerCase()}`);
+    if (!contraparteObj && !sinContraparte) {
+      setError(
+        contraparteId
+          ? `Ese ${contraparteLabel.toLowerCase()} ya no está en la lista de este negocio. Escoge otro.`
+          : `Selecciona un ${contraparteLabel.toLowerCase()}`,
+      );
       return;
     }
 
@@ -342,9 +361,13 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
         cuenta_nombre: cuenta.nombre,
         proyecto_id: proyectoId || null,
         proyecto_nombre: proyectoSel?.nombre ?? null,
-        contraparte_id: contraparteObj.id!,
-        contraparte_tipo: tipo === "ingreso" ? "cliente" : "proveedor",
-        contraparte_nombre: contraparteObj.nombre,
+        /* Sin contraparte se conserva lo que traía, tal cual. No se le
+         * inventa una para poder guardar. */
+        contraparte_id: contraparteObj ? contraparteObj.id! : null,
+        contraparte_tipo: contraparteObj
+          ? (tipo === "ingreso" ? "cliente" : "proveedor")
+          : ((contraparteOriginal?.tipo ?? "otro") as MovimientoInput["contraparte_tipo"]),
+        contraparte_nombre: contraparteObj ? contraparteObj.nombre : (contraparteOriginal?.nombre ?? ""),
         producto_id: tipo === "ingreso" && productoSel ? productoSel.id : null,
         producto_nombre: tipo === "ingreso" && productoSel ? productoSel.nombre : null,
         negocio_id: negocio.id!,
@@ -591,11 +614,20 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
 
               {/* Contraparte */}
               <SelectConCrear
-                label={`${contraparteLabel} *`}
-                required
+                label={sinContraparte ? contraparteLabel : `${contraparteLabel} *`}
+                required={!sinContraparte}
                 value={contraparteId}
                 onChange={setContraparteId}
-                emptyLabel="— Selecciona —"
+                emptyLabel={
+                  contraparteOriginal
+                    ? `Sin ${contraparteLabel.toLowerCase()}${contraparteOriginal.nombre ? ` · ${contraparteOriginal.nombre}` : ""}`
+                    : "— Selecciona —"
+                }
+                hint={
+                  sinContraparte
+                    ? `Este movimiento se capturó sin ${contraparteLabel.toLowerCase()} y así se queda. Si le pones uno, se guarda con ése.`
+                    : undefined
+                }
                 options={contrapartes.map((c) => ({ id: c.id!, label: c.nombre }))}
                 createLabel={`Crear nuevo ${contraparteLabel.toLowerCase()}`}
                 onOpenCreate={() =>
@@ -785,7 +817,14 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
           </Link>
           <button
             type="submit"
-            disabled={submitting || !monto || !cuentaId || !contraparteId || loadingCat}
+            /* Apagado SÓLO mientras trabaja o mientras carga los catálogos.
+             * Antes se apagaba también cuando faltaba un dato, y ésa era la
+             * mitad callada del defecto: picarle no hacía nada y no había
+             * un solo mensaje que dijera qué faltaba. Lo que falta lo dice
+             * ahora el navegador (los campos obligatorios) o `handleSubmit`
+             * con su frase. Un botón apagado sin explicación se ve igual
+             * que uno descompuesto. */
+            disabled={submitting || loadingCat}
             className="flex-1 bg-ink text-cream rounded-xl px-5 py-2 text-sm font-medium hover:bg-ink/90 disabled:opacity-50 transition"
           >
             {submitting ? (editando ? "Guardando…" : "Registrando…") : editando ? "Guardar cambios" : `Registrar ${isIngreso ? "ingreso" : "egreso"}`}
@@ -805,12 +844,14 @@ function SelectConCrear({
   onChange,
   options,
   emptyLabel,
+  hint,
   createLabel,
   onOpenCreate,
   isOpenCreate,
 }: {
   label: string;
   required?: boolean;
+  hint?: string;
   value: string;
   onChange: (v: string) => void;
   options: { id: string; label: string }[];
@@ -849,6 +890,7 @@ function SelectConCrear({
           {isOpenCreate ? <IconX size={14} /> : <IconPlus size={14} />}
         </button>
       </div>
+      {hint && <p className="text-xs text-ink-muted mt-1">{hint}</p>}
     </div>
   );
 }
