@@ -154,7 +154,7 @@ jobs:
           {
             echo
             echo "== Lo que dice el Worker de staging (wrangler tail) =="
-            npx wrangler tail dash101-staging --env staging --format json > /tmp/tail.jsonl 2>/tmp/tail.err &
+            npx wrangler tail --env staging --format json > /tmp/tail.jsonl 2>/tmp/tail.err &
             TAIL=$!
             sleep 8
             curl -s -o /dev/null -w 'GET /  → %{http_code}\n' "$STAGING/"
