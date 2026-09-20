@@ -10,7 +10,6 @@ import type { Cuenta, Movimiento, Proyecto } from "@/types/schema";
 import { formatMonto, formatDateShort } from "@/lib/format";
 import { Timestamp } from "firebase/firestore";
 import {
-  IconLeaf,
   IconArrowDownLeft,
   IconArrowUpRight,
   IconBuildingBank,
@@ -151,8 +150,9 @@ export default function DashboardPage() {
               Líquido + por cobrar − por pagar
             </p>
           </div>
-          <div className="w-20 h-20 rounded-full bg-sky-50 flex items-center justify-center text-ink shrink-0">
-            <IconLeaf size={32} />
+          <div className="w-20 h-20 rounded-full bg-sky-50 flex items-center justify-center shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/marca/dash101-aro.svg" alt="" className="h-9" />
           </div>
         </div>
       </section>
