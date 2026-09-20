@@ -81,7 +81,13 @@ export interface FilaItem { id: string; proyecto_id: string | null; nombre: stri
   cancelado_motivo?: string | null; aprobado_at?: string | null;
   /* 0.35.0 · a qué modelo del catálogo pertenece la pieza. NULL = es su
    * propio producto único. */
-  producto_id?: string | null }
+  producto_id?: string | null;
+  /* `refs.agrupados` lo dejó escrito la FUSIÓN del contrato 0.30.0, que
+   * borraba los renglones que absorbía: trae el id, el código, el nombre, la
+   * cantidad y el importe de cada uno. Es lo que permite devolverlos
+   * (contrato 0.36.0, POST /items/:id/separar). Un renglón que no venga de
+   * aquello no lo trae. */
+  refs?: { agrupados?: unknown[] } | null }
 export interface FilaPartida { id: string; proyecto_id: string; item_id: string | null; proveedor_id: string | null; proveedor_nombre: string | null; concepto: string | null; monto_acordado: number; monto_pagado: number; estado: 'pendiente' | 'parcial' | 'pagado' }
 export interface FilaMovimiento {
   id: string; negocio_id: string; tipo: 'ingreso' | 'egreso'; monto: number; fecha: string; cuenta_id: string;
@@ -167,6 +173,7 @@ export function item(f: FilaItem, movimientos: FilaMovimiento[]): ItemProyecto {
     fecha_entrega: aTimestamp(f.fecha_entrega), quell_id: f.origen?.quell_id ?? null,
     partida: String(f.partida ?? ''), orden: Number(f.orden ?? 0) || 0,
     producto_id: f.producto_id ?? null, clave: f.clave ?? null,
+    fusionados: Array.isArray(f.refs?.agrupados) ? f.refs.agrupados.length : 0,
   };
 }
 

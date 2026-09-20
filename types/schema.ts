@@ -137,6 +137,11 @@ export interface ItemProyecto {
   /** El código de catálogo que le toca por su producto, o el suyo si todavía
    *  no es de ninguno. */
   clave?: string | null;
+  /** Cuántos renglones se tragó este cuando «juntar los iguales» FUSIONABA
+   *  (contrato 0.30.0). Cero es lo normal. Más que cero quiere decir que
+   *  este renglón se puede partir de vuelta: la fusión dejó anotado qué
+   *  borró, y `separarItem` lo devuelve. */
+  fusionados?: number;
 }
 
 export interface Proyecto {

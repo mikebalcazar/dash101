@@ -42,9 +42,10 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { IconArrowUp, IconArrowDown, IconCheck, IconX, IconArrowsSort, IconLayersSubtract, IconThumbUp, IconBan, IconChevronDown, IconChevronRight } from "@tabler/icons-react";
+import { IconArrowUp, IconArrowDown, IconCheck, IconX, IconArrowsSort, IconLayersSubtract, IconThumbUp, IconBan, IconChevronDown, IconChevronRight, IconArrowsSplit } from "@tabler/icons-react";
 import {
   acomodar, agrupables, agrupar, aprobarItem, asignarProducto, cancelarItem, productosDelProyecto,
+  separarItem, separarProducto,
   type GrupoDeItems, type ItemUnico, type Producto,
 } from "@/lib/items-grupo";
 import { fueraDeAlcance } from "@/lib/api/leer";
@@ -126,6 +127,39 @@ export function ItemsDelProyecto({ proyecto, alCambiar }: { proyecto: Proyecto; 
       alCambiar();
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo cambiar de producto.");
+    } finally {
+      setMoviendo("");
+    }
+  };
+
+  /** Separar: sacar del grupo, y devolver los renglones que la fusión vieja
+   *  borró. Mike, 20-sep: «sepárame todos los ítems de puertas otra vez».
+   *
+   *  `que` es o un producto entero —sus piezas salen todas— o un renglón
+   *  fusionado, que se parte de vuelta en los que se tragó. */
+  const separar = async (que: { producto: string } | { item: string }) => {
+    const id = "producto" in que ? que.producto : que.item;
+    setMoviendo(id); setError(""); setHecho("");
+    try {
+      const r = "producto" in que
+        ? await separarProducto(proyecto.id!, que.producto)
+        : await separarItem(que.item);
+      const delta = (r.venta_despues - r.venta_antes) / 100;
+      const partes = [
+        r.separados ? `${r.separados} ${r.separados === 1 ? "ítem salió" : "ítems salieron"} del grupo` : "",
+        r.reconstruidos ? `volvieron ${r.reconstruidos} ${r.reconstruidos === 1 ? "renglón" : "renglones"} que la versión anterior había borrado` : "",
+        r.piezas_repartidas ? `y ${r.piezas_repartidas} ${r.piezas_repartidas === 1 ? "pieza del plano se fue" : "piezas del plano se fueron"} con el suyo` : "",
+      ].filter(Boolean);
+      setHecho(
+        `${partes.join(", ")}. ` +
+        (delta === 0
+          ? "El precio de venta del proyecto no se movió."
+          : `OJO: el precio de venta ${delta > 0 ? "subió" : "bajó"} ${formatMonto(Math.abs(delta), "MXN")}.`),
+      );
+      await traerOpciones();
+      alCambiar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo separar.");
     } finally {
       setMoviendo("");
     }
@@ -321,6 +355,7 @@ export function ItemsDelProyecto({ proyecto, alCambiar }: { proyecto: Proyecto; 
                     moviendo={moviendo}
                     alMover={mover}
                     alCambiarProducto={cambiarProducto}
+                    alSeparar={separar}
                   />
                 ) : (
                   bloque.filas.map((pr) => (
@@ -332,6 +367,7 @@ export function ItemsDelProyecto({ proyecto, alCambiar }: { proyecto: Proyecto; 
                       moviendo={moviendo}
                       alMover={mover}
                       alCambiarProducto={cambiarProducto}
+                      alSeparar={separar}
                     />
                   ))
                 ),
@@ -358,7 +394,7 @@ export function ItemsDelProyecto({ proyecto, alCambiar }: { proyecto: Proyecto; 
  * puerta?»— se lee junto al nombre, no a dos dedos de distancia.
  */
 function FilaDeItem({
-  fila, opciones, pestana, moviendo, alMover, alCambiarProducto, sangrada = false,
+  fila, opciones, pestana, moviendo, alMover, alCambiarProducto, alSeparar, sangrada = false,
 }: {
   fila: Fila;
   opciones: Opciones;
@@ -366,6 +402,7 @@ function FilaDeItem({
   moviendo: string;
   alMover: (id: string, que: "aprobar" | "cancelar", motivo?: string) => void;
   alCambiarProducto: (id: string, escogido: string) => void;
+  alSeparar: (que: { producto: string } | { item: string }) => void;
   sangrada?: boolean;
 }) {
   const pct = fila.monto > 0 ? Math.min(100, (fila.pagado / fila.monto) * 100) : 0;
@@ -382,6 +419,26 @@ function FilaDeItem({
           <p className="text-[10px] text-ink-muted uppercase tracking-wide mt-0.5">{fila.partida}</p>
         )}
         <SelectorDeProducto fila={fila} opciones={opciones} ocupado={moviendo === fila.id} alEscoger={alCambiarProducto} />
+        {/* Un renglón que se tragó a otros cuando «juntar» fusionaba. No se
+            puede mover de grupo por pieza porque las piezas ya no existen
+            como renglones; esto las devuelve. Se ofrece sólo aquí, donde
+            está el renglón, y diciendo cuántas son. */}
+        {(fila.fusionados ?? 0) > 0 && (
+          <div className="mt-1.5 text-[11px] text-mauve-900">
+            <p>
+              Este renglón se tragó {fila.fusionados} más cuando juntar borraba renglones.
+            </p>
+            <button
+              type="button"
+              onClick={() => alSeparar({ item: fila.id })}
+              disabled={moviendo === fila.id}
+              className="mt-1 inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-xl border border-mauve-900/30 bg-white text-mauve-900 disabled:opacity-40"
+            >
+              <IconArrowsSplit size={13} />
+              {moviendo === fila.id ? "Separando…" : `Separar en ${(fila.fusionados ?? 0) + 1} renglones`}
+            </button>
+          </div>
+        )}
       </td>
       <td className="text-right px-4 py-3 text-sm text-ink-dim tabular-nums">{fila.cantidad ?? 1}</td>
       <td className="px-4 py-3 text-xs text-ink-muted whitespace-nowrap">
@@ -423,7 +480,7 @@ function FilaDeItem({
  * propio dropdown, que es como se saca una del grupo.
  */
 function ProductoEnLaLista({
-  producto, piezas, abierto, alAbrir, opciones, pestana, moviendo, alMover, alCambiarProducto,
+  producto, piezas, abierto, alAbrir, opciones, pestana, moviendo, alMover, alCambiarProducto, alSeparar,
 }: {
   producto: Producto;
   piezas: Fila[];
@@ -434,6 +491,7 @@ function ProductoEnLaLista({
   moviendo: string;
   alMover: (id: string, que: "aprobar" | "cancelar", motivo?: string) => void;
   alCambiarProducto: (id: string, escogido: string) => void;
+  alSeparar: (que: { producto: string } | { item: string }) => void;
 }) {
   const cuantas = piezas.reduce((s, f) => s + (f.cantidad ?? 1), 0);
   const monto = piezas.reduce((s, f) => s + f.monto, 0);
@@ -474,7 +532,23 @@ function ProductoEnLaLista({
             <span className="text-[10px] text-ink-muted w-7 text-right">{pct.toFixed(0)}%</span>
           </div>
         </td>
-        <td className="px-2 py-3" />
+        <td className="px-2 py-3 text-right">
+          {/* Sacar las piezas del grupo de un golpe. Mike, 20-sep:
+              «sepárame todos los ítems de puertas otra vez». De una en una
+              son 29 clics, y ése era justo el problema. No se pierde nada:
+              cada pieza se queda con su precio y vuelve a ser su propio
+              producto único. */}
+          <button
+            type="button"
+            onClick={() => alSeparar({ producto: producto.id })}
+            disabled={moviendo === producto.id}
+            title={`Sacar las ${piezas.length} piezas de «${producto.nombre}»`}
+            className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg border border-black/10 bg-white text-ink-dim disabled:opacity-40"
+          >
+            <IconArrowsSplit size={12} />
+            {moviendo === producto.id ? "Separando…" : "Separar"}
+          </button>
+        </td>
       </tr>
       {abierto &&
         piezas.map((f) => (
@@ -486,6 +560,7 @@ function ProductoEnLaLista({
             moviendo={moviendo}
             alMover={alMover}
             alCambiarProducto={alCambiarProducto}
+            alSeparar={alSeparar}
             sangrada
           />
         ))}
