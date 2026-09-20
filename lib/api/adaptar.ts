@@ -77,6 +77,12 @@ export interface FilaMovimiento {
   proyecto_id: string | null; item_id: string | null; contraparte_tipo: string; contraparte_id: string | null;
   contraparte_nombre: string | null; transfer_id: string | null; descripcion: string | null; categoria: string | null;
   creado_por: string; creado_at: string;
+  /* Lo fiscal (contrato 0.21.x y 0.25.0). `facturado` dice que la factura ya
+   * llegó; `requiere_factura`, que se espera. Se declaran porque la pantalla
+   * de corregir los necesita: el monto de un movimiento YA facturado no se
+   * toca sin quitar antes la marca, o la factura y el movimiento acaban
+   * diciendo importes distintos. */
+  facturado?: boolean; requiere_factura?: boolean; uuid_cfdi?: string | null;
 }
 export interface FilaOpex {
   id: string; negocio_id: string; nombre: string; tipo: string; monto: number; moneda: 'MXN' | 'USD'; frecuencia: string;
@@ -192,6 +198,7 @@ export function movimiento(
     producto_id: f.item_id, producto_nombre: f.item_id ? nombres.items.get(f.item_id)?.nombre ?? null : null,
     cliente_uid: f.tipo === 'ingreso' && cli?.portal_activo ? cli.usuario_id : null,
     negocio_id: f.negocio_id, descripcion: f.descripcion ?? '', categoria: f.categoria ?? '',
+    facturado: Boolean(f.facturado), requiere_factura: Boolean(f.requiere_factura),
     creado_por: f.creado_por, creado_at: ts(f.creado_at),
   };
 }

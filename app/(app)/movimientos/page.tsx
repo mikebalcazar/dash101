@@ -20,6 +20,7 @@ import {
   IconArrowDownLeft,
   IconArrowUpRight,
   IconTrash,
+  IconPencil,
   IconLink,
 } from "@tabler/icons-react";
 
@@ -290,6 +291,18 @@ export default function MovimientosPage() {
                   {meta.prefix}
                   {formatMonto(m.monto, activo.moneda)}
                 </p>
+                {/* Corregir, antes que borrar: es lo que casi siempre se quiere.
+                    Una transferencia no se corrige —son dos movimientos
+                    espejo—, así que ahí sólo queda el bote. */}
+                {!m.transfer_id && (
+                  <Link
+                    href={`/movimientos/${m.id}/editar`}
+                    className="text-ink-muted hover:text-ink-dim p-1"
+                    title="Corregir"
+                  >
+                    <IconPencil size={14} />
+                  </Link>
+                )}
                 <button
                   onClick={() => handleDelete(m)}
                   disabled={deletingId === m.id}
