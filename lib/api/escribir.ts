@@ -292,18 +292,51 @@ export async function updateProyecto(
   });
 
   /* Ítems: por id. Los que vienen con id se actualizan, los que no se crean,
-   * los que ya no vienen se cancelan (regla 2). Si no vienen productos pero
-   * sí un precio y el proyecto no tiene ítems, se aplica la regla 1. */
-  const vivos = (await listar<A.FilaItem>('items', { proyecto_id: id })).filter((i) => i.estado !== 'cancelado');
+   * los que ya no vienen se quitan.
+   *
+   * TRES COSAS QUE SE APRENDIERON A GOLPES (Mike lo reportó tres veces el
+   * 20-sep: «sigue agregando todo lo que aparece en la lista de ítems; no hay
+   * forma de quitar/eliminar ítems»):
+   *
+   * 1. LA LISTA SE PIDE SÓLO DE LOS VIVOS. La API tope cada lista en 500
+   *    filas, ordenadas por fecha de creación. Un proyecto al que se le
+   *    editan los ítems varias veces va dejando cancelados, y el día que
+   *    cancelados + vivos pasan de 500, los vivos RECIENTES se caen del tope:
+   *    sus ids ya no aparecen aquí, la rama de abajo los toma por nuevos y
+   *    los CREA otra vez. Eso es exactamente lo que se veía: cada guardado
+   *    agregaba copias y nada se podía quitar. Pidiendo `estado=vendido` los
+   *    cancelados no ocupan lugar en el tope.
+   *
+   * 2. UN ID QUE LA PANTALLA MANDA NUNCA SE CONVIERTE EN UNA COPIA. Si trae
+   *    id pero no está en la lista, se intenta ACTUALIZARLO; sólo si la API
+   *    dice que no existe se crea. Un id que existe jamás se duplica, aunque
+   *    la lista venga incompleta por lo que sea.
+   *
+   * 3. LO QUE SE QUITA SE SIGUE CANCELANDO, y está bien que así sea: la API
+   *    contesta 403 `items_nunca_se_borran` a propósito, porque un ítem
+   *    borrado deja el historial y el saldo sin cuadrar y nadie sabría por
+   *    qué. Lo que estaba mal no era cancelar: era CONTAR los cancelados
+   *    contra el tope de 500 (punto 1) y tomar por nuevo un id que no salía
+   *    en esa lista (punto 2). */
+  const vivos = await listar<A.FilaItem>('items', { proyecto_id: id, estado: 'vendido' });
   if (d.productos !== undefined || (d.precio_venta !== undefined && vivos.length === 0)) {
     const quiere = productosOPrecio(d.nombre ?? actual.nombre, d.precio_venta ?? A.aPesos(actual.precio_venta), d.productos);
     const porId = new Map(vivos.map((i) => [i.id, i]));
     const quedan = new Set<string>();
     for (const p of quiere) {
-      if (p.id && porId.has(p.id)) {
-        quedan.add(p.id);
-        await cambiar('items', p.id, { nombre: p.nombre, descripcion: oNulo(p.descripcion), monto: A.aCentavos(p.monto), cantidad: cantidadDe(p), fecha_entrega: dia(p.fecha_entrega) });
-      } else {
+      const campos = {
+        nombre: p.nombre, descripcion: oNulo(p.descripcion), monto: A.aCentavos(p.monto),
+        cantidad: cantidadDe(p), fecha_entrega: dia(p.fecha_entrega),
+      };
+      if (!p.id) { await crear('items', filaItem(p, donde)); continue; }
+      quedan.add(p.id);
+      if (porId.has(p.id)) { await cambiar('items', p.id, campos); continue; }
+      // Trae id pero no salió en la lista: se intenta actualizar; si de veras
+      // no existe —lo borró alguien más entre que se abrió la pantalla y se
+      // guardó—, entonces sí es uno nuevo.
+      try {
+        await cambiar('items', p.id, { ...campos, estado: 'vendido' });
+      } catch {
         await crear('items', filaItem(p, donde));
       }
     }
