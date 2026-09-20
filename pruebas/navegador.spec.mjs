@@ -753,8 +753,24 @@ test('corregir un movimiento SIN contraparte: el botón no se queda apagado', as
   const campoMonto = pag.locator('input[type="number"]').first();
   await campoMonto.waitFor({ timeout: 25000 });
 
+  /* El botón SÍ se apaga un instante: mientras cargan los catálogos de ese
+   * negocio. Eso está bien y es corto. Lo que no puede pasar —el defecto de
+   * Mike— es que se quede apagado para siempre porque falta un dato.
+   *
+   * Así que no se mira una vez: se espera a que encienda, y si no enciende
+   * se dice QUÉ QUEDÓ EN PANTALLA. La primera versión de esta prueba miraba
+   * al instante y salía roja con el arreglo puesto, que es la peor clase de
+   * prueba: una que dice que no sirve algo que sí sirve. */
   const boton = pag.getByRole('button', { name: /^Guardar cambios$/ });
-  assert.equal(await boton.isDisabled(), false, 'el botón de guardar está vivo, no apagado');
+  let encendio = false;
+  for (let i = 0; i < 80 && !encendio; i++) {
+    encendio = !(await boton.isDisabled());
+    if (!encendio) await pag.waitForTimeout(250);
+  }
+  if (!encendio) {
+    const enPantalla = (await texto(pag)).replace(/\s+/g, ' ').slice(0, 400);
+    assert.fail(`el botón de guardar se quedó apagado. La pantalla decía: ${enPantalla}`);
+  }
 
   await campoMonto.fill('5200');
   await boton.click();
