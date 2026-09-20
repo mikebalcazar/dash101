@@ -8,6 +8,8 @@ import { useNegocioActivo } from "@/lib/negocio-activo-context";
 import { clientesParecidos, createCliente, listClientes } from "@/lib/clientes";
 import { listProveedores } from "@/lib/proveedores";
 import { createProyecto } from "@/lib/proyectos";
+import { listObras, ligarObra, type Obra } from "@/lib/obras";
+import { normalizarNombre } from "@/lib/clientes";
 import type { Cliente, Proveedor, EstadoProyecto } from "@/types/schema";
 import { ESTADO_PROYECTO_LABELS } from "@/types/schema";
 import { formatMonto } from "@/lib/format";
@@ -47,6 +49,14 @@ export default function NuevoProyectoPage() {
   const [fechaInicio, setFechaInicio] = useState(new Date().toISOString().slice(0, 10));
   const [partidas, setPartidas] = useState<Partida[]>([]);
 
+  /* Las obras que ya existen en quell101 y todavía no tienen proyecto aquí.
+   * Mike, 20-sep: «deberían aparecer los proyectos creados en quell101 que
+   * aún no están activados dentro de dash101». Escoger una llena el nombre y
+   * el cliente, y al guardar el proyecto queda ligado con ella: de ahí en
+   * adelante las dos apps hablan de la misma casa. */
+  const [obras, setObras] = useState<Obra[]>([]);
+  const [obraId, setObraId] = useState("");
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -55,10 +65,13 @@ export default function NuevoProyectoPage() {
       setLoadingCatalog(false);
       return;
     }
-    Promise.all([listClientes(activo.id), listProveedores()])
-      .then(([cs, ps]) => {
+    /* Las obras se piden con `catch`: una empresa que no usa quell101 no
+     * tiene por qué ver un error aquí, nada más no ve el bloque. */
+    Promise.all([listClientes(activo.id), listProveedores(), listObras(true).catch(() => [] as Obra[])])
+      .then(([cs, ps, os]) => {
         setClientes(cs);
         setProveedores(ps);
+        setObras(os);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Error cargando catálogo"))
       .finally(() => setLoadingCatalog(false));
@@ -88,6 +101,28 @@ export default function NuevoProyectoPage() {
 
   const removePartida = (i: number) => {
     setPartidas((prev) => prev.filter((_, idx) => idx !== i));
+  };
+
+  /** Escoger una obra de quell101 llena lo que ya se sabe de ella: el nombre
+   *  y, si el cliente ya está dado de alta aquí con ese mismo nombre, el
+   *  cliente. Lo que ya se haya escrito NO se pisa: si alguien ya tecleó un
+   *  nombre, ése se queda —la obra se llama como se llama en obra, y aquí el
+   *  proyecto puede llamarse de otro modo sin dejar de ser la misma casa—. */
+  const escogerObra = (id: string) => {
+    setObraId(id);
+    const obra = obras.find((o) => o.id === id);
+    if (!obra) return;
+    if (!nombre.trim()) setNombre(obra.nombre);
+    if (!clienteId && !nuevoCliente && obra.cliente.trim()) {
+      const igual = clientes.find((c) => normalizarNombre(c.nombre) === normalizarNombre(obra.cliente));
+      if (igual?.id) setClienteId(igual.id);
+      else {
+        // No está: se deja listo el alta con el nombre que trae la obra, para
+        // que no se capture otra vez a mano y salga escrito distinto.
+        setNuevoCliente(true);
+        setNc((prev) => (prev.nombre ? prev : { ...prev, nombre: obra.cliente }));
+      }
+    }
   };
 
   const compromiso = partidas.reduce((s, p) => s + (parseFloat(p.monto_acordado) || 0), 0);
@@ -154,7 +189,7 @@ export default function NuevoProyectoPage() {
 
     setSubmitting(true);
     try {
-      await createProyecto(user.uid, {
+      const nuevoId = await createProyecto(user.uid, {
         nombre: nombre.trim(),
         descripcion: descripcion.trim() || undefined,
         cliente_id: cliente.id!,
@@ -171,6 +206,23 @@ export default function NuevoProyectoPage() {
         estado,
         fecha_inicio: new Date(fechaInicio),
       });
+      /* La liga con la obra va DESPUÉS de crear: el proyecto tiene que
+       * existir para poder ligarlo. Si la liga falla —alguien más la acaba de
+       * usar— el proyecto ya está creado y no se pierde nada de lo que se
+       * capturó: se dice qué pasó y se queda aquí para ligar a mano. */
+      if (obraId) {
+        try {
+          await ligarObra(obraId, nuevoId);
+        } catch (e) {
+          setError(
+            `El proyecto se creó, pero no se pudo ligar con la obra de quell101: ${
+              e instanceof Error ? e.message : "error"
+            }. Ábrelo y lígalo desde ahí.`,
+          );
+          setSubmitting(false);
+          return;
+        }
+      }
       router.push("/proyectos");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al crear");
@@ -204,6 +256,39 @@ export default function NuevoProyectoPage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Las obras de quell101 que todavía no tienen proyecto. Va ARRIBA
+          * del nombre a propósito: si la obra ya existe, escogerla llena el
+          * resto, y ponerla abajo haría capturar dos veces lo mismo. Si la
+          * empresa no usa quell101 —o no hay obras sueltas— el bloque no
+          * aparece y la pantalla queda como estaba. */}
+        {obras.length > 0 && (
+          <div className="bg-cream rounded-2xl p-4">
+            <label htmlFor="obra" className="text-xs font-medium text-ink-dim block mb-1.5">
+              ¿Esta obra ya existe en quell101?
+            </label>
+            <select
+              id="obra"
+              value={obraId}
+              onChange={(e) => escogerObra(e.target.value)}
+              className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
+            >
+              <option value="">No, es una obra nueva</option>
+              {obras.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.nombre}
+                  {o.cliente ? ` — ${o.cliente}` : ""}
+                  {o.ubicados ? ` (${o.ubicados} ítem${o.ubicados === 1 ? "" : "s"} ubicado${o.ubicados === 1 ? "" : "s"})` : ""}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-ink-muted mt-2">
+              {obraId
+                ? "Al guardar, las dos apps van a tomar esto como la misma casa: el plano y la bitácora en quell101, el dinero aquí."
+                : "Aquí salen las obras abiertas en quell101 que todavía no tienen proyecto en dash101. Escoge una y se llena sola."}
+            </p>
+          </div>
+        )}
+
         <div>
           <label className="text-xs font-medium text-ink-dim block mb-1.5">
             Nombre <span className="text-mauve-900">*</span>
