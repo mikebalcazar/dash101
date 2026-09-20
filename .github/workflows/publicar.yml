@@ -111,6 +111,21 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "staging publicado: $url"
 
+      # ── supply101, la cara de quien pide una compra ──────────────────────
+      # Vive en este repositorio porque es la otra cara del mismo módulo de
+      # órdenes y usa los mismos secretos. Son cuatro archivos sin
+      # empaquetador: `wrangler deploy` y ya.
+      - name: Publicar supply101 staging
+        id: supply_staging
+        working-directory: supply101
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --env staging | tee /tmp/supply-staging.txt
+          url=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' /tmp/supply-staging.txt | head -1)
+          [ -n "$url" ] || { echo 'no pude sacar la liga de supply101' >&2; exit 1; }
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "supply101 staging publicado: $url"
+
       - name: Medir staging
         id: medir_staging
         continue-on-error: true
@@ -208,6 +223,24 @@ jobs:
       # Sólo si staging salió bien (los pasos van en orden y sin
       # `continue-on-error`) y sólo si Mike ya dijo qué empresa sirve.
 
+      - name: Medir supply101 staging
+        id: medir_supply
+        continue-on-error: true
+        env:
+          URL_SUPPLY: ${{ steps.supply_staging.outputs.url }}
+        run: |
+          set -uo pipefail
+          node --test supply101/pruebas/supply.spec.mjs 2>&1 | tee /tmp/supply.txt
+
+      - name: Pegar lo de supply101 a la medición
+        if: always()
+        run: |
+          { echo; echo "== supply101 contra staging =="; cat /tmp/supply.txt 2>/dev/null || echo "(no corrió)"; } >> /tmp/medido-staging.txt
+
+      - name: Que supply101 mande
+        if: steps.medir_supply.outcome != 'success'
+        run: exit 1
+
       - name: Construir para producción
         if: env.ORG_PRODUCCION != ''
         env:
@@ -241,6 +274,14 @@ jobs:
           [ -n "$url" ] || { echo 'no pude sacar la liga de la salida de wrangler' >&2; exit 1; }
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "producción publicada: $url"
+
+      - name: Publicar supply101 producción
+        if: env.ORG_PRODUCCION != ''
+        working-directory: supply101
+        run: |
+          set -euo pipefail
+          npx wrangler deploy | tee /tmp/supply-prod.txt
+          echo "supply101 en producción: $(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' /tmp/supply-prod.txt | head -1)"
 
       - name: Medir producción
         if: env.ORG_PRODUCCION != ''

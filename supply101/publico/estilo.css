@@ -1,0 +1,127 @@
+/* supply101 — pensado para un teléfono en la mano, en una ferretería, con
+ * una sola mano libre. Una columna, botones grandes, nada que se corte.
+ *
+ * Identidad de la suite: azul #0080C1, y cifras tabulares para que las
+ * columnas de dinero cuadren a la vista. Sin fuentes de fuera: en el celular
+ * de quien pide, una fuente que tarda es una pantalla en blanco. */
+
+:root {
+  --marca: #0080C1;
+  --marca-suave: #E4F2FA;
+  --fondo: #F5F7F8;
+  --sup: #FFFFFF;
+  --linea: #E2E7EA;
+  --tinta: #16222B;
+  --tinta-2: #5A6976;
+  --bien: #1E7A4C;
+  --bien-suave: #E2F3EA;
+  --mal: #A32D2D;
+  --mal-suave: #F8E5E5;
+  --pend: #8A6100;
+  --pend-suave: #FBF0D8;
+  --cuerpo: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+body {
+  margin: 0; background: var(--fondo); color: var(--tinta);
+  font-family: var(--cuerpo); font-size: 16px; line-height: 1.45;
+}
+
+.pag { max-width: 560px; margin: 0 auto; padding: 16px 16px 48px; }
+
+header.barra {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px; background: var(--sup); border-bottom: 1px solid var(--linea);
+  position: sticky; top: 0; z-index: 5;
+}
+header.barra .logo {
+  width: 34px; height: 34px; border-radius: 10px; flex: 0 0 auto;
+  background: var(--marca); color: #fff; display: flex; align-items: center;
+  justify-content: center; font-weight: 700; font-size: 13px; letter-spacing: .02em;
+}
+header.barra .quien { flex: 1; min-width: 0; font-size: 12px; color: var(--tinta-2); }
+header.barra .quien b { display: block; color: var(--tinta); font-size: 14px; font-weight: 600; }
+header.barra .quien span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+h1 { font-size: 20px; margin: 0 0 2px; font-weight: 650; letter-spacing: -0.01em; }
+h2 { font-size: 15px; margin: 22px 0 8px; font-weight: 600; }
+p.sub { margin: 0 0 16px; color: var(--tinta-2); font-size: 13px; }
+
+label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 4px; }
+label .pista { display: block; font-weight: 400; color: var(--tinta-2); font-size: 12px; }
+
+input, select, textarea, button { font: inherit; }
+input, select, textarea {
+  width: 100%; padding: 12px; border: 1px solid var(--linea); border-radius: 12px;
+  background: var(--sup); color: var(--tinta);
+}
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--marca-suave); border-color: var(--marca); }
+input.cifra { text-align: right; font-variant-numeric: tabular-nums; }
+input.grande { font-size: 26px; padding: 14px; font-weight: 600; }
+.fila { display: flex; gap: 10px; }
+.fila > * { flex: 1; min-width: 0; }
+
+.casilla { display: flex; align-items: center; gap: 10px; margin: 14px 0 0; font-size: 15px; font-weight: 500; }
+.casilla input { width: 22px; height: 22px; flex: 0 0 auto; }
+
+button.b, a.b {
+  display: block; width: 100%; text-align: center; text-decoration: none;
+  padding: 14px; border: 0; border-radius: 12px; background: var(--marca); color: #fff;
+  font-weight: 600; cursor: pointer; margin-top: 18px;
+}
+button.b:disabled { opacity: .45; cursor: default; }
+button.b.claro, a.b.claro { background: var(--sup); color: var(--tinta); border: 1px solid var(--linea); }
+button.liso {
+  background: none; border: 0; color: var(--marca); font-size: 14px; padding: 8px 0;
+  cursor: pointer; font-weight: 600;
+}
+
+.tarjeta { background: var(--sup); border: 1px solid var(--linea); border-radius: 16px; padding: 14px; }
+.lista { background: var(--sup); border: 1px solid var(--linea); border-radius: 16px; overflow: hidden; }
+.lista a.renglon {
+  display: flex; gap: 12px; padding: 14px; border-bottom: 1px solid var(--linea);
+  text-decoration: none; color: inherit;
+}
+.lista a.renglon:last-child { border-bottom: 0; }
+.lista a.renglon:active { background: var(--fondo); }
+.renglon .texto { flex: 1; min-width: 0; }
+.renglon .texto b { display: block; font-weight: 600; font-size: 15px; }
+.renglon .texto small { color: var(--tinta-2); font-size: 12px; display: block; }
+.renglon .plata { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.renglon .plata small { display: block; font-weight: 400; color: var(--tinta-2); font-size: 11px; }
+
+.marca {
+  display: inline-block; border-radius: 8px; padding: 2px 8px; font-size: 12px; font-weight: 600;
+  background: var(--marca-suave); color: #05506F;
+}
+.marca.bien { background: var(--bien-suave); color: var(--bien); }
+.marca.mal { background: var(--mal-suave); color: var(--mal); }
+.marca.pend { background: var(--pend-suave); color: var(--pend); }
+.marca.gris { background: var(--fondo); color: var(--tinta-2); }
+
+.aviso { border-radius: 12px; padding: 10px 12px; font-size: 13px; margin: 12px 0; }
+.aviso.mal { background: var(--mal-suave); color: var(--mal); }
+.aviso.bien { background: var(--bien-suave); color: var(--bien); }
+.aviso.gris { background: var(--sup); border: 1px solid var(--linea); color: var(--tinta-2); }
+
+.vacio { text-align: center; padding: 36px 20px; color: var(--tinta-2); font-size: 14px; }
+.vacio b { display: block; color: var(--tinta); font-size: 15px; margin-bottom: 4px; }
+
+.papel { display: block; margin-top: 10px; }
+.papel img { width: 100%; border-radius: 12px; border: 1px solid var(--linea); }
+.papel .pdf { display: flex; gap: 8px; align-items: center; color: var(--marca); font-weight: 600; font-size: 14px; }
+
+dl.datos { margin: 0; }
+dl.datos div { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--linea); }
+dl.datos div:last-child { border-bottom: 0; }
+dl.datos dt { color: var(--tinta-2); font-size: 13px; }
+dl.datos dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; font-size: 14px; }
+
+ol.historia { list-style: none; margin: 0; padding: 0; }
+ol.historia li { padding: 8px 0; border-bottom: 1px solid var(--linea); font-size: 13px; }
+ol.historia li:last-child { border-bottom: 0; }
+ol.historia small { color: var(--tinta-2); display: block; }
+
+.oculto { display: none !important; }

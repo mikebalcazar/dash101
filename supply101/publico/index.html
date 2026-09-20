@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>supply101 · pedir una compra</title>
+<meta name="description" content="Pide una compra de la empresa desde el teléfono, y dale seguimiento hasta que se paga.">
+<meta name="theme-color" content="#0080C1">
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+
+<header class="barra oculto" id="barra">
+  <div class="logo">s101</div>
+  <div class="quien">
+    <b id="barra-empresa">—</b>
+    <span id="barra-correo">—</span>
+  </div>
+  <button class="liso" id="b-salir" type="button">Salir</button>
+</header>
+
+<div class="pag">
+
+  <!-- ─────────────── entrar ─────────────── -->
+  <section id="v-correo" class="oculto">
+    <h1>Pedir una compra</h1>
+    <p class="sub">Entra con tu cuenta de la suite. La misma de siempre.</p>
+    <form id="f-correo">
+      <label for="correo">Tu correo
+        <span class="pista">El que te dieron de alta en la empresa.</span>
+      </label>
+      <input id="correo" type="email" inputmode="email" autocomplete="username" placeholder="tu@correo.mx" required>
+      <p class="aviso mal oculto" id="err-correo"></p>
+      <button class="b" id="b-correo" type="submit">Continuar</button>
+    </form>
+    <a class="b claro" id="b-google" href="#">Entrar con Google</a>
+  </section>
+
+  <section id="v-clave" class="oculto">
+    <h1>Tu contraseña</h1>
+    <p class="sub" id="clave-p">—</p>
+    <form id="f-clave">
+      <input id="clave" type="password" autocomplete="current-password" placeholder="contraseña" required>
+      <p class="aviso mal oculto" id="err-clave"></p>
+      <button class="b" id="b-clave" type="submit">Entrar</button>
+    </form>
+    <button class="liso" id="b-olvide" type="button">Olvidé mi contraseña</button>
+    <button class="liso" id="b-otro" type="button">Usar otro correo</button>
+  </section>
+
+  <section id="v-codigo" class="oculto">
+    <h1>El código</h1>
+    <p class="sub" id="codigo-p">—</p>
+    <form id="f-codigo">
+      <input id="codigo" inputmode="numeric" autocomplete="one-time-code" placeholder="código de 6 dígitos" required>
+      <p class="aviso bien oculto" id="ok-codigo"></p>
+      <p class="aviso mal oculto" id="err-codigo"></p>
+      <button class="b" id="b-codigo" type="submit">Continuar</button>
+    </form>
+    <button class="liso" id="b-otro-2" type="button">Usar otro correo</button>
+  </section>
+
+  <section id="v-nueva" class="oculto">
+    <h1>Ponle contraseña a tu cuenta</h1>
+    <p class="sub">Para la próxima vez entras directo con ella.</p>
+    <form id="f-nueva">
+      <input id="nueva" type="password" autocomplete="new-password" placeholder="contraseña nueva" required>
+      <input id="nueva2" type="password" autocomplete="new-password" placeholder="otra vez, de memoria" required style="margin-top:10px">
+      <p class="aviso mal oculto" id="err-nueva"></p>
+      <button class="b" id="b-nueva" type="submit">Guardar y entrar</button>
+    </form>
+  </section>
+
+  <!-- ─────────────── mis compras ─────────────── -->
+  <section id="v-lista" class="oculto">
+    <h1>Mis compras</h1>
+    <p class="sub" id="lista-sub">Lo que has pedido, y en qué va cada una.</p>
+    <div id="picker-negocio" class="oculto">
+      <label for="negocio">Negocio</label>
+      <select id="negocio"></select>
+    </div>
+    <button class="b" id="b-nueva-compra" type="button">Pedir una compra</button>
+    <p class="aviso mal oculto" id="err-lista"></p>
+    <p class="aviso bien oculto" id="ok-lista"></p>
+    <div id="lista"></div>
+  </section>
+
+  <!-- ─────────────── pedir ─────────────── -->
+  <section id="v-pedir" class="oculto">
+    <button class="liso" id="b-volver-1" type="button">← Mis compras</button>
+    <h1 id="pedir-t">Pedir una compra</h1>
+    <p class="sub" id="pedir-sub">Le llega directo a quien paga. Nadie tiene que autorizarla antes.</p>
+    <form id="f-pedir">
+      <label for="monto">Cuánto es
+        <span class="pista">El total, con IVA si lleva.</span>
+      </label>
+      <input id="monto" class="cifra grande" inputmode="decimal" placeholder="0.00" required>
+
+      <label for="concepto">Qué se compra</label>
+      <input id="concepto" placeholder="Triplay de 18 mm, 12 hojas" required>
+
+      <label for="proveedor">A quién se le compra</label>
+      <select id="proveedor"></select>
+      <input id="proveedor-nuevo" placeholder="Nombre del proveedor" style="margin-top:8px">
+
+      <label for="proyecto">Para qué proyecto
+        <span class="pista">Si no es de ninguno, déjalo en gasto general.</span>
+      </label>
+      <select id="proyecto"></select>
+
+      <div id="bloque-partida" class="oculto">
+        <label for="partida">A qué compromiso del proyecto va</label>
+        <select id="partida"></select>
+      </div>
+
+      <label for="fecha">Cuándo se tiene que pagar</label>
+      <input id="fecha" type="date">
+
+      <label class="casilla"><input id="urgente" type="checkbox"> Es urgente</label>
+      <label class="casilla"><input id="con-factura" type="checkbox" checked> Con factura</label>
+
+      <div id="bloque-iva" class="tarjeta" style="margin-top:10px">
+        <p class="sub" style="margin:0 0 8px">Así queda separado. Corrígelo si la factura trae otra tasa, retención o exento.</p>
+        <div class="fila">
+          <div>
+            <label for="subtotal" style="margin-top:0">Subtotal</label>
+            <input id="subtotal" class="cifra" inputmode="decimal">
+          </div>
+          <div>
+            <label for="iva" style="margin-top:0">IVA</label>
+            <input id="iva" class="cifra" inputmode="decimal">
+          </div>
+        </div>
+        <p class="aviso mal oculto" id="err-iva">El subtotal más el IVA tiene que dar el total exacto.</p>
+      </div>
+
+      <label for="archivo">Foto o PDF de la cotización</label>
+      <input id="archivo" type="file" accept="image/*,application/pdf">
+
+      <p class="aviso mal oculto" id="err-pedir"></p>
+      <button class="b" id="b-pedir" type="submit">Pedir la compra</button>
+    </form>
+  </section>
+
+  <!-- ─────────────── una compra ─────────────── -->
+  <section id="v-detalle" class="oculto">
+    <button class="liso" id="b-volver-2" type="button">← Mis compras</button>
+    <div id="detalle"></div>
+  </section>
+
+  <section id="v-cargando">
+    <p class="vacio">Cargando…</p>
+  </section>
+
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
