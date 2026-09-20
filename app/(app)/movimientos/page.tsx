@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { MarcaFacturado } from "@/components/marca-facturado";
 import { deleteDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useNegocioActivo } from "@/lib/negocio-activo-context";
@@ -281,6 +282,7 @@ export default function MovimientosPage() {
                         className="inline-block ml-1 text-sky-900"
                       />
                     )}
+                    <MarcaFacturado mov={m} />
                   </p>
                   <p className="text-[11px] text-ink-muted truncate">
                     {dateStr} · {m.cuenta_nombre}
