@@ -1,6 +1,6 @@
 "use client";
 
-/* Juntar los ítems del proyecto con las piezas del plano · contrato 0.30.0.
+/* Juntar los ítems del proyecto con las piezas del plano · contrato 0.34.0.
  *
  * Mike, 20-sep: los ítems de la obra y los del proyecto son la misma lista de
  * piezas capturada dos veces. Y después, al ver la primera versión:
@@ -12,11 +12,13 @@
  * parecido llega preseleccionado —acierta casi siempre— y se cambia con un
  * clic cuando no.
  *
- * Y lo que de verdad los hace uno es el CÓDIGO, no el nombre. Mike lo
- * precisó: «lo que va a ser lo mismo es el código de ítem, ej. CAR-01,
- * PT-09, porque el nombre descriptivo viene en el detalle de dash y en el
- * detalle de quell». Así que el código se unifica, y el nombre sólo si
- * alguien lo escoge.
+ * Y los dos CÓDIGOS son dos cosas, no una. Mike lo ordenó el 20-sep: «una
+ * cosa es el código de ítem (pieza física en obra) y otra diferente el
+ * código de producto de catálogo». El de la pieza vive en el plano y es
+ * único en la obra; el del producto es el del modelo en el catálogo, y
+ * veintinueve puertas iguales son veintinueve piezas y un producto. Por eso
+ * esta pantalla ya no pregunta cuál gana: ninguno, cada uno se queda con el
+ * suyo.
  *
  * Y desde aquí se cierra el renglón, que fue lo siguiente que pidió:
  * «debería poder de ahí mismo agregar un ítem nuevo con precio y
@@ -45,7 +47,6 @@ const pesos = (centavos: number) => formatMonto(Math.round(centavos) / 100, "MXN
  *  `nuevo` = crearle su propio ítem. */
 type Decision = {
   item: string;
-  clave?: "quell" | "dash";
   nombre?: "quell" | "dash";
   /** Sólo cuando `item === NUEVO`. En PESOS tal como se teclean; la
    *  conversión a centavos se hace una sola vez, al mandar. */
@@ -148,7 +149,7 @@ export function JuntarItemsDeLaObra({ obra, alTerminar }: { obra: Obra; alTermin
         const van = (llevadas[d.item] ?? 0) + 1;
         llevadas[d.item] = van;
         ligar.push({
-          element_id: pz.element_id, item_id: d.item, clave: d.clave, nombre: d.nombre,
+          element_id: pz.element_id, item_id: d.item, nombre: d.nombre,
           sumar: van > cupo ? true : undefined,
         });
       }
@@ -217,7 +218,7 @@ export function JuntarItemsDeLaObra({ obra, alTerminar }: { obra: Obra; alTermin
                 <select
                   aria-label={`Ítem para ${pz.pieza}`}
                   value={d.item}
-                  onChange={(e) => cambiar(pz.element_id, { item: e.target.value, clave: undefined, nombre: undefined })}
+                  onChange={(e) => cambiar(pz.element_id, { item: e.target.value, nombre: undefined })}
                   className="flex-1 min-w-[12rem] bg-white border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-ink/40"
                 >
                   <option value="">— No hacer nada con ésta —</option>
@@ -278,33 +279,18 @@ export function JuntarItemsDeLaObra({ obra, alTerminar }: { obra: Obra; alTermin
                 </div>
               )}
 
-              {/* El código es la identidad, y sólo hay que decidir cuando los
-                  dos lados traen uno distinto. Cuando falta de un lado, la
-                  API lo copia sin preguntar: eso es llenar un hueco. */}
+              {/* Los dos códigos NO se mezclan, y por eso aquí ya no hay nada
+                  que decidir. Mike, 20-sep: «una cosa es el código de ítem
+                  (pieza física en obra) y otra diferente el código de
+                  producto de catálogo». El de la pieza vive en el plano; el
+                  del producto, en el catálogo. Hasta hace un rato esta
+                  pantalla preguntaba cuál ganaba y copiaba uno al otro: le
+                  ponía a un producto el folio de una de sus piezas. */}
               {chocanClaves && (
-                <div className="mt-1.5 text-[11px] text-ink-dim">
-                  <span className="inline-flex items-center gap-1 text-mauve-900">
-                    <IconAlertTriangle size={12} /> Dos códigos distintos. ¿Cuál queda en los dos lados?
-                  </span>
-                  <div className="flex gap-1.5 mt-1">
-                    {(["quell", "dash"] as const).map((lado) => (
-                      <button
-                        key={lado}
-                        type="button"
-                        onClick={() => cambiar(pz.element_id, { clave: lado })}
-                        className={`px-2 py-1 rounded-lg border text-[11px] ${
-                          d.clave === lado ? "bg-ink text-cream border-ink" : "bg-white border-black/10 text-ink-dim"
-                        }`}
-                      >
-                        {lado === "quell" ? `${clavePieza} (plano)` : `${claveItem} (proyecto)`}
-                      </button>
-                    ))}
-                    {d.clave && (
-                      <button type="button" onClick={() => cambiar(pz.element_id, { clave: undefined })}
-                        className="px-2 py-1 text-[11px] text-ink-muted">Dejar cada uno</button>
-                    )}
-                  </div>
-                </div>
+                <p className="mt-1.5 text-[11px] text-ink-muted">
+                  La pieza trae <b>{clavePieza}</b> en el plano y el producto <b>{claveItem}</b> en el
+                  catálogo. Son dos códigos distintos y cada uno se queda con el suyo.
+                </p>
               )}
 
               {/* El nombre es otra cosa: los dos lados lo traen, y el

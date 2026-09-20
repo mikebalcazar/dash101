@@ -1,4 +1,4 @@
-/* Las obras de quell101, del lado de dash101 · contrato 0.30.0 de la suite.
+/* Las obras de quell101, del lado de dash101 · contrato 0.34.0 de la suite.
  *
  * Mike, 20-sep: la obra que se abre en quell101 y el proyecto que se abre
  * aquí son la misma casa. Este módulo habla con `/orgs/:o/obras/*`, que la
@@ -136,9 +136,9 @@ export interface PropuestaDeItems {
 
 /** Lo que se manda por cada pieza que se liga.
  *
- *  `clave` sólo hace falta cuando los dos lados traen código y son
- *  distintos: es qué código gana, y queda en los dos lados. Sin ella la API
- *  no toca ninguno, a propósito.
+ *  Ya NO lleva `clave`: los dos códigos son dos cosas distintas —el de la
+ *  pieza en el plano y el del producto en el catálogo— y ligar no toca
+ *  ninguno (contrato 0.34.0, decisión de Mike del 20-sep).
  *
  *  `nombre` es aparte y siempre opcional: los dos lados traen nombre, así
  *  que no hay hueco que llenar —o cada uno conserva el suyo, o alguien
@@ -146,7 +146,6 @@ export interface PropuestaDeItems {
 export interface LigaDeItem {
   element_id: string;
   item_id: string;
-  clave?: 'quell' | 'dash';
   nombre?: 'quell' | 'dash';
   /** «Una puerta más a las 14 del mismo modelo» (Mike, 20-sep). Cuando la
    *  pieza ya no cabe, sube en uno la cantidad del concepto y le agrega el
