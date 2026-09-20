@@ -172,3 +172,40 @@ export async function marcarRecibido(pago_id: string, recibido: boolean): Promis
   });
   return pagoEnPesos(r.pago);
 }
+
+/* ─────────────── los expedientes de roster101 (contrato 0.32.0) ───────────────
+ *
+ * Mike, 20-sep: «en la sección de raya de dash debo poder escoger a quién se
+ * le paga de la lista de los trabajadores en roster101, no en la de dash. Y
+ * de agregar las personas a las que se les realiza el pago».
+ *
+ * Son dos listas y las dos hacen falta: el EXPEDIENTE es quién es la persona
+ * —la llena roster101 y la llena ella misma desde su celular—, y `personal`
+ * es a quién le toca algo en la suite. La raya se arma con la primera y paga
+ * contra la segunda; escoger a alguien le abre su lugar, ligado.
+ */
+
+export interface TrabajadorDeRoster {
+  id: string;
+  /** Si todavía no llena su ficha, sale con su correo: hay que poder
+   *  distinguirlo para escogerlo. */
+  nombre: string;
+  puesto: string;
+  correo: string;
+  /** 'borrador' | 'completo'. */
+  expediente: string;
+  /** Su lugar en la lista corta, si ya lo tiene. */
+  personal_id: string | null;
+}
+
+export async function listTrabajadores(): Promise<TrabajadorDeRoster[]> {
+  return (await pedir<{ trabajadores: TrabajadorDeRoster[] }>(`${base()}/trabajadores`)).trabajadores;
+}
+
+/** Escoger a alguien del expediente para poder pagarle. Devuelve su renglón
+ *  de `personal`, el que ya tenía o el que se le acaba de abrir. */
+export async function genteDeRoster(roster_id: string): Promise<GenteDeRaya> {
+  return (await pedir<{ persona: GenteDeRaya }>(`${base()}/gente/de-roster`, {
+    method: 'POST', body: { roster_id },
+  })).persona;
+}

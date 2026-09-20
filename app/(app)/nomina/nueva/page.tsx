@@ -14,7 +14,10 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { IconArrowLeft, IconPlus, IconTrash } from "@tabler/icons-react";
 import { useNegocioActivo } from "@/lib/negocio-activo-context";
-import { crearGente, crearRaya, listGente, type GenteDeRaya } from "@/lib/nomina";
+import {
+  crearGente, crearRaya, genteDeRoster, listGente, listTrabajadores,
+  type GenteDeRaya, type TrabajadorDeRoster,
+} from "@/lib/nomina";
 import { formatMonto } from "@/lib/format";
 
 type Renglon = { personal_id: string; concepto: string; sueldo: string; extras: string; descuentos: string };
@@ -45,10 +48,20 @@ export default function NuevaRayaPage() {
   const [gente, setGente] = useState<GenteDeRaya[]>([]);
   const [renglones, setRenglones] = useState<Renglon[]>([vacio()]);
   const [nuevaPersona, setNuevaPersona] = useState("");
+  /* Los EXPEDIENTES de roster101: la lista larga, la de quién es cada
+   * quien. Mike, 20-sep: «debo poder escoger a quién se le paga de la lista
+   * de los trabajadores en roster101, no en la de dash». `gente` es la
+   * corta —a quién le toca algo en la suite— y es contra la que se paga;
+   * escoger a alguien de la larga le abre su lugar en la corta. */
+  const [expedientes, setExpedientes] = useState<TrabajadorDeRoster[]>([]);
+  const [deRoster, setDeRoster] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => { listGente().then(setGente).catch(() => setGente([])); }, []);
+  /* Si la empresa no lleva expedientes, esto viene vacío y el bloque no se
+   * enseña: nadie tiene que saber que roster101 existe para poder pagar. */
+  useEffect(() => { listTrabajadores().then(setExpedientes).catch(() => setExpedientes([])); }, []);
 
   const cambiar = (i: number, patch: Partial<Renglon>) =>
     setRenglones((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
@@ -68,6 +81,27 @@ export default function NuevaRayaPage() {
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo dar de alta.");
+    }
+  };
+
+  /** Escoger a alguien del expediente: le abre su lugar en la lista corta
+   *  —o toma el que ya tenía— y lo pone en el corte. */
+  const traerDeRoster = async () => {
+    if (!deRoster) return;
+    setError("");
+    try {
+      const p = await genteDeRoster(deRoster);
+      setGente((prev) => (prev.some((g) => g.id === p.id) ? prev : [...prev, p]));
+      setExpedientes((prev) => prev.map((x) => (x.id === deRoster ? { ...x, personal_id: p.id } : x)));
+      setDeRoster("");
+      setRenglones((prev) => {
+        if (prev.some((r) => r.personal_id === p.id)) return prev;
+        const libre = prev.findIndex((r) => !r.personal_id);
+        if (libre >= 0) return prev.map((r, i) => (i === libre ? { ...r, personal_id: p.id } : r));
+        return [...prev, { ...vacio(), personal_id: p.id }];
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo traer del expediente.");
     }
   };
 
@@ -190,11 +224,39 @@ export default function NuevaRayaPage() {
             ))}
           </div>
 
+          {/* De los EXPEDIENTES de roster101, que es la lista de la empresa.
+              Va primero porque es de donde se escoge casi siempre; dar de
+              alta a mano queda para el ayudante de fuera que no lleva
+              expediente. */}
+          {expedientes.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-black/5">
+              <select
+                value={deRoster}
+                onChange={(e) => setDeRoster(e.target.value)}
+                aria-label="Trabajador del expediente"
+                className="flex-1 min-w-[12rem] bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40"
+              >
+                <option value="">— Traer de los trabajadores de roster101 —</option>
+                {expedientes.map((x) => (
+                  <option key={x.id} value={x.id} disabled={Boolean(x.personal_id && yaPuestos.has(x.personal_id))}>
+                    {x.nombre}{x.puesto ? ` · ${x.puesto}` : ""}
+                    {x.expediente === "borrador" ? " · ficha sin llenar" : ""}
+                    {x.personal_id && yaPuestos.has(x.personal_id) ? " · ya está en el corte" : ""}
+                  </option>
+                ))}
+              </select>
+              <button type="button" onClick={traerDeRoster} disabled={!deRoster}
+                className="bg-white border border-black/10 text-ink-dim text-xs px-3 py-2 rounded-xl disabled:opacity-40">
+                Traer al corte
+              </button>
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-black/5">
             <input
               value={nuevaPersona}
               onChange={(e) => setNuevaPersona(e.target.value)}
-              placeholder="Dar de alta a alguien más"
+              placeholder="O dar de alta a alguien que no lleva expediente"
               aria-label="Nombre de quien se da de alta"
               className="flex-1 min-w-[12rem] bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40"
             />

@@ -23,8 +23,8 @@ import { createNegocio } from "@/lib/negocios";
 import { createCuenta } from "@/lib/cuentas";
 import { listMovimientos } from "@/lib/movimientos";
 import {
-  crearGente, crearRaya, editarRaya, getRaya, listGente, listRayas,
-  marcarRecibido, pagarRaya, cancelarRaya,
+  crearGente, crearRaya, editarRaya, genteDeRoster, getRaya, listGente, listRayas,
+  listTrabajadores, marcarRecibido, pagarRaya, cancelarRaya,
 } from "@/lib/nomina";
 
 const CORREO = process.env.CORREO_SUPERADMIN ?? "mike@forespot.com";
@@ -121,5 +121,29 @@ describe("la raya, desde dash101", () => {
     expect(mio.total).toBe(6_400);
     expect(mio.personas).toBe(2);
     expect(mio.estado).toBe("pagada");
+  });
+});
+
+describe('la raya se arma con los expedientes de roster101 (§107)', () => {
+  /* Mike, 20-sep: «en la sección de raya de dash debo poder escoger a quién
+   * se le paga de la lista de los trabajadores en roster101, no en la de
+   * dash. Y de agregar las personas a las que se les realiza el pago».
+   *
+   * Aquí se mide LO QUE ESTA APP PUEDE MEDIR: que las dos llamadas nuevas
+   * existan y hablen bien con la suite. El recorrido completo —un
+   * trabajador entrando por su puerta, su expediente saliendo en la lista,
+   * escogerlo dos veces sin duplicarlo— se mide del lado de la API
+   * (`pruebas/raya.spec.ts`), porque este cliente manda siempre
+   * `X-App: dash101` y la puerta de roster101 pide la suya. Se dice aquí
+   * para que nadie lo lea como un hueco. */
+  it('la lista de expedientes se puede pedir', async () => {
+    const lista = await listTrabajadores();
+    expect(Array.isArray(lista), 'contesta una lista, vacía o no').toBe(true);
+  });
+
+  it('escoger un expediente que no existe se rechaza, no inventa una persona', async () => {
+    const antes = (await listGente()).length;
+    await expect(genteDeRoster('no-existe')).rejects.toThrow();
+    expect((await listGente()).length, 'y no dejó a nadie a medias').toBe(antes);
   });
 });
