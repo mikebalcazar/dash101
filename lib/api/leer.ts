@@ -10,7 +10,7 @@
  * escribe. */
 
 import * as A from './adaptar';
-import { listar, obtener, pedir, yo } from './cliente';
+import { listar, listarCompleto, obtener, pedir, yo } from './cliente';
 import { org } from '../fuente';
 import type { Cliente, Cuenta, Movimiento, Negocio, Opex, Proveedor, Proyecto, Usuario } from '@/types/schema';
 
@@ -85,7 +85,15 @@ export async function getProveedor(id: string): Promise<Proveedor | null> {
 async function partesDeProyectos(negocioId: string) {
   const [partidas, items, movimientos, clientes, negocios] = await Promise.all([
     listar<A.FilaPartida>('partidas'),
-    listar<A.FilaItem>('items', { negocio_id: negocioId }),
+    /* Sólo los vivos: el adaptador tira los cancelados de todos modos, y
+     * pedirlos nada más los hace ocupar lugar contra el tope de 500 de la
+     * API, empujando fuera a ítems vivos de proyectos recientes. Aquí no se
+     * usa `listarCompleto` a propósito: esto pinta la LISTA de proyectos, y
+     * en una empresa con años de trabajo pasar de 5,000 ítems vivos es
+     * posible. Que la lista enseñe de menos un renglón de detalle se nota y
+     * no rompe nada; que truene la pantalla de proyectos, sí. El detalle del
+     * proyecto —el que decide qué se guarda— sí exige la lista completa. */
+    listar<A.FilaItem>('items', { negocio_id: negocioId, estado: 'vendido' }),
     listar<A.FilaMovimiento>('movimientos', { negocio_id: negocioId }),
     listar<A.FilaCliente>('clientes', { negocio_id: negocioId }),
     listar<A.FilaNegocio>('negocios'),
@@ -102,13 +110,23 @@ export async function getProyecto(id: string): Promise<Proyecto | null> {
   const f = await obtener<A.FilaProyecto>('proyectos', id);
   if (!f) return null;
   const partes = await partesDeProyectos(f.negocio_id);
-  /* Los ítems de ESTE proyecto se piden aparte, y no se sacan de la lista del
-   * negocio entero, porque esa lista viene topada en 500 filas: en una
-   * empresa con años de trabajo —y con los ítems cancelados, que también
-   * ocupan lugar— los de un proyecto reciente se caen del tope y la pantalla
-   * los enseña de menos. Y lo que la pantalla no enseña, al guardar se
-   * cancela. Así el tope se aplica por proyecto, donde 500 ítems es mucho. */
-  const items = await listar<A.FilaItem>('items', { proyecto_id: id });
+  /* Los ítems de ESTE proyecto, vivos, y completos.
+   *
+   * Tres cosas que costaron, las tres del mismo tope de 500 filas:
+   *
+   *   · se piden por proyecto y no de la lista del negocio entero, porque en
+   *     una empresa con años de trabajo los de un proyecto reciente se caen
+   *     del tope y la pantalla los enseña de menos;
+   *   · se piden SÓLO LOS VIVOS. Los cancelados son los más viejos y la lista
+   *     viene ordenada por fecha: en un proyecto muy editado llenan las 500
+   *     primeras filas y empujan a los vivos fuera de la respuesta. Así se
+   *     veía el proyecto de Mike el 20-sep: «Sin ítems» en pantalla y
+   *     $6,473,790 de precio de venta, que era la cifra CORRECTA —ésa la suma
+   *     la API en la base—. No faltaba nada; faltaba verlo;
+   *   · y se piden con `listarCompleto`, que compara `total` contra lo que
+   *     llegó y truena si falta. Enseñar de menos aquí no es un detalle de
+   *     presentación: lo que la pantalla no enseña, al guardar se cancela. */
+  const items = await listarCompleto<A.FilaItem>('items', { proyecto_id: id, estado: 'vendido' });
   return A.proyecto(f, { ...partes, items });
 }
 

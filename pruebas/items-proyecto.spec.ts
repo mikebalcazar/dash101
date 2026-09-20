@@ -201,3 +201,63 @@ describe("editar la lista de ítems de un proyecto", () => {
     expect(d.precio_venta).toBe(0);
   });
 });
+
+describe("el tope de 500 no puede esconder ítems (lo de HOLCIM)", () => {
+  /* Mike, 20-sep, con la pantalla enfrente: «ya no aparecen los ítems pero el
+   * total de venta del proyecto se quedó con todos los ítems sumando, ese
+   * margen proyectado está mal».
+   *
+   * El margen no estaba mal: el precio de venta lo suma la API en la base
+   * sobre los ítems vivos, y esa cifra era la correcta. La que mentía era la
+   * LISTA. Se pedían los ítems del proyecto sin filtrar el estado, y la API
+   * tope cada lista en 500 filas ordenadas de la más vieja a la más nueva:
+   * en un proyecto al que se le editaron los ítems muchas veces, los
+   * cancelados —los más viejos— llenan las 500 y empujan a los vivos fuera
+   * de la respuesta. La pantalla decía «Sin ítems» y no faltaba nada.
+   *
+   * Sembrar 500 cancelados contra staging sería lento y no mediría nada más
+   * que esto: aquí se mide la regla que lo arregla, que es que la lectura
+   * pida SÓLO LOS VIVOS y exija la lista completa. */
+
+  it("la lectura del proyecto pide sólo los vivos: un cancelado no ocupa lugar", async () => {
+    await updateProyecto(ids.proyecto, {
+      productos: [{ nombre: "Se queda", monto: 400 }, { nombre: "Se va", monto: 600 }],
+    });
+    const antes = (await getProyecto(ids.proyecto))!;
+    const seVa = antes.productos!.find((p) => p.nombre === "Se va")!;
+    await updateProyecto(ids.proyecto, {
+      productos: antes.productos!.filter((p) => p.nombre !== "Se va").map((p) => ({ id: p.id, nombre: p.nombre, monto: p.monto })),
+    });
+
+    // La lista del proyecto, tal como la pide la pantalla: el cancelado no
+    // viene, ni siquiera para que lo tire el adaptador después.
+    const crudo = await pedir<{ total: number; filas: Array<{ id: string; estado: string }> }>(
+      `/orgs/${ORG}/items?proyecto_id=${encodeURIComponent(ids.proyecto)}&estado=vendido`,
+    );
+    expect(crudo.filas.some((i) => i.id === seVa.id), "el cancelado no ocupa lugar en la respuesta").toBe(false);
+    expect(crudo.total, "«total» cuenta sólo los vivos cuando se filtra").toBe(crudo.filas.length);
+
+    const d = (await getProyecto(ids.proyecto))!;
+    expect(d.productos!.map((p) => p.nombre)).toEqual(["Se queda"]);
+    expect(d.precio_venta).toBe(400);
+  });
+
+  it("«total» delata una lista cortada: es la única seña que da la API", async () => {
+    /* Sin esto no hay arreglo posible: una respuesta topada se ve idéntica a
+     * una completa —200, `filas`, y nada más—. Se comprueba con un tope
+     * chiquito, que es el mismo mecanismo con el que se cae una de 500. */
+    await updateProyecto(ids.proyecto, {
+      productos: [{ nombre: "Uno", monto: 10 }, { nombre: "Dos", monto: 20 }, { nombre: "Tres", monto: 30 }],
+    });
+    const cortada = await pedir<{ total: number; filas: unknown[] }>(
+      `/orgs/${ORG}/items?proyecto_id=${encodeURIComponent(ids.proyecto)}&estado=vendido&limite=1`,
+    );
+    expect(cortada.filas).toHaveLength(1);
+    expect(cortada.total, "y aun así dice que hay tres").toBe(3);
+
+    // Y la pantalla, que usa `listarCompleto`, los trae todos de todos modos.
+    const d = (await getProyecto(ids.proyecto))!;
+    expect(d.productos).toHaveLength(3);
+    expect(d.precio_venta).toBe(60);
+  });
+});

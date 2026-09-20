@@ -78,13 +78,56 @@ export async function pedirCrudo<T>(ruta: string, opciones: { method?: string; b
   return cuerpo as T;
 }
 
-/** GET /orgs/:o/<tabla>?filtros — la lista completa (la API tope en 500). */
+/** GET /orgs/:o/<tabla>?filtros — lo que la API dé, topado en 500 filas. */
 export async function listar<T>(tabla: string, filtros: Record<string, string | undefined> = {}): Promise<T[]> {
+  return (await listarConTotal<T>(tabla, filtros)).filas;
+}
+
+async function listarConTotal<T>(
+  tabla: string,
+  filtros: Record<string, string | undefined>,
+): Promise<{ total: number; filas: T[] }> {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(filtros)) if (v !== undefined && v !== '') q.set(k, v);
   const s = q.toString();
-  const r = await pedir<{ total: number; filas: T[] }>(`/orgs/${org()}/${tabla}${s ? '?' + s : ''}`);
-  return r.filas;
+  return pedir<{ total: number; filas: T[] }>(`/orgs/${org()}/${tabla}${s ? '?' + s : ''}`);
+}
+
+/** Lo más que se pide de una vez. Es el techo de la API (contrato 0.24.2). */
+const TOPE_MAXIMO = 5000;
+
+/** GET de una lista que TIENE que venir completa.
+ *
+ *  Una lista topada se ve idéntica a una completa: 200, `filas`, y nada que
+ *  diga que faltan. Lo único que lo delata es `total`. Cuando la lista sirve
+ *  para decidir —«¿este ítem ya existe?», «¿cuáles sigo mostrando?»— venir
+ *  corta no es enseñar de menos: es borrar.
+ *
+ *  Mike lo vio el 20-sep en un proyecto suyo: la pantalla decía «Sin ítems» y
+ *  el precio de venta seguía en $6,473,790. Los ítems estaban ahí. Se pedían
+ *  sin filtrar el estado, los cancelados —los más viejos— llenaban las 500
+ *  primeras filas y los vivos se caían de la respuesta. El precio de venta no
+ *  se equivocó porque ése lo suma la API en la base, no la pantalla.
+ *
+ *  Aquí se vuelve a pedir con el tope en alto, y si AUN ASÍ falta algo se
+ *  truena con un mensaje que se entiende. Una pantalla que truena se arregla;
+ *  una pantalla que enseña de menos se cree. */
+export async function listarCompleto<T>(
+  tabla: string,
+  filtros: Record<string, string | undefined> = {},
+): Promise<T[]> {
+  const r = await listarConTotal<T>(tabla, filtros);
+  if (r.filas.length >= r.total) return r.filas;
+
+  const otra = await listarConTotal<T>(tabla, { ...filtros, limite: String(Math.min(r.total, TOPE_MAXIMO)) });
+  if (otra.filas.length >= otra.total) return otra.filas;
+
+  throw new ErrorApi('lista_incompleta', 200, {
+    tabla,
+    total: otra.total,
+    llegaron: otra.filas.length,
+    mensaje: `Hay ${otra.total} renglones en «${tabla}» y la API sólo entrega ${TOPE_MAXIMO} de una vez.`,
+  });
 }
 
 /** GET /orgs/:o/<tabla>/:id — null si no existe. */
