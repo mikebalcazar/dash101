@@ -19,6 +19,7 @@ import { IconArrowLeft, IconTrash, IconPlus, IconEdit } from "@tabler/icons-reac
 import { formatDateShort } from "@/lib/format";
 import { ObraDelProyecto } from "@/components/obra-del-proyecto";
 import { ItemsSinPrecio } from "@/components/items-sin-precio";
+import { ItemsDelProyecto } from "@/components/items-del-proyecto";
 
 const ESTADO_STYLE: Record<string, string> = {
   planeando: "bg-cream text-ink-muted",
@@ -368,15 +369,20 @@ export default function ProyectoDetallePage() {
               cuenta para el monto de venta. */}
           <ItemsSinPrecio proyectoId={p.id!} />
 
-          {/* Los ítems del proyecto */}
-          <ProductosVista proyecto={p} />
+          {/* Los ítems del proyecto: en su orden, por partidas y sin
+              repetidos (contrato 0.30.0). */}
+          <ItemsDelProyecto proyecto={p} alCambiar={() => { void loadProyecto(); }} />
 
-          {/* Partidas table */}
+          {/* Lo acordado con cada proveedor. Se llamaba «Partidas de
+              proveedores»; desde que los ítems tienen su propia partida —el
+              capítulo de la cotización— dos cosas distintas se llamaban
+              igual en la misma pantalla. La tabla de la base sigue siendo
+              `partidas`; lo que cambia es cómo se lee aquí. */}
           <div className="mb-4">
-            <h3 className="text-sm font-medium text-ink-dim mb-2">Partidas de proveedores</h3>
+            <h3 className="text-sm font-medium text-ink-dim mb-2">Compromisos con proveedores</h3>
             {p.partidas.length === 0 ? (
               <div className="bg-white border border-black/5 rounded-2xl p-6 text-center text-xs text-ink-muted">
-                Sin partidas. Edita el proyecto para agregar.
+                Sin compromisos. Edita el proyecto para agregar.
               </div>
             ) : (
               <div className="bg-white border border-black/5 rounded-2xl overflow-hidden">
@@ -842,89 +848,3 @@ function ProyectoEditForm(props: EditFormProps) {
 }
 
 // --- Los ítems del proyecto (vista) ---
-
-function ProductosVista({ proyecto }: { proyecto: Proyecto }) {
-  const productos: ProductoProyecto[] = proyecto.productos ?? [];
-  const suma = productos.reduce((s, p) => s + p.monto, 0);
-  const sinAsignar = proyecto.cobrado - productos.reduce((s, p) => s + (p.pagado ?? 0), 0);
-  return (
-    <div className="mb-4">
-      <div className="flex justify-between items-baseline mb-2">
-        <h3 className="text-sm font-medium text-ink-dim">Ítems del proyecto</h3>
-        {productos.length > 0 && (
-          <span className="text-[11px] text-ink-muted">
-            {formatMonto(suma, "MXN")}
-            {proyecto.precio_venta > 0 && Math.abs(suma - proyecto.precio_venta) > 0.5 && (
-              <span className="text-mauve-900 ml-1">≠ precio venta</span>
-            )}
-          </span>
-        )}
-      </div>
-      {productos.length === 0 ? (
-        <div className="bg-white border border-black/5 rounded-2xl p-6 text-center text-xs text-ink-muted">
-          Sin ítems. Edita el proyecto para agregarlos: es lo que el cliente ve en su portal.
-        </div>
-      ) : (
-        <div className="bg-white border border-black/5 rounded-2xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-cream/50 text-xs text-ink-muted uppercase tracking-wide">
-              <tr>
-                <th className="text-left px-4 py-2 font-medium">Ítem</th>
-                <th className="text-right px-4 py-2 font-medium">Cant.</th>
-                <th className="text-left px-4 py-2 font-medium">Entrega</th>
-                <th className="text-right px-4 py-2 font-medium">Importe</th>
-                <th className="text-right px-4 py-2 font-medium">Cobrado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {productos.map((pr) => {
-                const pct = pr.monto > 0 ? Math.min(100, (pr.pagado / pr.monto) * 100) : 0;
-                const fe = pr.fecha_entrega as Timestamp | null | undefined;
-                return (
-                  <tr key={pr.id} className="border-t border-black/5">
-                    <td className="px-4 py-3">
-                      <p className="text-sm font-medium text-ink-dim">{pr.nombre}</p>
-                      {pr.descripcion && (
-                        <p className="text-[11px] text-ink-muted">{pr.descripcion}</p>
-                      )}
-                    </td>
-                    <td className="text-right px-4 py-3 text-sm text-ink-dim tabular-nums">
-                      {pr.cantidad ?? 1}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-ink-muted whitespace-nowrap">
-                      {fe && typeof fe.toDate === "function" ? formatDateShort(fe.toDate()) : "—"}
-                    </td>
-                    <td className="text-right px-4 py-3 text-sm text-ink-dim">
-                      {formatMonto(pr.monto, "MXN")}
-                      {(pr.cantidad ?? 1) > 1 && (
-                        <span className="block text-[10px] text-ink-muted">
-                          {formatMonto(pr.monto / (pr.cantidad ?? 1), "MXN")} c/u
-                        </span>
-                      )}
-                    </td>
-                    <td className="text-right px-4 py-3">
-                      <p className="text-sm text-ink-dim">{formatMonto(pr.pagado ?? 0, "MXN")}</p>
-                      <div className="flex items-center gap-1.5 justify-end mt-1">
-                        <div className="w-16 h-1 bg-cream rounded-full overflow-hidden">
-                          <div className="h-full bg-mint-900" style={{ width: `${pct}%` }} />
-                        </div>
-                        <span className="text-[10px] text-ink-muted w-7 text-right">
-                          {pct.toFixed(0)}%
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {sinAsignar > 0.5 && (
-            <p className="px-4 py-2 text-[11px] text-ink-muted bg-cream/40 border-t border-black/5">
-              {formatMonto(sinAsignar, "MXN")} cobrados sin asignar a un producto.
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
