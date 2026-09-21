@@ -13,10 +13,11 @@
  * pesa en cada arranque del Worker, el navegador ya sabe hacerlo, y de paso
  * deja escoger hoja y márgenes.
  *
- * EL EXCEL SÍ SE ARMA AQUÍ, con `lib/xlsx.ts`, que son doscientas líneas sin
- * dependencias. Van DOS HOJAS —los ítems y los pagos— porque son dos tablas,
- * y pegadas en una sola con renglones en blanco en medio es donde Excel
- * empieza a adivinar tipos.
+ * EL EXCEL LO ARMA LA API. Empezó armándose aquí y se mudó el mismo día,
+ * antes de publicarse: en cuanto el cliente también tenía que poder bajarlo
+ * desde peek101, dos armadores del mismo archivo se volvieron dos maneras de
+ * que un día no dijeran lo mismo. Aquí queda una liga a
+ * `/proyectos/:id/estado.xlsx`.
  *
  * AQUÍ NO SE SUMA NADA. Todos los totales llegan resueltos de la API, que es
  * la MISMA ruta que abre peek101. Es lo que garantiza que el papel que manda
@@ -27,8 +28,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { IconArrowLeft, IconPrinter, IconTableExport } from "@tabler/icons-react";
-import { estadoDelProyecto, type EstadoDelProyecto } from "@/lib/estado-proyecto";
-import { bajarArchivo, xlsx, type Celda } from "@/lib/xlsx";
+import { estadoDelProyecto, ligaDelExcel, type EstadoDelProyecto } from "@/lib/estado-proyecto";
 import { formatMonto } from "@/lib/format";
 
 /** El día que se genera, en palabras. Sale de `generado_at`, que lo pone el
@@ -41,49 +41,6 @@ const enPalabras = (iso: string) =>
 const enDigitos = (iso: string) => new Date(iso).toISOString().slice(0, 10);
 
 const limpio = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
-
-/** Las dos hojas del Excel, con los mismos números que la hoja impresa.
- *
- *  Los importes van como NÚMERO y no como «$1,234.00»: un importe con signo
- *  de pesos adentro es texto para Excel, la suma da cero, y quien lo abra va
- *  a creer que no le deben nada. El formato lo pone quien lo abre. */
-function libroDe(d: EstadoDelProyecto): { hojas: { nombre: string; filas: Celda[][] }[]; archivo: string } {
-  const encabezado: Celda[][] = [
-    ["Estado de cuenta"],
-    ["Proyecto", d.proyecto.nombre],
-    ["Cliente", d.cliente?.nombre ?? ""],
-    ["Generado el", enPalabras(d.generado_at)],
-    [],
-  ];
-
-  const items: Celda[][] = [
-    ...encabezado,
-    ["Código", "Concepto", "Modelo", "Cantidad", "Precio unitario", "Importe"],
-    ...d.items.map((i): Celda[] => [
-      i.clave ?? "", i.nombre, i.producto_nombre ?? "", i.cantidad, i.precio_unitario, i.importe,
-    ]),
-    [],
-    ["", "", "", "", "Subtotal", d.totales.subtotal],
-    ["", "", "", "", `IVA ${d.totales.tasa_iva / 100}%`, d.totales.iva],
-    ["", "", "", "", "Total", d.totales.total],
-    ["", "", "", "", "Pagado", d.totales.cobrado],
-    ["", "", "", "", "Saldo", d.totales.saldo],
-  ];
-
-  const pagos: Celda[][] = [
-    ...encabezado,
-    ["Fecha", "Concepto", "Cuenta", "Monto"],
-    ...d.movimientos.map((m): Celda[] => [m.fecha, m.descripcion ?? "", m.cuenta_nombre ?? "", m.monto]),
-    [],
-    ["", "", "Pagado", d.totales.cobrado],
-    ["", "", "Saldo", d.totales.saldo],
-  ];
-
-  return {
-    hojas: [{ nombre: "Ítems", filas: items }, { nombre: "Pagos", filas: pagos }],
-    archivo: `estado-${limpio(d.proyecto.nombre) || "proyecto"}-${enDigitos(d.generado_at)}.xlsx`,
-  };
-}
 
 export default function EstadoDelProyectoPage() {
   const { id } = useParams<{ id: string }>();
@@ -104,10 +61,6 @@ export default function EstadoDelProyectoPage() {
   if (!d) return <p className="text-sm text-mauve-900">{error || "Ese proyecto ya no existe."}</p>;
 
   const t = d.totales;
-  const bajarExcel = () => {
-    const { hojas, archivo } = libroDe(d);
-    bajarArchivo(xlsx(hojas), archivo);
-  };
 
   return (
     <div className="max-w-4xl">
@@ -116,12 +69,15 @@ export default function EstadoDelProyectoPage() {
           <IconArrowLeft size={13} /> Volver al proyecto
         </Link>
         <span className="flex gap-2">
-          <button
-            type="button" onClick={bajarExcel}
+          {/* Una liga y no un botón: el archivo lo arma la API y el
+              navegador lo baja solo, sin que esta pantalla toque los
+              números otra vez. */}
+          <a
+            href={ligaDelExcel(id)}
             className="border border-black/10 text-ink-dim rounded-xl px-3 py-2 text-sm inline-flex items-center gap-1.5"
           >
             <IconTableExport size={15} /> Bajar Excel
-          </button>
+          </a>
           <button
             type="button" onClick={() => window.print()}
             className="bg-ink text-cream rounded-xl px-3 py-2 text-sm font-medium inline-flex items-center gap-1.5"

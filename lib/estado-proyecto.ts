@@ -16,7 +16,7 @@
  */
 
 import { pedir } from './api/cliente';
-import { org } from './fuente';
+import { apiBase, org } from './fuente';
 
 const aPesos = (centavos: unknown) => Math.round(Number(centavos ?? 0)) / 100;
 
@@ -129,3 +129,15 @@ export function desglose(
   const iva = iva_incluido ? c - subtotal : Math.round((c * tasa) / 10000);
   return { subtotal: subtotal / 100, iva: iva / 100, total: (subtotal + iva) / 100 };
 }
+
+/** La liga para bajar el mismo estado de cuenta en Excel.
+ *
+ *  El archivo lo arma la API —`GET …/estado.xlsx`— y no esta pantalla: lo
+ *  baja también el cliente desde peek101, y dos armadores del mismo archivo
+ *  es la manera segura de que un día no digan lo mismo.
+ *
+ *  Va como liga y no como `fetch` + Blob a propósito: el navegador ya sabe
+ *  bajar archivos, respeta el nombre que manda la cabecera, y así no queda
+ *  un `createObjectURL` que alguien se olvide de revocar. */
+export const ligaDelExcel = (proyecto_id: string) =>
+  `${apiBase()}/orgs/${org()}/proyectos/${encodeURIComponent(proyecto_id)}/estado.xlsx`;

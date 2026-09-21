@@ -15,8 +15,10 @@
  *     lado del navegador— dé exactamente lo mismo que el servidor. Si se
  *     separaran, el botón prometería un total y el papel diría otro;
  *   · que el interruptor de IVA NO MUEVA ningún peso guardado;
- *   · que el EXCEL lleve los mismos números que el documento, y que los
- *     importes viajen como números y no como texto.
+ *   · que la LIGA DEL EXCEL baje un archivo de verdad. El armador vive en
+ *     la API —lo bajan dash101 y peek101—, así que lo que se mide aquí es
+ *     que la pantalla apunte a donde debe y que del otro lado salga un
+ *     .xlsx; el formato por dentro lo miden las pruebas de la API.
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -27,7 +29,8 @@ import { createCliente } from "@/lib/clientes";
 import { createCuenta } from "@/lib/cuentas";
 import { createMovimiento } from "@/lib/movimientos";
 import { createProyecto, getProyecto, updateProyecto } from "@/lib/proyectos";
-import { desglose, estadoDelProyecto } from "@/lib/estado-proyecto";
+import { bajar } from "@/lib/api/cliente";
+import { desglose, estadoDelProyecto, ligaDelExcel } from "@/lib/estado-proyecto";
 
 const CORREO = process.env.CORREO_SUPERADMIN ?? "mike@forespot.com";
 const ORG = `ep-${(process.env.GITHUB_RUN_ID ?? Date.now().toString(36)).toString().toLowerCase().slice(-12)}`;
@@ -147,5 +150,20 @@ describe("el IVA de la obra", () => {
     expect(p.precio_venta).toBe(antes);
     expect(p.iva_incluido).toBe(false);
     expect(p.items!.reduce((t, i) => t + i.monto, 0)).toBe(antes);
+  });
+});
+
+describe("el Excel", () => {
+  it("la liga apunta a la ruta de la API y baja un .xlsx de verdad", async () => {
+    const liga = ligaDelExcel(ids.proyecto);
+    expect(liga).toContain(`/orgs/${ORG}/proyectos/${ids.proyecto}/estado.xlsx`);
+
+    const r = await bajar(`/orgs/${ORG}/proyectos/${ids.proyecto}/estado.xlsx`);
+    expect(r.status).toBe(200);
+    expect(r.headers.get("content-type")).toContain("spreadsheetml.sheet");
+    const bytes = new Uint8Array(await r.arrayBuffer());
+    /* «PK»: la firma de un ZIP, que es lo que un .xlsx es por dentro. */
+    expect([bytes[0], bytes[1]]).toEqual([0x50, 0x4b]);
+    expect(bytes.byteLength, "y no viene vacío").toBeGreaterThan(500);
   });
 });
