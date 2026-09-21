@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useNegocioActivo } from "@/lib/negocio-activo-context";
 import { listCuentas } from "@/lib/cuentas";
 import { listMovimientos } from "@/lib/movimientos";
-import { MarcaFacturado } from "@/components/marca-facturado";
+import { MarcaFiscal } from "@/components/marca-fiscal";
 import { listProyectos } from "@/lib/proyectos";
 import type { Cuenta, Movimiento, Proyecto } from "@/types/schema";
 import { formatMonto, formatDateShort } from "@/lib/format";
@@ -381,7 +381,7 @@ export default function DashboardPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-ink-dim truncate">
                       {m.descripcion || m.contraparte_nombre}
-                      <MarcaFacturado mov={m} />
+                      <MarcaFiscal mov={m} />
                     </p>
                     <p className="text-[11px] text-ink-muted truncate">
                       {dateStr} · {m.cuenta_nombre}
