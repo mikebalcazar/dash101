@@ -3,7 +3,7 @@
  *
  * `wrangler dev` no sirve aquí: el *service binding* a `suite101-api` sólo
  * existe dentro de Cloudflare. Esto hace lo MISMO que `worker/index.js`
- * —servir `publico/` y reenviar `/s101/*` con `X-App: dash101`— pero por HTTP
+ * —servir `publico/` y reenviar `/s101/*` con `X-App: supply101`— pero por HTTP
  * contra la API de STAGING. Nunca contra producción: la dirección por omisión
  * es la de staging y hay que escribir la otra a mano para cambiarla.
  *
@@ -30,7 +30,7 @@ const servidor = createServer(async (req, res) => {
 
   if (u.pathname === '/s101' || u.pathname.startsWith('/s101/')) {
     const destino = API + (u.pathname.slice('/s101'.length) || '/') + u.search;
-    const cabeceras = { ...req.headers, 'X-App': 'dash101', host: new URL(API).host };
+    const cabeceras = { ...req.headers, 'X-App': 'supply101', host: new URL(API).host };
     delete cabeceras['accept-encoding'];
     const trozos = [];
     for await (const t of req) trozos.push(t);

@@ -26,6 +26,20 @@ Hace tres cosas:
 **No paga.** No hay buzón, ni cuentas, ni saldos, ni nada fiscal: eso vive en
 dash101, con el dinero. La misma orden, dos caras.
 
+## Quién entra
+
+supply101 tiene **llave propia** en la suite (`supply`, contrato 0.42.0). Va
+prendida en toda empresa que tenga dash101 —no hay nada que prender a mano—,
+pero **el permiso se reparte persona por persona y por separado**: quien
+administra puede dejar pedir compras a alguien sin abrirle el tablero del
+dinero, que es de lo que se trataba esta app.
+
+Hasta el 21-sep-2026 mandaba `X-App: dash101` «porque esa llave ya está
+prendida». Era correcto para las empresas y falso para las personas: la lista
+de apps por persona usa esa misma llave, así que pedir una compra exigía
+entrar a dash101 y la app le cerraba la puerta justo a la gente para la que
+se hizo. Se arregló dándole nombre propio.
+
 ## Por qué está en el repositorio de dash101
 
 Porque es la otra cara del mismo módulo y del mismo contrato de la API, y
