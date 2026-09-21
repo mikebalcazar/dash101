@@ -715,21 +715,37 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
                 </div>
               )}
 
+              {/* LO FISCAL, EN DOS PASOS. Mike, 21-sep: «ese marcador de
+                  facturado son 2 pasos: uno que indica si ese monto es
+                  facturado —o sea que se desglosa el IVA—, y eso activa otro
+                  marcador que dice si ya se facturó o no. Si un movimiento
+                  no va fiscalizado, no tiene caso el marcador de si ya se
+                  hizo la factura».
+
+                  Tenía razón y los DATOS ya estaban así: `requiere_factura`
+                  dice si lleva, `facturado` dice si ya se expidió. Era la
+                  pantalla la que los había aplastado en un solo control de
+                  tres botones, donde «no lleva» y «falta» parecían del mismo
+                  tipo de decisión y no lo son: la primera es qué ES el
+                  movimiento, la segunda es en qué VA. */}
               <div>
-                <label className="text-xs font-medium text-ink-dim block mb-1.5">Factura</label>
-                <div className="grid grid-cols-3 gap-1.5">
+                <label className="text-xs font-medium text-ink-dim block mb-1.5">¿Este monto se factura?</label>
+                <div className="grid grid-cols-2 gap-1.5">
                   {([
-                    ["ya", "Ya se facturó"],
-                    ["falta", "Falta facturar"],
-                    ["no", "No lleva"],
-                  ] as const).map(([v, texto]) => (
+                    [true, "Sí, lleva factura"],
+                    [false, "No lleva"],
+                  ] as const).map(([lleva, texto]) => (
                     <button
-                      key={v}
+                      key={String(lleva)}
                       type="button"
-                      onClick={() => setFactura(v)}
-                      aria-pressed={factura === v}
+                      /* Al prender, arranca en «todavía no»: decir que lleva
+                         factura no es decir que ya se hizo. Al apagar, se
+                         va a «no lleva» y el segundo paso desaparece con
+                         todo y sus datos. */
+                      onClick={() => setFactura(lleva ? (factura === "no" ? "falta" : factura) : "no")}
+                      aria-pressed={lleva === (factura !== "no")}
                       className={`rounded-xl px-2 py-2 text-xs border transition ${
-                        factura === v
+                        lleva === (factura !== "no")
                           ? "bg-ink text-white border-ink"
                           : "bg-white text-ink-dim border-black/10 hover:border-ink/30"
                       }`}
@@ -739,12 +755,42 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
                   ))}
                 </div>
                 <p className="text-[11px] text-ink-muted mt-1.5">
-                  {factura === "ya"
-                    ? "Captura aquí el folio fiscal y, si quieres, cuelga el archivo."
-                    : factura === "falta"
-                      ? "Se queda en «pendientes de facturar» hasta que la captures."
-                      : "No aparece en pendientes. Para un préstamo, un traspaso o una devolución."}
+                  {factura === "no"
+                    ? "No se le desglosa IVA y no aparece en pendientes. Para un préstamo, un traspaso o una devolución."
+                    : "Se le desglosa el IVA y cuenta para lo fiscal."}
                 </p>
+
+                {/* El segundo paso sólo existe si el primero dijo que sí. */}
+                {factura !== "no" && (
+                  <div className="mt-3">
+                    <label className="text-xs font-medium text-ink-dim block mb-1.5">¿Ya se expidió la factura?</label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {([
+                        ["ya", "Ya se expidió"],
+                        ["falta", "Todavía no"],
+                      ] as const).map(([v, texto]) => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => setFactura(v)}
+                          aria-pressed={factura === v}
+                          className={`rounded-xl px-2 py-2 text-xs border transition ${
+                            factura === v
+                              ? "bg-ink text-white border-ink"
+                              : "bg-white text-ink-dim border-black/10 hover:border-ink/30"
+                          }`}
+                        >
+                          {texto}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-ink-muted mt-1.5">
+                      {factura === "ya"
+                        ? "Captura aquí el folio fiscal y, si quieres, cuelga el archivo."
+                        : "Se queda en «pendientes de facturar» hasta que la captures."}
+                    </p>
+                  </div>
+                )}
 
                 {factura === "ya" && (
                   <div className="mt-3 bg-cream rounded-xl p-3 space-y-3">
