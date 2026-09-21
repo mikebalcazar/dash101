@@ -29,7 +29,13 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { IconArrowLeft, IconPrinter, IconTableExport } from "@tabler/icons-react";
 import { estadoDelProyecto, ligaDelExcel, type EstadoDelProyecto } from "@/lib/estado-proyecto";
-import { formatMonto } from "@/lib/format";
+/* `formatMontoExact` y no `formatMonto`: éste último redondea a pesos
+ * enteros, y en un papel que se le manda a un cliente eso rompe la cuenta.
+ * Con «IVA incluido» el subtotal casi nunca es redondo —de $111,250 salen
+ * $95,905.17 y $15,344.83—, y enseñado sin centavos se lee «95,905 +
+ * 15,345 = 111,250», que no cuadra. El que suma la columna es quien va a
+ * pagar. */
+import { formatMontoExact } from "@/lib/format";
 
 /** El día que se genera, en palabras. Sale de `generado_at`, que lo pone el
  *  SERVIDOR: un estado de cuenta con la fecha de la laptop mal puesta es un
@@ -120,7 +126,7 @@ export default function EstadoDelProyectoPage() {
           ].map((k) => (
             <div key={k.que} className="bg-cream/60 rounded-xl p-3 print:bg-transparent print:border print:border-black/15">
               <p className="text-[11px] text-ink-muted">{k.que}</p>
-              <p className={`text-lg font-medium tabular ${k.tono}`}>{formatMonto(k.cuanto, "MXN")}</p>
+              <p className={`text-lg font-medium tabular ${k.tono}`}>{formatMontoExact(k.cuanto, "MXN")}</p>
             </div>
           ))}
         </div>
@@ -154,8 +160,8 @@ export default function EstadoDelProyectoPage() {
                     )}
                   </td>
                   <td className="py-1.5 text-right tabular">{i.cantidad}</td>
-                  <td className="py-1.5 text-right tabular">{formatMonto(i.precio_unitario, "MXN")}</td>
-                  <td className="py-1.5 text-right tabular">{formatMonto(i.importe, "MXN")}</td>
+                  <td className="py-1.5 text-right tabular">{formatMontoExact(i.precio_unitario, "MXN")}</td>
+                  <td className="py-1.5 text-right tabular">{formatMontoExact(i.importe, "MXN")}</td>
                 </tr>
               ))}
             </tbody>
@@ -163,17 +169,17 @@ export default function EstadoDelProyectoPage() {
               <tr>
                 <td colSpan={2} />
                 <td className="py-1.5 text-right text-ink-muted">Subtotal</td>
-                <td className="py-1.5 text-right tabular">{formatMonto(t.subtotal, "MXN")}</td>
+                <td className="py-1.5 text-right tabular">{formatMontoExact(t.subtotal, "MXN")}</td>
               </tr>
               <tr>
                 <td colSpan={2} />
                 <td className="py-1.5 text-right text-ink-muted">IVA {t.tasa_iva / 100}%</td>
-                <td className="py-1.5 text-right tabular">{formatMonto(t.iva, "MXN")}</td>
+                <td className="py-1.5 text-right tabular">{formatMontoExact(t.iva, "MXN")}</td>
               </tr>
               <tr className="border-t-2 border-black/20 font-medium">
                 <td colSpan={2} />
                 <td className="py-2 text-right">Total</td>
-                <td className="py-2 text-right tabular">{formatMonto(t.total, "MXN")}</td>
+                <td className="py-2 text-right tabular">{formatMontoExact(t.total, "MXN")}</td>
               </tr>
             </tfoot>
           </table>
@@ -199,18 +205,18 @@ export default function EstadoDelProyectoPage() {
                     {m.descripcion || "Pago"}
                     {m.cuenta_nombre && <span className="text-ink-muted text-xs"> · {m.cuenta_nombre}</span>}
                   </td>
-                  <td className="py-1.5 text-right tabular text-mint-900">{formatMonto(m.monto, "MXN")}</td>
+                  <td className="py-1.5 text-right tabular text-mint-900">{formatMontoExact(m.monto, "MXN")}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr className="border-t-2 border-black/20 font-medium">
                 <td colSpan={2} className="py-2">Pagado</td>
-                <td className="py-2 text-right tabular">{formatMonto(t.cobrado, "MXN")}</td>
+                <td className="py-2 text-right tabular">{formatMontoExact(t.cobrado, "MXN")}</td>
               </tr>
               <tr className="font-medium">
                 <td colSpan={2} className="py-1">Saldo</td>
-                <td className="py-1 text-right tabular">{formatMonto(t.saldo, "MXN")}</td>
+                <td className="py-1 text-right tabular">{formatMontoExact(t.saldo, "MXN")}</td>
               </tr>
             </tfoot>
           </table>
