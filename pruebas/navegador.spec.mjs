@@ -65,6 +65,7 @@
 
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { stat } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
 /* SI CORRES ESTO DESDE EL CONTENEDOR DE UNA SESIÓN DE CHAT, hazlo contra un
@@ -673,14 +674,28 @@ test('el estado de cuenta del proyecto: la lista suma el subtotal y el IVA se de
   assert.ok(/Generado el/.test(dice), 'trae la fecha del día que se genera');
   assert.ok(/IVA 16%/.test(dice), 'dice la tasa con la que se hizo la cuenta');
 
-  // Las dos salidas que pidió: el PDF lo hace el navegador y el Excel lo
-  // arma la página. Que los dos botones existan es lo que se puede medir
-  // aquí sin abrir el diálogo de imprimir del sistema.
+  /* Las dos salidas que pidió.
+   *
+   * El PDF lo hace el navegador —abrir el diálogo de imprimir del sistema no
+   * se puede medir desde aquí—, así que de ése se comprueba que el botón
+   * esté.
+   *
+   * El Excel es una LIGA y no un botón: el archivo lo arma la API y el
+   * navegador lo baja solo. Eso importa para la prueba y no es un detalle:
+   * un `<a href>` tiene rol de liga, y buscarlo como botón lo deja sin
+   * encontrar. Así se cayó el despliegue #56, con la descarga esperando un
+   * clic que nunca ocurrió. */
   await pag.getByRole('button', { name: /Guardar como PDF/ }).waitFor({ timeout: 10000 });
-  const bajada = pag.waitForEvent('download', { timeout: 20000 });
-  await pag.getByRole('button', { name: /Bajar Excel/ }).click();
+  const liga = pag.getByRole('link', { name: /Bajar Excel/ });
+  await liga.waitFor({ timeout: 10000 });
+  assert.ok(/\/estado\.xlsx$/.test(await liga.getAttribute('href')), 'la liga apunta a la ruta de la API');
+  const bajada = pag.waitForEvent('download', { timeout: 30000 });
+  await liga.click();
   const archivo = await bajada;
   assert.ok(/\.xlsx$/.test(archivo.suggestedFilename()), `el Excel se baja: ${archivo.suggestedFilename()}`);
+  /* Y que traiga algo: un ZIP vacío también se «baja». */
+  const { size } = await stat(await archivo.path());
+  assert.ok(size > 500, `y el archivo trae contenido: ${size} bytes`);
 
   console.log(`    ${pesos2(30_000_00)} + ${pesos2(4_800_00)} = ${pesos2(34_800_00)}, saldo ${pesos2(24_800_00)}`);
   assert.deepEqual(errores, [], 'cero errores de JavaScript');
