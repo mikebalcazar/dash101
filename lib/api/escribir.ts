@@ -295,6 +295,9 @@ export async function updateProyecto(
   d: {
     nombre?: string; descripcion?: string; precio_venta?: number; partidas?: PartidaProyectoInput[];
     items?: ItemProyectoInput[]; estado?: EstadoProyecto; fecha_inicio?: Date; fecha_fin_estimada?: Date | null;
+    /** Contrato 0.39.0. No mueven un peso: dicen cómo se LEE `precio_venta`
+     *  al armar el estado de cuenta. */
+    tasa_iva?: number; iva_incluido?: boolean;
   },
 ): Promise<void> {
   const actual = await obtener<A.FilaProyecto>('proyectos', id);
@@ -305,6 +308,8 @@ export async function updateProyecto(
     nombre: d.nombre, descripcion: d.descripcion === undefined ? undefined : oNulo(d.descripcion), estado: d.estado,
     fecha_inicio: d.fecha_inicio === undefined ? undefined : dia(d.fecha_inicio),
     fecha_fin_estimada: d.fecha_fin_estimada === undefined ? undefined : dia(d.fecha_fin_estimada),
+    tasa_iva: d.tasa_iva,
+    iva_incluido: d.iva_incluido === undefined ? undefined : d.iva_incluido ? 1 : 0,
   });
 
   /* Ítems: por id. Los que vienen con id se actualizan, los que no se crean,

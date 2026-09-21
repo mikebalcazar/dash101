@@ -182,6 +182,10 @@ export async function updateProyecto(
     estado?: EstadoProyecto;
     fecha_inicio?: Date;
     fecha_fin_estimada?: Date | null;
+    /** Contrato 0.39.0: cómo lleva el IVA esta obra en su estado de cuenta.
+     *  Sólo existe del lado de la API; en Firestore no había dónde. */
+    tasa_iva?: number;
+    iva_incluido?: boolean;
   }
 ): Promise<void> {
   if (fuente() === 'api') return escribir.updateProyecto(id, data);

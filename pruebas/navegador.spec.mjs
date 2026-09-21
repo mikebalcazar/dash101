@@ -100,7 +100,9 @@ after(async () => { await nav?.close(); });
 
 async function pestana(viewport = { width: 1440, height: 900 }, conSesion = false) {
   if (conSesion) assert.ok(estado, 'la primera prueba (entrar) tiene que haber pasado para tener sesión');
-  const ctx = await nav.newContext({ viewport, locale: 'es-MX', ...(conSesion ? { storageState: estado } : {}) });
+  /* `acceptDownloads` explícito: el estado de cuenta baja un .xlsx y esa
+   * prueba no puede depender de cuál sea el valor por omisión del día. */
+  const ctx = await nav.newContext({ viewport, locale: 'es-MX', acceptDownloads: true, ...(conSesion ? { storageState: estado } : {}) });
   const pag = await ctx.newPage();
   const errores = [];
   pag.on('pageerror', (e) => errores.push(String(e).slice(0, 300)));
@@ -607,6 +609,76 @@ test('la cantidad: 20 puertas a $1,500 son $30,000 de línea, no $600,000', asyn
   const dice = await texto(pag);
   assert.ok(/20/.test(dice), 'la cantidad se ve en la tabla');
   console.log(`    20 × ${pesos2(1_500_00)} = ${pesos2(item.monto)} de línea`);
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
+test('el estado de cuenta del proyecto: la lista suma el subtotal y el IVA se desglosa', async () => {
+  /* Encargo de Mike del 21-sep: «necesito poder exportar un estado de cuenta
+   * en pdf y un excel con lo siguiente de cada proyecto: saldo general,
+   * lista de productos en proyecto, subtotal, IVA y total de proyecto
+   * completo, movimientos de proyecto (pagos), fecha del día que se genera».
+   *
+   * Este papel se le manda a un cliente, así que lo que se mide es que los
+   * números que se VEN cuadren: la suma de la lista contra el subtotal, y
+   * el subtotal más el IVA contra el total. Un documento que no cuadra lo
+   * descubre quien lo recibe. */
+  const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  const { neg } = await negocioDePruebas(pag);
+  await elegirNegocio(pag, neg.id);
+
+  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes?negocio_id=${neg.id}`))
+    .find((c) => c.nombre === CLIENTE_PRUEBAS);
+  if (!cliente) {
+    cliente = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS, negocio_id: neg.id } });
+  }
+  const proyecto = await api(pag, `/orgs/${ORG}/proyectos`, {
+    method: 'POST',
+    body: { nombre: `Estado ${Date.now().toString(36).slice(-5)}`, cliente_id: cliente.id, negocio_id: neg.id, estado: 'activo' },
+  });
+  await api(pag, `/orgs/${ORG}/items`, {
+    method: 'POST',
+    body: {
+      negocio_id: neg.id, cliente_id: cliente.id, proyecto_id: proyecto.id,
+      nombre: 'Puerta del estado', monto: 30_000_00, cantidad: 2, estado: 'vendido', tipo: 'mueble',
+    },
+  });
+  const cuenta = filas(await api(pag, `/orgs/${ORG}/cuentas?negocio_id=${neg.id}`))[0];
+  await api(pag, `/orgs/${ORG}/movimientos`, {
+    method: 'POST',
+    body: {
+      negocio_id: neg.id, tipo: 'ingreso', monto: 10_000_00, fecha: '2026-03-01',
+      cuenta_id: cuenta.id, proyecto_id: proyecto.id,
+      contraparte_tipo: 'cliente', contraparte_id: cliente.id, descripcion: 'Anticipo del estado',
+    },
+  });
+
+  // Se llega por donde llega Mike: el botón del proyecto, no la dirección.
+  await pag.goto(`${URL}/proyectos/${proyecto.id}`, { waitUntil: 'load' });
+  await pag.getByRole('link', { name: /Estado de cuenta/ }).first().click();
+  await pag.getByRole('heading', { name: 'Estado de cuenta' }).waitFor({ timeout: 30000 });
+  await pag.getByText('Lo que lleva la obra').first().waitFor({ timeout: 20000 });
+
+  const dice = await texto(pag);
+  assert.ok(dice.includes(pesos2(30_000_00)), `el subtotal sale: ${pesos2(30_000_00)}`);
+  assert.ok(dice.includes(pesos2(4_800_00)), `y el IVA al 16%: ${pesos2(4_800_00)}`);
+  assert.ok(dice.includes(pesos2(34_800_00)), `y el total: ${pesos2(34_800_00)}`);
+  assert.ok(dice.includes(pesos2(10_000_00)), 'el pago aparece');
+  assert.ok(dice.includes(pesos2(24_800_00)), 'y el saldo es contra el total con IVA');
+  assert.ok(/Generado el/.test(dice), 'trae la fecha del día que se genera');
+  assert.ok(/IVA 16%/.test(dice), 'dice la tasa con la que se hizo la cuenta');
+
+  // Las dos salidas que pidió: el PDF lo hace el navegador y el Excel lo
+  // arma la página. Que los dos botones existan es lo que se puede medir
+  // aquí sin abrir el diálogo de imprimir del sistema.
+  await pag.getByRole('button', { name: /Guardar como PDF/ }).waitFor({ timeout: 10000 });
+  const bajada = pag.waitForEvent('download', { timeout: 20000 });
+  await pag.getByRole('button', { name: /Bajar Excel/ }).click();
+  const archivo = await bajada;
+  assert.ok(/\.xlsx$/.test(archivo.suggestedFilename()), `el Excel se baja: ${archivo.suggestedFilename()}`);
+
+  console.log(`    ${pesos2(30_000_00)} + ${pesos2(4_800_00)} = ${pesos2(34_800_00)}, saldo ${pesos2(24_800_00)}`);
   assert.deepEqual(errores, [], 'cero errores de JavaScript');
   await ctx.close();
 });
