@@ -651,11 +651,19 @@ test('un cobro se captura «falta facturar» y aparece en la lista de pendientes
   await pag.locator(`select:has(option[value="${cuenta.id}"])`).first().selectOption(cuenta.id);
   await pag.locator(`select:has(option[value="${cliente.id}"])`).first().selectOption(cliente.id);
 
-  // Lo nuevo: un ingreso arranca solo en «falta facturar».
-  const falta = pag.getByRole('button', { name: 'Falta facturar' });
-  await falta.waitFor({ timeout: 20000 });
-  assert.equal(await falta.getAttribute('aria-pressed'), 'true',
-    'un ingreso arranca en «falta facturar», que es lo que casi siempre pasa');
+  /* Un ingreso arranca fiscal y con la factura pendiente, que es lo que casi
+     siempre pasa. Desde el 21-sep eso son DOS marcadores y no uno —Mike:
+     «son 2 pasos: uno que indica si ese monto es facturado, y eso activa
+     otro que dice si ya se facturó»—, así que se revisan los dos: que lleve
+     factura, y que todavía no se haya expedido. */
+  const lleva = pag.getByRole('button', { name: 'Sí, lleva factura' });
+  await lleva.waitFor({ timeout: 20000 });
+  assert.equal(await lleva.getAttribute('aria-pressed'), 'true',
+    'un ingreso arranca como fiscal: se le desglosa IVA');
+  const todaviaNo = pag.getByRole('button', { name: 'Todavía no' });
+  await todaviaNo.waitFor({ timeout: 20000 });
+  assert.equal(await todaviaNo.getAttribute('aria-pressed'), 'true',
+    'y con la factura pendiente, no dada por hecha');
 
   await pag.getByRole('button', { name: /^Registrar ingreso$/ }).click();
   await pag.waitForURL(/\/movimientos(\?|$)/, { timeout: 30000 });
@@ -935,12 +943,17 @@ test('el archivo de la factura: se escoge y se ve antes de guardar', async () =>
 
   await pag.goto(`${URL}/movimientos/${mov.id}/editar`, { waitUntil: 'load' });
   try {
-    await pag.getByRole('button', { name: /Ya se facturó/ }).waitFor({ timeout: 30000 });
+    await pag.getByRole('button', { name: 'Sí, lleva factura' }).waitFor({ timeout: 30000 });
   } catch {
     assert.fail(`no cargó la pantalla de editar. Decía: ${(await texto(pag)).replace(/\s+/g, ' ').slice(0, 300)}`);
   }
-  await pag.getByRole('button', { name: /Ya se facturó/ }).click();
 
+  /* NO se marca «ya se expidió» antes de colgar el archivo, y eso es parte
+     de lo que se mide: el comprobante se cuelga del MOVIMIENTO, no de la
+     factura. Hasta el 21-sep el control vivía dentro del bloque del CFDI y
+     había que decir que ya se había facturado —que es mentira— para poder
+     adjuntar una ficha de transferencia. Mike lo reportó y por eso salió de
+     ahí; si alguien lo regresa, este paso se cae. */
   const entrada = pag.locator('#archivo-factura');
   await entrada.waitFor({ state: 'attached', timeout: 15000 });
   await entrada.setInputFiles({

@@ -89,7 +89,7 @@ describe("la marca de fiscalizado", () => {
   });
 
   it("capturar la factura al momento la deja colgada del movimiento, con su archivo", async () => {
-    /* Es el camino que hace la pantalla cuando se escoge «Ya se facturó»:
+    /* Es el camino que hace la pantalla cuando se escoge «Ya se expidió»:
      * se crea el movimiento, se crea el CFDI POR EL TOTAL DEL MOVIMIENTO, se
      * ligan, y se cuelga el archivo. Nunca se crea un movimiento aparte:
      * una factura no es un cobro más.
