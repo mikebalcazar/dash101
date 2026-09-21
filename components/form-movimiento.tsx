@@ -21,6 +21,7 @@ import type {
 import { formatMonto } from "@/lib/format";
 import { crearCfdi, ligarCfdi } from "@/lib/fiscal";
 import { subirArchivo } from "@/lib/ordenes";
+import { aDia, delDia } from "@/lib/api/adaptar";
 import { SoltarArchivo } from "@/components/soltar-archivo";
 import {
   IconArrowLeft,
@@ -39,7 +40,11 @@ function aDiaLocal(f: unknown): string {
   const d = f && typeof (f as { toDate?: () => Date }).toDate === "function"
     ? (f as { toDate: () => Date }).toDate()
     : new Date(f as string | number | Date);
-  return Number.isNaN(d.getTime()) ? new Date().toISOString().slice(0, 10) : d.toISOString().slice(0, 10);
+  /* `aDia` y no `toISOString()`: el Timestamp viene de `aTimestamp`, que
+   * arma la medianoche de AQUÍ, y pasarlo por UTC le resta un día a quien
+   * viva al este de Greenwich. En CDMX daba lo mismo por casualidad; la
+   * casualidad no es una regla. */
+  return Number.isNaN(d.getTime()) ? aDia(new Date()) : aDia(d);
 }
 
 /** El formulario de un movimiento, que sirve para capturar y para corregir.
@@ -357,7 +362,7 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
       const datos: MovimientoInput = {
         tipo,
         monto: montoNum,
-        fecha: new Date(fecha),
+        fecha: delDia(fecha),
         cuenta_id: cuenta.id!,
         cuenta_nombre: cuenta.nombre,
         proyecto_id: proyectoId || null,
@@ -372,7 +377,12 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
         producto_id: tipo === "ingreso" && productoSel ? productoSel.id : null,
         producto_nombre: tipo === "ingreso" && productoSel ? productoSel.nombre : null,
         negocio_id: negocio.id!,
-        descripcion: descripcion.trim() || undefined,
+        /* SIN `|| undefined`. En el guardado, `undefined` quiere decir «no
+         * toques este campo», así que vaciar la nota no la borraba: se
+         * mandaba `undefined` y la API conservaba la de antes. Agregar sí
+         * funcionaba; borrar no. Mike lo reportó el 21-sep. La cadena vacía
+         * sí llega y `oNulo` la vuelve nula, que es borrarla. */
+        descripcion: descripcion.trim(),
         /* «Ya se facturó» también espera factura: la espera es lo que hace
          * que se persiga si mañana la cancelan. Lo que la saca de la lista
          * de pendientes es `facturado`, que se marca aparte con su UUID. */
@@ -398,8 +408,20 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
           total: montoNum, fecha: fechaFactura || fecha,
         });
         await ligarCfdi(c.id, id);
-        if (archivoFactura) await subirArchivo("movimientos", id, archivoFactura);
       }
+
+      /* El archivo se cuelga SIEMPRE que haya uno, y esto estaba adentro del
+       * `if` de arriba. Mike lo reportó el 21-sep: «no se están guardando
+       * los PDFs que adjunto en los detalles de los movimientos».
+       *
+       * Tenía razón y era peor de lo que suena: el archivo sólo subía si
+       * además habías marcado «ya se facturó» Y tecleado el folio fiscal.
+       * Un comprobante en PDF —una ficha de transferencia, un recibo— no
+       * trae UUID, así que se perdía sin decir nada. La pantalla enseñaba su
+       * vista previa, guardabas, y el archivo no llegaba a ningún lado.
+       *
+       * Un comprobante no depende de que haya factura: son dos cosas. */
+      if (archivoFactura) await subirArchivo("movimientos", id, archivoFactura);
 
       router.push("/movimientos");
     } catch (err) {
@@ -780,18 +802,6 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
                       </div>
                     </div>
 
-                    {/* Arrastrar, pegar o escoger, y ver lo que se va a
-                        colgar antes de guardar. Mike, 20-sep: «quiero poder
-                        arrastrar los archivos para subirlos. Y que me
-                        muestre un preview del archivo abajo». */}
-                    <SoltarArchivo
-                      id="archivo-factura"
-                      etiqueta="El archivo (XML o PDF) — opcional"
-                      acepta=".xml,.pdf,application/xml,text/xml,application/pdf"
-                      archivo={archivoFactura}
-                      alEscoger={setArchivoFactura}
-                    />
-
                     <p className="text-[11px] text-ink-muted">
                       El total de la factura es el del movimiento: {formatMonto(parseFloat(monto) || 0, negocio?.moneda ?? "MXN")}.
                       El subtotal sale de restarle el IVA, así que siempre cuadran al centavo.
@@ -799,6 +809,28 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
                     </p>
                   </div>
                 )}
+
+                {/* EL COMPROBANTE, colgado del movimiento y no de la
+                    factura. Estaba adentro del bloque de «ya se facturó»,
+                    así que para colgar una ficha de transferencia había que
+                    decir que ya se había facturado, que es mentira. Son dos
+                    cosas: la factura es del SAT, el comprobante es del
+                    movimiento.
+
+                    Arrastrar, pegar o escoger, y ver lo que se va a colgar
+                    antes de guardar. Mike, 20-sep: «quiero poder arrastrar
+                    los archivos para subirlos. Y que me muestre un preview
+                    del archivo abajo». */}
+                <div className="mt-3">
+                  <SoltarArchivo
+                    id="archivo-factura"
+                    etiqueta="El comprobante (PDF o XML) — opcional"
+                    acepta=".xml,.pdf,application/xml,text/xml,application/pdf"
+                    archivo={archivoFactura}
+                    alEscoger={setArchivoFactura}
+                    ayuda="Se cuelga del movimiento, haya factura o no."
+                  />
+                </div>
               </div>
             </>
           )}

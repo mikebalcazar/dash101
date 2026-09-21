@@ -67,6 +67,19 @@ export async function pedir<T>(ruta: string, opciones: { method?: string; body?:
  *  `{ok, data}` de la suite. Pasarlo por `pedir` truena con
  *  «undefined (200)», que no dice nada. Esto es para esas rutas y nada más;
  *  todo lo de la suite va por `pedir`. */
+/** Traer algo que NO es JSON: un PDF, una foto. Devuelve la respuesta tal
+ *  cual, por la misma plumbería de sesión que todo lo demás.
+ *
+ *  Existe porque listar el renglón de un archivo no prueba que sus bytes
+ *  llegaron a R2, y `pedir` revienta con `respuesta_no_json` al intentarlo.
+ *  Sin esto, la única manera de comprobar que un comprobante se puede volver
+ *  a bajar era abrirlo a mano en el navegador. */
+export async function bajar(ruta: string): Promise<Response> {
+  const r = await llamar(ruta, {});
+  if (!r.ok) throw new ErrorApi('no_se_pudo_bajar', r.status);
+  return r;
+}
+
 export async function pedirCrudo<T>(ruta: string, opciones: { method?: string; body?: unknown } = {}): Promise<T> {
   const r = await llamar(ruta, opciones);
   let cuerpo: unknown;

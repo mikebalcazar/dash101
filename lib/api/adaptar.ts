@@ -58,6 +58,25 @@ export function aDia(d: Date): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+/** Y el camino de vuelta: «2026-09-21» → el 21 de septiembre AQUÍ.
+ *
+ *  Existe porque `new Date('2026-09-21')` NO hace esto: el estándar manda
+ *  leer una fecha sola como medianoche en UTC, que en la Ciudad de México es
+ *  el día 20 a las seis de la tarde. Combinado con `aDia`, que lee
+ *  componentes LOCALES, eso restaba un día en cada guardado.
+ *
+ *  Mike lo reportó el 21-sep: «me está poniendo un día menos de lo que estoy
+ *  marcando en el calendario como la fecha del movimiento». Tenía razón, y
+ *  el error no estaba en una zona ni en la otra: estaba en mezclarlas.
+ *
+ *  `aDia(delDia(x)) === x` para cualquier día, en cualquier zona. Eso es lo
+ *  que mide la prueba. */
+export function delDia(dia: string): Date {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dia.trim());
+  if (!m) return new Date(dia);
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
 /* ─────────────── las filas de la API, con sus nombres ─────────────── */
 
 export interface FilaNegocio { id: string; nombre: string; rfc: string | null; moneda: 'MXN' | 'USD'; dia_conciliacion: number; creado_at: string }

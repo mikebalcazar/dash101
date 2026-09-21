@@ -119,3 +119,41 @@ describe("corregir un movimiento", () => {
     await expect(updateMovimiento("01ZZZZZZZZZZZZZZZZZZZZZZZZ", { monto: 1 })).rejects.toThrow(/ya no existe/i);
   });
 });
+
+describe("la nota se puede borrar, no sólo agregar", () => {
+  /* Mike, 21-sep: «cuando borro una nota en el movimiento, le doy guardar
+   * cambios y no la borra. Se queda igual. Sí puedo agregar, pero no puedo
+   * borrar».
+   *
+   * Tenía razón y la causa estaba en la pantalla, no aquí: mandaba
+   * `descripcion.trim() || undefined`, y en el guardado `undefined` quiere
+   * decir «no toques este campo». Vaciar la caja mandaba `undefined`, o sea
+   * «déjala como está». Agregar sí funcionaba porque ahí el texto no era
+   * vacío.
+   *
+   * Esta prueba mide la regla del lado de la escritura, que es donde vive:
+   * la cadena VACÍA borra, y `undefined` —de verdad no mandar el campo— no
+   * toca nada. Las dos cosas importan: si la vacía no borrara, no habría
+   * arreglo; si `undefined` borrara, cualquier guardado parcial se llevaría
+   * la nota por delante. */
+  it("mandar la cadena vacía deja el movimiento sin nota", async () => {
+    const id = await cobrar(150_00, { descripcion: "Nota que hay que quitar" });
+    expect((await getMovimiento(id))!.descripcion).toBe("Nota que hay que quitar");
+
+    await updateMovimiento(id, { descripcion: "" });
+    const ya = await getMovimiento(id);
+    expect(ya!.descripcion ?? "", "la nota se fue").toBe("");
+  });
+
+  it("y NO mandar el campo la deja como estaba", async () => {
+    const id = await cobrar(160_00, { descripcion: "Ésta se queda" });
+    await updateMovimiento(id, { monto: 170_00 });
+    expect((await getMovimiento(id))!.descripcion).toBe("Ésta se queda");
+  });
+
+  it("agregar una nota a un movimiento que no tenía también funciona", async () => {
+    const id = await cobrar(180_00, { descripcion: "" });
+    await updateMovimiento(id, { descripcion: "Le pongo una" });
+    expect((await getMovimiento(id))!.descripcion).toBe("Le pongo una");
+  });
+});
