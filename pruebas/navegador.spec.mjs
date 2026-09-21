@@ -660,8 +660,12 @@ test('el estado de cuenta del proyecto: la lista suma el subtotal y el IVA se de
   await pag.getByRole('heading', { name: 'Estado de cuenta' }).waitFor({ timeout: 30000 });
   await pag.getByText('Lo que lleva la obra').first().waitFor({ timeout: 20000 });
 
+  /* CON CENTAVOS, y es parte de lo que se mide: el resto de dash101 pinta
+   * el dinero redondeado a pesos enteros, y aquí no se puede. Con «IVA
+   * incluido» el subtotal casi nunca es redondo, y sin centavos la columna
+   * que suma el cliente no da el total de abajo. */
   const dice = await texto(pag);
-  assert.ok(dice.includes(pesos2(30_000_00)), `el subtotal sale: ${pesos2(30_000_00)}`);
+  assert.ok(dice.includes(pesos2(30_000_00)), `el subtotal sale con centavos: ${pesos2(30_000_00)}`);
   assert.ok(dice.includes(pesos2(4_800_00)), `y el IVA al 16%: ${pesos2(4_800_00)}`);
   assert.ok(dice.includes(pesos2(34_800_00)), `y el total: ${pesos2(34_800_00)}`);
   assert.ok(dice.includes(pesos2(10_000_00)), 'el pago aparece');
