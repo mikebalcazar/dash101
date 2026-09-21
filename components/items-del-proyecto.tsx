@@ -42,11 +42,11 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { IconArrowUp, IconArrowDown, IconCheck, IconX, IconArrowsSort, IconLayersSubtract, IconThumbUp, IconBan, IconChevronDown, IconChevronRight, IconArrowsSplit, IconEdit, IconPlus, IconMinus } from "@tabler/icons-react";
+import { IconArrowUp, IconArrowDown, IconCheck, IconX, IconArrowsSort, IconLayersSubtract, IconThumbUp, IconBan, IconChevronDown, IconChevronRight, IconArrowsSplit, IconEdit, IconPlus, IconMinus, IconTrash, IconAlertTriangle } from "@tabler/icons-react";
 import {
-  acomodar, agrupables, agrupar, aprobarItem, asignarProducto, cancelarItem, productosDelProyecto,
-  separarItem, separarProducto,
-  type GrupoDeItems, type ItemUnico, type Producto,
+  acomodar, agrupables, agrupar, aprobarItem, asignarProducto, borrarCancelados, cancelarItem,
+  productosDelProyecto, revisarCancelados, separarItem, separarProducto,
+  type CensoDeCancelados, type GrupoDeItems, type ItemUnico, type Producto,
 } from "@/lib/items-grupo";
 import { fueraDeAlcance } from "@/lib/api/leer";
 import type { ItemFuera } from "@/lib/api/leer";
@@ -359,10 +359,12 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
 
       {modo === "ver" && (pestana === NO_APROBADOS || pestana === CANCELADOS) && (
         <FueraDelAlcance
+          proyectoId={proyecto.id!}
           filas={pestana === NO_APROBADOS ? fuera.no_aprobados : fuera.cancelados}
           cual={pestana === NO_APROBADOS ? "no_aprobados" : "cancelados"}
           moviendo={moviendo}
           alMover={mover}
+          alLimpiar={alCambiar}
         />
       )}
 
@@ -1022,12 +1024,14 @@ function Juntador({
  * la API.
  */
 function FueraDelAlcance({
-  filas, cual, moviendo, alMover,
+  proyectoId, filas, cual, moviendo, alMover, alLimpiar,
 }: {
+  proyectoId: string;
   filas: ItemFuera[];
   cual: "no_aprobados" | "cancelados";
   moviendo: string;
   alMover: (id: string, que: "aprobar" | "cancelar", motivo?: string) => void;
+  alLimpiar: () => void;
 }) {
   const suma = filas.reduce((s, f) => s + f.monto, 0);
   return (
@@ -1079,6 +1083,130 @@ function FueraDelAlcance({
           </li>
         ))}
       </ul>
+
+      {cual === "cancelados" && <LimpiarCancelados proyectoId={proyectoId} alLimpiar={alLimpiar} />}
+    </div>
+  );
+}
+
+/* ─────────────── borrar lo cancelado, con el número enfrente ───────────────
+ *
+ * Mike, 21-sep: «ya todo lo cancelado lo puedes eliminar por completo».
+ *
+ * Tres pasos y no dos, porque esto NO SE DESHACE. Primero se REVISA —la API
+ * contesta el censo sin escribir nada—, después se lee lo que va a pasar, y
+ * hasta entonces aparece el botón que borra.
+ *
+ * Lo que la revisión dice, y que no se puede adivinar desde aquí:
+ *
+ *   · cuántos se van de verdad, que casi nunca son todos;
+ *   · cuáles NO se pueden borrar y por qué —traen un cobro, un avance de
+ *     obra, un compromiso con un proveedor o un papel—. Ésos se quedan, y
+ *     está bien que se queden: borrarlos dejaría un movimiento de dinero
+ *     sin dueño;
+ *   · cuántas PIEZAS DEL PLANO se quedan sin ítem. La pieza es de quell101 y
+ *     sobrevive; enterarse después, abriendo el plano, es peor;
+ *   · que el precio de venta no se mueve. Un cancelado nunca sumó, pero eso
+ *     se enseña con el número y no se pide que se crea.
+ *
+ * Y sale el conteo de DESCARTADOS aparte: los que se quitaron sin haber
+ * estado aprobados nunca no salen en esta pestaña, así que el borrado se
+ * lleva más renglones de los que están a la vista. Decirlo después sería
+ * una sorpresa con algo que no tiene vuelta.
+ */
+function LimpiarCancelados({ proyectoId, alLimpiar }: { proyectoId: string; alLimpiar: () => void }) {
+  const [censo, setCenso] = useState<CensoDeCancelados | null>(null);
+  const [hecho, setHecho] = useState<CensoDeCancelados | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+  const [error, setError] = useState("");
+
+  const revisar = async () => {
+    setOcupado(true); setError(""); setHecho(null);
+    try { setCenso(await revisarCancelados(proyectoId)); }
+    catch (e) { setError(e instanceof Error ? e.message : "No se pudo revisar."); }
+    finally { setOcupado(false); }
+  };
+
+  const borrar = async () => {
+    setOcupado(true); setError("");
+    try {
+      const r = await borrarCancelados(proyectoId);
+      setHecho(r); setCenso(null); alLimpiar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo borrar.");
+    } finally { setOcupado(false); }
+  };
+
+  if (hecho) {
+    return (
+      <p className="mt-3 pt-3 border-t border-black/5 text-xs text-ink-dim">
+        Se borraron <b>{hecho.borrados}</b> ítem{hecho.borrados === 1 ? "" : "s"}.
+        {hecho.se_quedan.length > 0 && <> Se quedaron {hecho.se_quedan.length} porque traen dinero o historia.</>}
+        {hecho.piezas_sin_item > 0 && <> {hecho.piezas_sin_item} pieza{hecho.piezas_sin_item === 1 ? "" : "s"} del plano quedaron sin ítem, en quell101.</>}
+        {" "}El precio de venta del proyecto no se movió.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-black/5 space-y-2">
+      {!censo ? (
+        <button
+          type="button" onClick={revisar} disabled={ocupado}
+          className="text-[11px] px-2 py-1 rounded-lg border border-black/10 text-ink-dim disabled:opacity-40 inline-flex items-center gap-1"
+        >
+          <IconTrash size={12} /> {ocupado ? "Revisando…" : "Revisar y borrar los cancelados"}
+        </button>
+      ) : (
+        <>
+          <p className="text-xs text-ink-dim">
+            Se van <b>{censo.se_van.length}</b> de {censo.total}
+            {censo.descartados > 0 && (
+              <> —{censo.cancelados} cancelados y {censo.descartados} descartados, que no salen en esta lista—</>
+            )}
+            . Esto no se deshace.
+          </p>
+
+          {censo.se_quedan.length > 0 && (
+            <div className="text-[11px] text-ink-muted bg-cream/40 border border-black/5 rounded-xl p-2">
+              <p className="inline-flex items-center gap-1 text-ink-dim">
+                <IconAlertTriangle size={12} /> {censo.se_quedan.length} no se pueden borrar, y se quedan:
+              </p>
+              <ul className="mt-1 space-y-0.5 max-h-40 overflow-y-auto">
+                {censo.se_quedan.map((x) => (
+                  <li key={x.id}>
+                    {x.clave ? `${x.clave} · ` : ""}{x.nombre} — {x.porque.join(", ")}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {censo.piezas_sin_item > 0 && (
+            <p className="text-[11px] text-ink-muted">
+              {censo.piezas_sin_item} pieza{censo.piezas_sin_item === 1 ? "" : "s"} del plano se quedará
+              {censo.piezas_sin_item === 1 ? "" : "n"} sin ítem en quell101. La pieza no se borra desde aquí.
+            </p>
+          )}
+
+          <p className="text-[11px] text-ink-muted">
+            El precio de venta del proyecto no se mueve: un cancelado nunca sumó.
+          </p>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button" onClick={borrar} disabled={ocupado || censo.se_van.length === 0}
+              className="bg-mauve-900 text-white text-xs px-3 py-2 rounded-xl inline-flex items-center gap-1 disabled:opacity-40"
+            >
+              <IconTrash size={13} /> {ocupado ? "Borrando…" : `Borrar ${censo.se_van.length} para siempre`}
+            </button>
+            <button type="button" onClick={() => setCenso(null)} className="text-[11px] text-ink-dim hover:underline">
+              Mejor no
+            </button>
+          </div>
+        </>
+      )}
+      {error && <p className="text-xs text-mauve-900">{error}</p>}
     </div>
   );
 }

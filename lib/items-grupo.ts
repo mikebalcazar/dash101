@@ -243,3 +243,46 @@ export async function cancelarItem(id: string, motivo?: string): Promise<'cancel
   );
   return r.alcance;
 }
+
+/* ─────────────── borrar lo cancelado (contrato 0.38.0) ───────────────
+ *
+ * Mike, 21-sep: «ya todo lo cancelado lo puedes eliminar por completo».
+ *
+ * Dos llamadas al mismo sitio y la diferencia es una bandera, a propósito:
+ * la vista previa TIENE que ser el mismo cálculo que el borrado. Si fueran
+ * dos cuentas distintas, la pantalla prometería una cosa y la base haría
+ * otra, y esto no se deshace.
+ */
+
+export interface CensoDeCancelados {
+  /** Cancelados + descartados: todo lo que tiene `estado = 'cancelado'`. */
+  total: number;
+  /** Cuántos se borraron de verdad. En seco siempre es 0. */
+  borrados: number;
+  /** Los que estuvieron aprobados y se cancelaron. Son los que Mike ve en
+   *  la pestaña «Cancelados». */
+  cancelados: number;
+  /** Los que nunca estuvieron aprobados. NO salen en ninguna pestaña, y por
+   *  eso la cuenta de aquí puede ser mayor que la que se ve. */
+  descartados: number;
+  /** `monto` en CENTAVOS. */
+  se_van: Array<{ id: string; clave: string | null; nombre: string; monto: number; piezas: number }>;
+  se_quedan: Array<{ id: string; clave: string | null; nombre: string; monto: number; porque: string[] }>;
+  /** Piezas del plano que quedan sin ítem. La pieza es de quell101 y no se
+   *  borra desde aquí. */
+  piezas_sin_item: number;
+  /** En CENTAVOS, como todo este archivo. Un cancelado nunca sumó, así que
+   *  estos dos tienen que ser iguales; se enseñan para que se vea, no para
+   *  creerlo. */
+  venta_antes: number;
+  venta_despues: number;
+}
+
+const censo = (proyecto_id: string, modo: 'seco' | 'borrar') =>
+  pedir<CensoDeCancelados>(`${base(proyecto_id)}/borrar-cancelados`, { method: 'POST', body: { modo } });
+
+/** Qué pasaría. No escribe nada. */
+export const revisarCancelados = (proyecto_id: string) => censo(proyecto_id, 'seco');
+
+/** Hazlo. No se deshace. */
+export const borrarCancelados = (proyecto_id: string) => censo(proyecto_id, 'borrar');
