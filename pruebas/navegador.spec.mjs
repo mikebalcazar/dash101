@@ -855,7 +855,17 @@ test('agrupar dos renglones en un producto: NO se borra ninguno y se pueden move
    * Y se busca la OPCIÓN, no el `<select>`: un `<option>` dentro de un
    * select cerrado no cuenta como visible para Playwright, así que se espera
    * a que esté `attached`. Es la manera directa de decir «existe el
-   * dropdown y trae la opción de salirse del grupo». */
+   * dropdown y trae la opción de salirse del grupo».
+   *
+   * EL SELECTOR VIVE DETRÁS DEL «+». Mike lo pidió así el 20-sep: «oculta la
+   * descripción en la lista, sólo que se abra con un signo de más; la info
+   * que se despliega con + es: descripción, pagado, selector de qué producto
+   * es». Así que primero se abre el detalle del renglón y luego se busca. La
+   * versión anterior de este paso lo buscaba en la lista y se cayó en la
+   * puerta: la prueba seguía donde el control ya no estaba. */
+  const masDelItem = pag.getByRole('button', { name: /Ver el detalle de Puerta igualita/ }).first();
+  await masDelItem.waitFor({ timeout: 20000 });
+  await masDelItem.click();
   try {
     await pag
       .locator('select option', { hasText: 'Es su propio producto' })
@@ -893,7 +903,7 @@ test('agrupar dos renglones en un producto: NO se borra ninguno y se pueden move
 
   /* Y en la pantalla queda UN renglón de producto que se abre. Es el
    * encargo original: no tener 21 puertas idénticas enlistadas. */
-  const abrir = pag.getByRole('button', { name: /toca para ver cuáles/ });
+  const abrir = pag.getByRole('button', { name: /toca para ver cada pieza/ });
   await abrir.first().waitFor({ timeout: 20000 });
   await abrir.first().click();
   await pag.getByText('Puerta igualita').first().waitFor({ timeout: 10000 });
