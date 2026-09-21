@@ -14,9 +14,10 @@ import type {
 import { ESTADO_PROYECTO_LABELS } from "@/types/schema";
 import { formatMonto, formatMontoExact } from "@/lib/format";
 import { Timestamp } from "firebase/firestore";
-import { IconArrowLeft, IconTrash, IconPlus, IconEdit } from "@tabler/icons-react";
+import { IconArrowLeft, IconTrash, IconPlus, IconEdit, IconFileText } from "@tabler/icons-react";
 import { formatDateShort } from "@/lib/format";
 import { ObraDelProyecto } from "@/components/obra-del-proyecto";
+import { desglose } from "@/lib/estado-proyecto";
 import { ItemsDelProyecto } from "@/components/items-del-proyecto";
 
 const ESTADO_STYLE: Record<string, string> = {
@@ -83,6 +84,10 @@ export default function ProyectoDetallePage() {
   const [precioVenta, setPrecioVenta] = useState("0");
   const [estado, setEstado] = useState<EstadoProyecto>("planeando");
   const [fechaInicio, setFechaInicio] = useState("");
+  /* Contrato 0.39.0: cómo lleva el IVA esta obra en su estado de cuenta.
+   * Mike lo escogió con botones el 21-sep —«que lo diga cada proyecto»— y
+   * arranca en «+ IVA», que es como se venían leyendo todas las cifras. */
+  const [ivaIncluido, setIvaIncluido] = useState(false);
   const [partidasEdit, setPartidasEdit] = useState<PartidaForm[]>([]);
   const [itemsEdit, setItemsEdit] = useState<ItemForm[]>([]);
 
@@ -104,6 +109,7 @@ export default function ProyectoDetallePage() {
       setDescripcion(p.descripcion ?? "");
       setPrecioVenta(String(p.precio_venta));
       setEstado(p.estado);
+      setIvaIncluido(Boolean(p.iva_incluido));
       const fi = p.fecha_inicio as Timestamp | undefined;
       if (fi && typeof fi.toDate === "function") {
         setFechaInicio(fi.toDate().toISOString().slice(0, 10));
@@ -173,6 +179,7 @@ export default function ProyectoDetallePage() {
         descripcion: descripcion.trim() || "",
         precio_venta: parseFloat(precioVenta) || 0,
         estado,
+        iva_incluido: ivaIncluido,
         fecha_inicio: fechaInicio ? new Date(fechaInicio) : undefined,
         items: itemsEdit
           .filter((pr) => pr.nombre.trim())
@@ -274,13 +281,25 @@ export default function ProyectoDetallePage() {
                 <p className="text-xs text-ink-muted mt-2">{p.descripcion}</p>
               )}
             </div>
-            <button
-              onClick={() => setEditMode("proyecto")}
-              className="text-xs bg-white border border-black/10 rounded-xl px-3 py-1.5 hover:border-black/20 transition flex items-center gap-1"
-            >
-              <IconEdit size={13} />
-              Editar el proyecto
-            </button>
+            <div className="flex items-center gap-2">
+              {/* El estado de cuenta es lo que se manda: va junto a editar y
+                  no escondido en un menú, porque se pide seguido y es el
+                  mismo documento que el cliente ve en su portal. */}
+              <Link
+                href={`/proyectos/${p.id}/estado-de-cuenta`}
+                className="text-xs bg-white border border-black/10 rounded-xl px-3 py-1.5 hover:border-black/20 transition flex items-center gap-1"
+              >
+                <IconFileText size={13} />
+                Estado de cuenta
+              </Link>
+              <button
+                onClick={() => setEditMode("proyecto")}
+                className="text-xs bg-white border border-black/10 rounded-xl px-3 py-1.5 hover:border-black/20 transition flex items-center gap-1"
+              >
+                <IconEdit size={13} />
+                Editar el proyecto
+              </button>
+            </div>
           </div>
 
           {/* Hero disponible */}
@@ -472,6 +491,8 @@ export default function ProyectoDetallePage() {
           setPrecioVenta={setPrecioVenta}
           estado={estado}
           setEstado={setEstado}
+          ivaIncluido={ivaIncluido}
+          setIvaIncluido={setIvaIncluido}
           fechaInicio={fechaInicio}
           setFechaInicio={setFechaInicio}
           partidas={partidasEdit}
@@ -516,6 +537,9 @@ interface EditFormProps {
   setPrecioVenta: (v: string) => void;
   estado: EstadoProyecto;
   setEstado: (v: EstadoProyecto) => void;
+  /** Cómo lleva el IVA esta obra en su estado de cuenta (contrato 0.39.0). */
+  ivaIncluido: boolean;
+  setIvaIncluido: (v: boolean) => void;
   fechaInicio: string;
   setFechaInicio: (v: string) => void;
   partidas: PartidaForm[];
@@ -635,6 +659,56 @@ function ProyectoEditForm(props: EditFormProps) {
             className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
           />
         </div>
+      </div>
+
+      {/* Cómo lleva el IVA esta obra.
+       *
+       * Va pegado al precio de venta porque es una pregunta SOBRE esa cifra,
+       * no un ajuste aparte: dice si lo que está capturado arriba es el
+       * subtotal o el total. Mike lo escogió con botones el 21-sep, «que lo
+       * diga cada proyecto», porque en su taller conviven HOLCIM, que pide
+       * desglose, y una casa cotizada «con todo».
+       *
+       * No mueve un solo peso guardado. Sólo cambia lo que dice el estado de
+       * cuenta, y por eso la consecuencia va escrita con el número: el que
+       * lo marque mal lo va a ver aquí y no en el papel que ya mandó. */}
+      <div>
+        <label className="text-xs font-medium text-ink-dim block mb-1.5">
+          El precio de venta que capturaste, ¿cómo va?
+        </label>
+        <div className="flex gap-2">
+          {[
+            { v: false, t: "Más IVA", dice: "es el subtotal y el IVA se suma" },
+            { v: true, t: "IVA incluido", dice: "ya lo trae y se desglosa" },
+          ].map((o) => (
+            <button
+              key={o.t}
+              type="button"
+              onClick={() => props.setIvaIncluido(o.v)}
+              aria-pressed={props.ivaIncluido === o.v}
+              className={`flex-1 text-left rounded-xl px-3 py-2 text-xs border transition ${
+                props.ivaIncluido === o.v
+                  ? "bg-ink text-cream border-ink"
+                  : "bg-white text-ink-dim border-black/10 hover:border-black/25"
+              }`}
+            >
+              <span className="block font-medium">{o.t}</span>
+              <span className={`block text-[11px] ${props.ivaIncluido === o.v ? "opacity-75" : "text-ink-muted"}`}>
+                {o.dice}
+              </span>
+            </button>
+          ))}
+        </div>
+        {(() => {
+          const d = desglose(parseFloat(props.precioVenta) || 0, props.ivaIncluido, props.proyecto.tasa_iva ?? 1600);
+          return (
+            <p className="text-[11px] text-ink-muted mt-1.5">
+              En el estado de cuenta se va a leer: subtotal {formatMonto(d.subtotal, "MXN")}, IVA{" "}
+              {formatMonto(d.iva, "MXN")}, total {formatMonto(d.total, "MXN")}. No cambia nada de lo
+              guardado.
+            </p>
+          );
+        })()}
       </div>
         </>
       )}

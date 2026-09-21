@@ -162,6 +162,12 @@ export interface Proyecto {
   disponible: number;
   margen_proyectado: number;
   partidas: PartidaProyecto[];
+  /** Puntos base: 1600 = 16 %. Lo lleva cada obra (contrato 0.39.0). */
+  tasa_iva?: number;
+  /** false = el precio capturado es el SUBTOTAL y el IVA se suma encima,
+   *  que es como nacen todas; true = ya viene dentro y el estado de cuenta
+   *  lo desglosa hacia atrás. Decisión de Mike del 21-sep. */
+  iva_incluido?: boolean;
   estado: EstadoProyecto;
   fecha_inicio: Timestamp | FieldValue;
   fecha_fin_estimada?: Timestamp | null;
