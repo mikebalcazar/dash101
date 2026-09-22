@@ -18,7 +18,16 @@
  * gente directo a `…/#/pedir` sin que esta app necesite servidor de rutas.
  */
 
+import { irA, sellar } from './navegar.js';
+
 /* ─────────────── lo básico ─────────────── */
+
+/* Qué tan hondo está cada dirección. Sirve para decidir si moverse APILA una
+ * entrada del historial, la REEMPLAZA o RETROCEDE; el detalle está en
+ * `navegar.js`. Pedir y una orden están al mismo nivel a propósito: mandar la
+ * compra reemplaza el formulario en vez de dejarlo esperando atrás, para que
+ * «atrás» no lo devuelva lleno de una compra ya pedida. */
+const HONDURA = { lista: 1, pedir: 2, orden: 2, corregir: 3 };
 
 const $ = (id) => document.getElementById(id);
 const ver = (id, si = true) => $(id).classList.toggle('oculto', !si);
@@ -114,6 +123,7 @@ const est = {
   proveedores: [],
   proyectos: [],
   corrigiendo: null,  // la orden que se está corrigiendo, si es que
+  orden: null,        // la última orden abierta, para no volver a pedirla
 };
 const LLAVE_ORG = 'supply101:org';
 const LLAVE_NEG = 'supply101:negocio';
@@ -309,8 +319,12 @@ function renglon(o) {
 
 /* ─────────────── pedir una compra ─────────────── */
 
-$('b-nueva-compra').onclick = () => { location.hash = '#/pedir'; };
-$('b-volver-1').onclick = $('b-volver-2').onclick = () => { location.hash = '#/'; };
+$('b-nueva-compra').onclick = () => irA('/pedir', HONDURA.pedir);
+/* «← Mis compras» dice a dónde va, así que va hasta allá: desde el
+ * formulario es un paso atrás y desde una corrección son dos. Y retrocede, no
+ * apila: si escribiera una entrada nueva, el siguiente «atrás» reabriría la
+ * pantalla que se acaba de cerrar. */
+$('b-volver-1').onclick = $('b-volver-2').onclick = () => irA('/', HONDURA.lista);
 
 async function verPedir(orden) {
   est.corrigiendo = orden || null;
@@ -450,14 +464,14 @@ $('f-pedir').onsubmit = async (ev) => {
         } catch (e) {
           // La compra ya quedó pedida, que es lo que importa. Se dice qué pasó
           // con la foto en vez de fingir que subió.
-          location.hash = `#/orden/${orden.id}`;
+          irA(`/orden/${orden.id}`, HONDURA.orden);
           decir('err-lista', `La compra quedó pedida, pero la cotización no subió: ${enPalabras(e)}`);
           return;
         }
       }
     }
     est.corrigiendo = null;
-    location.hash = `#/orden/${orden.id}`;
+    irA(`/orden/${orden.id}`, HONDURA.orden);
   } catch (e) {
     decir('err-pedir', enPalabras(e));
   } finally { b.disabled = false; b.textContent = antes; }
@@ -481,6 +495,7 @@ async function verDetalle(id) {
     return;
   }
   const o = r.orden;
+  est.orden = o;
   const e = ESTADO[o.estado] || { texto: o.estado, clase: 'marca gris' };
   const cotizaciones = (r.archivos || []).filter((a) => a.de !== 'pago');
   const comprobantes = (r.archivos || []).filter((a) => a.de === 'pago');
@@ -525,7 +540,10 @@ async function verDetalle(id) {
     </li>`).join('')}</ol>`;
 
   const bc = $('b-corregir');
-  if (bc) bc.onclick = () => verPedir(o);
+  /* Corregir es una dirección y no sólo un cambio de pantalla: si no, la
+   * barra seguiría diciendo `#/orden/…` mientras se ve el formulario, y
+   * «atrás» saltaría hasta la lista en vez de regresar a la orden. */
+  if (bc) bc.onclick = () => { est.orden = o; irA(`/corregir/${o.id}`, HONDURA.corregir); };
 }
 
 /* ─────────────── las direcciones ─────────────── */
@@ -533,10 +551,30 @@ async function verDetalle(id) {
 function enrutar() {
   if (!est.org) return;
   const h = location.hash || '#/';
+  /* Cada llegada sella su hondura, también las que no pasaron por `irA`: a
+   * `#/orden/…` se entra picando una liga de la lista, que apila sola. */
+  const mc = /^#\/corregir\/(.+)$/.exec(h);
+  if (mc) { sellar(HONDURA.corregir); return verCorregir(mc[1]); }
   const m = /^#\/orden\/(.+)$/.exec(h);
-  if (m) return verDetalle(m[1]);
-  if (h === '#/pedir') return verPedir(null);
+  if (m) { sellar(HONDURA.orden); return verDetalle(m[1]); }
+  if (h === '#/pedir') { sellar(HONDURA.pedir); return verPedir(null); }
+  sellar(HONDURA.lista);
   return verLista();
+}
+
+/** Corregir una orden devuelta. Se llega picando el botón de la orden —y ahí
+ *  ya la tenemos cargada— o recargando la página con esa dirección, y
+ *  entonces hay que traerla. */
+async function verCorregir(id) {
+  if (est.orden?.id === id) return verPedir(est.orden);
+  mostrar('v-cargando');
+  try {
+    est.orden = (await pedir(`/orgs/${est.org.id}/ordenes/${id}`)).orden;
+    return verPedir(est.orden);
+  } catch (e) {
+    irA(`/orden/${id}`, HONDURA.orden);
+    decir('err-lista', enPalabras(e));
+  }
 }
 window.addEventListener('hashchange', enrutar);
 

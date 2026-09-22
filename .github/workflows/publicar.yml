@@ -76,6 +76,25 @@ jobs:
           npm run tipos
           npm run tipos:worker
 
+      # supply101 no pasa por TypeScript ni por empaquetador: su JS se sirve
+      # tal cual, así que un error de sintaxis no truena al construir — truena
+      # en el teléfono de quien pide una compra.
+      - name: Que el JavaScript de supply101 compile
+        run: |
+          set -euo pipefail
+          for f in supply101/publico/*.js supply101/worker/index.js supply101/pruebas/*.mjs; do
+            node --check "$f"
+          done
+          echo "todos los archivos de supply101 pasan node --check"
+
+      # El «atrás» del navegador, medido contando entradas del historial. Un
+      # `pushState` de más obliga a picar atrás dos veces y uno de menos saca
+      # de la app; y mandar una compra apilada encima del formulario lo
+      # devolvía lleno de una compra YA PEDIDA. No necesita red, así que va
+      # antes de publicar.
+      - name: El «atrás» del navegador de supply101
+        run: node supply101/pruebas/el-atras.mjs
+
       # ── staging ──────────────────────────────────────────────────────────
       # La empresa se decide al construir (lib/fuente.ts), así que hay que
       # construir una vez por entorno: el nombre queda dentro del paquete.
