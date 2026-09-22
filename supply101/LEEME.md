@@ -45,9 +45,26 @@ se hizo. Se arregló dándole nombre propio.
 Porque es la otra cara del mismo módulo y del mismo contrato de la API, y
 porque un repositorio nuevo necesita que Mike pegue a mano los secretos de
 Cloudflare en Actions. Se publica con el mismo flujo (`publicar.yml`), en dos
-pasos propios. Si algún día conviene repositorio aparte, son cuatro archivos.
+pasos propios. Si algún día conviene repositorio aparte, son cinco archivos.
+
+## El «atrás» del navegador
+
+`publico/navegar.js` decide si moverse **apila** una entrada del historial, la
+**reemplaza** o **retrocede**. Cada dirección tiene una hondura: la lista 1,
+el formulario y una orden 2, corregir 3.
+
+Pedir y una orden están al mismo nivel **a propósito**: al mandar la compra,
+la orden reemplaza el formulario en vez de apilarse encima. Si se apilara, un
+«atrás» devolvería el formulario lleno de una compra ya pedida, lista para
+mandarse otra vez.
+
+Quien llega de fuera directo a `#/pedir` —quell101 y quote101 pueden mandarlo
+así— no tiene «Mis compras» atrás: ahí el botón reemplaza en vez de
+retroceder, para no sacarlo de supply101.
 
 ## Cómo se prueba aquí
+
+    node supply101/pruebas/el-atras.mjs          # sin red y sin navegador
 
     node supply101/pruebas/servidor.mjs 8798     # el Worker, en esta máquina
     URL_SUPPLY=http://127.0.0.1:8798 node --test supply101/pruebas/supply.spec.mjs
