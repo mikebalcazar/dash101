@@ -1,3 +1,9 @@
+# 24-sep-2026: Netlify se retiró de la suite (Mike). Este archivo se queda
+# SÓLO hasta que el sitio se borre en netlify.com: mientras exista, si vuelve a
+# construir, esta regla es lo que hace que redirija en vez de servir. Lo mide
+# `.github/workflows/verificar-publicado.yml`; cuando diga «ya no existe», se
+# borra junto con su carpeta.
+#
 # Netlify ya no construye ni sirve dash101: manda a la dirección con puerta.
 #
 # ── 16-sep-2026 · el corte (D3) ──────────────────────────────────────────

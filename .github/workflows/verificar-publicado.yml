@@ -1,17 +1,22 @@
-# Verifica lo publicado cuando quien publica no es GitHub.
+# Las direcciones viejas de Netlify: que no sirvan nada de la suite.
 #
-# Netlify construye por su cuenta al recibir el push, así que aquí no hay un
-# trabajo que esperar: se espera un rato y luego se mide. Si el sitio tarda más
-# de lo normal, el run sale rojo y hay que volver a dispararlo a mano.
+# 16-sep-2026: `conta-master.netlify.app` y `cuenta-taller101.netlify.app`
+# dejaron de servir sus apps y mandan a los Workers con puerta.
+# 24-sep-2026: Netlify se retiró de la suite (lo decidió Mike, con la cuenta
+# suspendida por uso). Falta que Mike borre los sitios en netlify.com —el
+# conector del chat no borra—; hasta entonces `netlify.toml`,
+# `netlify-publica/` y `portal/` se quedan: son la regla que hace que un sitio
+# que volviera a construir redirija en vez de servir.
 #
-# Este repositorio publica DOS sitios distintos desde un solo push, cada uno con
-# su propio netlify.toml, así que los dos se comprueban por separado.
-#
-# Desde el 16-sep-2026 los dos están cortados: ninguno sirve ya su app, los dos
-# mandan a la dirección con puerta. Así que aquí ya no se busca una marca en el
-# HTML —eso medía que el sitio sirviera— sino lo contrario: que redirija y que
-# no publique una llave. Si algún día uno de los dos vuelve a servir algo, es
-# aquí donde tiene que volver la comprobación de la marca.
+# Lo que se mide, por dirección:
+#   · no resuelve, 404 o 410: el sitio ya no existe. Cerrado.
+#   · 5xx: Netlify suspendido o caído. El sitio EXISTE y vuelve con la cuota:
+#     se avisa (amarillo) que falta borrarlo. No es un defecto del repositorio.
+#   · 3xx: tiene que mandar al Worker, sin llave en el cuerpo y sin reenviar
+#     /s101 a la API. Si no, rojo.
+#   · 200 u otra cosa: está sirviendo algo. Rojo.
+# Cuando las dos digan «ya no existe», este flujo y los archivos de Netlify
+# se borran.
 
 name: Verificar lo publicado
 
@@ -21,118 +26,48 @@ on:
   workflow_dispatch:
 
 jobs:
-  esperar:
+  netlify:
     runs-on: ubuntu-latest
     steps:
-      - name: Darle tiempo a la construcción de afuera
-        run: sleep 120
-
-  # ── el corte del 16-sep-2026 ──────────────────────────────────────────────
-  # Este trabajo medía que `conta-master.netlify.app` sirviera la app: buscaba
-  # la marca «Conta Master» en el HTML y las cinco fuentes. Después del corte
-  # eso habría seguido pasando en verde, y midiendo lo contrario de lo que hay
-  # que medir: la redirección lleva al Worker, el Worker sí dice «Conta Master»
-  # y sí tiene las fuentes. Una medición que sigue verde cuando el mundo cambió
-  # es peor que ninguna, porque da por revisado lo que ya nadie revisa.
-  #
-  # Así que ahora mide el corte: que esta dirección NO sirva la app, que mande
-  # al Worker, y —lo que de verdad importa— que ya no reenvíe a la API de
-  # producción.
-  corte:
-    needs: esperar
-    runs-on: ubuntu-latest
-    steps:
-      - name: La dirección vieja manda al Worker y ya no sirve la app
+      - name: Las direcciones viejas no sirven nada
         run: |
           set -uo pipefail
-          VIEJA=https://conta-master.netlify.app
-          NUEVA=https://dash101.mike-929.workers.dev
-
-          # Netlify tarda en publicar y el borde tarda en soltar la versión
-          # nueva. Sin reintento esto mide la versión anterior y sale rojo con
-          # el corte bien hecho: pasó el 16-sep en quell101, con el 410.
-          ok=0
-          for i in $(seq 1 12); do
-            codigo=$(curl -s -o /dev/null -w '%{http_code}' "$VIEJA/")
-            donde=$(curl -s -o /dev/null -w '%{redirect_url}' "$VIEJA/")
-            echo "vuelta $i: / → $codigo  Location: ${donde:-(ninguna)}"
+          fallas=0
+          medir() {
+            local vieja=$1 nueva=$2
+            local codigo donde cuerpo salud
+            codigo=$(curl -s -o /dev/null -w '%{http_code}' "$vieja/" || true)
+            donde=$(curl -s -o /dev/null -w '%{redirect_url}' "$vieja/" || true)
+            echo "$vieja/ → $codigo ${donde:+Location: $donde}"
             case "$codigo" in
+              000|404|410)
+                echo "  ya no existe: cerrado" ;;
+              5??)
+                echo "::warning::$vieja contestó $codigo: Netlify suspendido o caído. El sitio sigue existiendo y vuelve con la cuota; falta borrarlo en netlify.com." ;;
               301|302|303|307|308)
                 case "$donde" in
-                  "$NUEVA"/*|"$NUEVA") ok=1; break ;;
-                esac ;;
+                  "$nueva"/*|"$nueva") echo "  manda a $nueva" ;;
+                  *) echo "::error::$vieja redirige a otro lado ($donde)"; fallas=$((fallas+1)) ;;
+                esac
+                # Sin seguir la redirección: con -L el cuerpo sería el del Worker.
+                for ruta in / /index.html; do
+                  cuerpo=$(curl -s "$vieja$ruta" || true)
+                  for prohibido in 'AIzaSy' 'firebaseapp.com' 'firestore.googleapis.com' 'identitytoolkit' '_next/static'; do
+                    if printf '%s' "$cuerpo" | grep -q "$prohibido"; then
+                      echo "::error::$vieja$ruta está sirviendo «$prohibido»"; fallas=$((fallas+1))
+                    fi
+                  done
+                done
+                salud=$(curl -s -o /dev/null -w '%{http_code}' "$vieja/s101/salud" || true)
+                if [ "$salud" = 200 ]; then
+                  echo "::error::$vieja todavía reenvía /s101/* a la API de producción"; fallas=$((fallas+1))
+                fi
+                echo "::warning::$vieja todavía existe en Netlify (sólo redirige): falta borrarlo en netlify.com." ;;
+              *)
+                echo "::error::$vieja contesta $codigo: está sirviendo algo, y no debería"; fallas=$((fallas+1)) ;;
             esac
-            sleep 10
-          done
-          [ "$ok" = 1 ] || { echo "::error::$VIEJA no manda al Worker. Si Netlify volvió a construir la app, ahí está sirviéndose con la llave de Firebase dentro: es justo el hueco que cerró el corte. Revisa netlify.toml y netlify-publica/_redirects."; exit 1; }
-
-          # La app no se sirve aquí. Se mide sin seguir la redirección: con
-          # `-L` el cuerpo sería el del Worker y la comprobación se engañaría
-          # sola.
-          cuerpo=$(curl -s "$VIEJA/")
-          for prohibido in 'AIzaSy' 'firebaseapp.com' 'firestore.googleapis.com' '_next/static'; do
-            if printf '%s' "$cuerpo" | grep -q "$prohibido"; then
-              echo "::error::$VIEJA está sirviendo «$prohibido». O volvió la construcción de Next, o algo con llaves se coló en netlify-publica/."
-              exit 1
-            fi
-          done
-          echo "el cuerpo de la dirección vieja no trae llave, ni Firebase, ni el paquete de Next"
-
-          # Y lo que de verdad importaba: el proxy a la API de PRODUCCIÓN. Un
-          # 200 aquí significa que esta dirección sigue siendo una entrada de
-          # cuerpo entero a la suite, con `X-App: dash101` puesto por Netlify.
-          salud=$(curl -s -o /dev/null -w '%{http_code}' "$VIEJA/s101/salud")
-          echo "/s101/salud → $salud"
-          if [ "$salud" = 200 ]; then
-            echo "::error::$VIEJA todavía reenvía /s101/* a la API de producción. Esa era la segunda entrada, y sigue abierta."
-            exit 1
-          fi
-          echo "corte verificado: la dirección vieja no sirve la app y no reenvía a la API"
-
-  # ── el corte del portal, 16-sep-2026 ──────────────────────────────────────
-  # Mismo caso que el de arriba, y más engañoso: este trabajo buscaba la marca
-  # «Estado de cuenta» y las cinco fuentes. peek101 se titula «Estado de cuenta
-  # · Taller 101» y trae las mismas fuentes, así que siguiendo la redirección
-  # habría pasado en verde para siempre sin volver a mirar el portal viejo.
-  portal:
-    needs: esperar
-    runs-on: ubuntu-latest
-    steps:
-      - name: El portal viejo manda a peek101 y ya no trae la llave
-        run: |
-          set -uo pipefail
-          VIEJO=https://cuenta-taller101.netlify.app
-          NUEVO=https://peek101.mike-929.workers.dev
-
-          ok=0
-          for i in $(seq 1 12); do
-            codigo=$(curl -s -o /dev/null -w '%{http_code}' "$VIEJO/")
-            donde=$(curl -s -o /dev/null -w '%{redirect_url}' "$VIEJO/")
-            echo "vuelta $i: / → $codigo  Location: ${donde:-(ninguna)}"
-            case "$codigo" in
-              301|302|303|307|308)
-                case "$donde" in
-                  "$NUEVO"/*|"$NUEVO") ok=1; break ;;
-                esac ;;
-            esac
-            sleep 10
-          done
-          [ "$ok" = 1 ] || { echo "::error::$VIEJO no manda a peek101. Revisa portal/netlify.toml y portal/_redirects."; exit 1; }
-
-          # Y la parte que de verdad cierra el portal: la llave. Se mide sin
-          # seguir la redirección, porque con `-L` el cuerpo sería el de
-          # peek101 y la comprobación se engañaría sola. `publish = "."`
-          # significa que TODO archivo de portal/ queda en internet, así que se
-          # revisa también la página directo por su nombre, que es el camino
-          # que se salta la regla si algún día la regla se cae.
-          for ruta in / /index.html; do
-            cuerpo=$(curl -s "$VIEJO$ruta")
-            for prohibido in 'AIzaSy' 'firebaseapp.com' 'firestore.googleapis.com' 'identitytoolkit'; do
-              if printf '%s' "$cuerpo" | grep -q "$prohibido"; then
-                echo "::error::$VIEJO$ruta está sirviendo «$prohibido». La llave del portal volvió a quedar publicada."
-                exit 1
-              fi
-            done
-            echo "$ruta: sin llave ni dirección de Firebase"
-          done
-          echo "corte del portal verificado"
+          }
+          medir https://conta-master.netlify.app https://dash101.mike-929.workers.dev
+          medir https://cuenta-taller101.netlify.app https://peek101.mike-929.workers.dev
+          [ "$fallas" = 0 ] || exit 1
+          echo "ninguna dirección vieja sirve nada de la suite"
