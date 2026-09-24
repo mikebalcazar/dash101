@@ -284,13 +284,20 @@ describe("borrar: lo que se puede, lo que no, y con qué mensaje", () => {
     await expect(deleteCliente(ids.cliente)).rejects.toThrow(/No se puede borrar el cliente/);
   });
 
-  it("proveedor, cuentas y negocio sí se van", async () => {
+  it("proveedor y cuentas sí se van; el negocio con su cliente adentro no, y lo dice", async () => {
     await deleteProveedor(ids.proveedor);
     expect(await getProveedor(ids.proveedor)).toBe(null);
     await deleteCuenta(ids.caja);
     await deleteCuenta(ids.banco);
     expect(await listCuentas(ids.negocio)).toHaveLength(0);
-    await deleteNegocio(ids.negocio, uid);
-    expect(await getNegocio(ids.negocio)).toBe(null);
+    /* Desde la API 0.45.0 (23-sep) un negocio con cosas adentro NO se borra:
+     * antes se borraba y su cliente y sus ítems se quedaban en la base
+     * apuntando a nada, invisibles desde todas las apps —Mike: «desapareció
+     * mi info de quote»—. Aquí el cliente sigue (tiene ítems cancelados, y ésos
+     * no se borran al borrar el proyecto), así que el negocio se queda.
+     * Hasta el 24-sep esta prueba esperaba lo contrario: se quedó sin correr
+     * contra la API nueva y la encontró la siguiente publicación. */
+    await expect(deleteNegocio(ids.negocio, uid)).rejects.toThrow(/No se puede borrar el negocio/);
+    expect(await getNegocio(ids.negocio)).not.toBe(null);
   });
 });
