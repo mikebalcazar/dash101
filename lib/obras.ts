@@ -64,7 +64,9 @@ export async function desligarObra(obra_id: string): Promise<Obra> {
 export function urlObra(obra: Obra): string {
   const casa = apiBase().includes('staging')
     ? 'https://bitacora-obra-staging.mike-929.workers.dev'
-    : 'https://bitacora-obra.mike-929.workers.dev';
+    // Desde el 25-sep-2026 quell101 vive en su dominio propio; la de
+    // workers.dev sigue viva, pero manda para allá.
+    : 'https://quell101.taller101.com';
   return `${casa}/#/p/${obra.id}`;
 }
 
