@@ -26,8 +26,13 @@ routes = [
 
 # La dirección de workers.dev manda al dominio (Mike, 25-sep: «redirigir, no
 # apagar»). Sólo producción: `vars` no se hereda y staging no lleva esto.
-[vars]
-DOMINIO_PROPIO = "dash101.taller101.com"
+#
+# VA EN UNA LÍNEA, no como `[vars]`: en este archivo `assets` está escrito en
+# línea más abajo, y un encabezado `[vars]` aquí se lo tragaba —`assets` se
+# volvía una variable de entorno, el Worker se publicaba sin la capa de
+# archivos y en producción las fuentes, el logotipo y los chunks de Next
+# contestaban 404 (25-sep, #86; se vio en la medición y en vivo).
+vars = { DOMINIO_PROPIO = "dash101.taller101.com" }
 
 # Lo que Next deja construido; el Worker lo sirve como archivos.
 assets = { directory = ".open-next/assets", binding = "ASSETS" }
