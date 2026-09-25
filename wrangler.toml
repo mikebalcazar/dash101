@@ -12,6 +12,14 @@ main = "worker/index.ts"
 compatibility_date = "2026-09-01"
 compatibility_flags = ["nodejs_compat"]
 
+# Desde el 25-sep-2026 dash101 vive también en dash101.taller101.com: el DNS
+# de taller101.com está en Cloudflare (Mike lo movió ese día) y el Worker se
+# cuelga del dominio como *custom domain*: Cloudflare pone el registro y el
+# certificado; aquí no hay IPs. La dirección en workers.dev sigue viva.
+routes = [
+  { pattern = "dash101.taller101.com", custom_domain = true }
+]
+
 # Lo que Next deja construido; el Worker lo sirve como archivos.
 assets = { directory = ".open-next/assets", binding = "ASSETS" }
 
@@ -29,6 +37,8 @@ enabled = true
 
 [env.staging]
 name = "dash101-staging"
+# `routes` se hereda del nivel de arriba; staging NO se cuelga del dominio.
+routes = []
 compatibility_date = "2026-09-01"
 compatibility_flags = ["nodejs_compat"]
 assets = { directory = ".open-next/assets", binding = "ASSETS" }
