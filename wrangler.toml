@@ -24,6 +24,11 @@ routes = [
   { pattern = "dash101.taller101.com", custom_domain = true }
 ]
 
+# La dirección de workers.dev manda al dominio (Mike, 25-sep: «redirigir, no
+# apagar»). Sólo producción: `vars` no se hereda y staging no lleva esto.
+[vars]
+DOMINIO_PROPIO = "dash101.taller101.com"
+
 # Lo que Next deja construido; el Worker lo sirve como archivos.
 assets = { directory = ".open-next/assets", binding = "ASSETS" }
 

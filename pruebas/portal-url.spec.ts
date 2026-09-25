@@ -10,4 +10,10 @@ describe('la dirección del portal de clientes', () => {
     expect(fuente).toMatch(/PORTAL_URL\s*=\s*\n?\s*process\.env\.NEXT_PUBLIC_PORTAL_URL\s*\?\?\s*"https:\/\/peek101\.taller101\.com"/);
     expect(fuente).not.toContain('peek101.mike-929.workers.dev');
   });
+
+  it('y la liga a la obra en producción es quell101.taller101.com', () => {
+    const obras = readFileSync('lib/obras.ts', 'utf8');
+    expect(obras).toContain("'https://quell101.taller101.com'");
+    expect(obras).not.toContain("'https://bitacora-obra.mike-929.workers.dev'");
+  });
 });

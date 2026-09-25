@@ -40,6 +40,7 @@
     ".open-next",
     ".wrangler",
     "pruebas/worker.spec.ts",
+    "pruebas/dominio.spec.ts",
     "pruebas/doble-open-next.ts"
   ]
 }
