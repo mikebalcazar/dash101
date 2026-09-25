@@ -28,9 +28,11 @@ import type { FilaMovimiento, FilaProyecto } from "./api/adaptar";
  * del 16-sep-2026 esa dirección redirige a peek101, así que la liga seguiría
  * funcionando — pero seguiría siendo la liga vieja: rebota, y el día que se
  * quite la redirección deja de llevar a ninguna parte. Una liga que se le
- * manda a un cliente por correo dura años, así que se le manda la buena. */
+ * manda a un cliente por correo dura años, así que se le manda la buena.
+ * Desde el 25-sep-2026 la buena es la del dominio propio, peek101.taller101.com;
+ * la de workers.dev sigue viva, pero es la del proveedor, no la del taller. */
 export const PORTAL_URL =
-  process.env.NEXT_PUBLIC_PORTAL_URL ?? "https://peek101.mike-929.workers.dev";
+  process.env.NEXT_PUBLIC_PORTAL_URL ?? "https://peek101.taller101.com";
 
 const SECUNDARIA = "portal-clientes";
 
