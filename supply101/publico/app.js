@@ -1,8 +1,16 @@
-/* supply101 — pedir una compra y darle seguimiento.
+/* supply101 — pedir una compra o un reembolso, y darle seguimiento.
  *
  * Tres cosas, y ninguna más, porque así lo encargó Mike el 20-sep: pedir una
  * compra, ver si ya se pagó, y abrir el comprobante para reclamarle al
  * proveedor. **Pagar no está aquí**: eso vive en dash101, con las cuentas.
+ *
+ * Desde el 28-sep (contrato 0.47.0) también se pide un REEMBOLSO: el mismo
+ * formulario con un selector arriba, porque Mike lo pidió así: «podría ser
+ * el mismo portal de supply, pero poner una opción en el tipo de orden si es
+ * reembolso o compra». Quien no tiene la llave de compras entra de todos
+ * modos, ve «tu usuario no está autorizado para compras» y sólo puede pedir
+ * reembolsos; eso lo decide el servidor (`/ordenes/permisos`) y aquí nada
+ * más se apaga la opción.
  *
  * Todo pasa contra `suite101-api` por `/s101/*`, que el Worker de al lado
  * reenvía con `X-App: dash101`. Los permisos los revisa el servidor en cada
@@ -56,7 +64,8 @@ const DICHO = {
   app_inactiva: 'Esta empresa no tiene prendidas las compras. Avísale a quien la administra.',
   datos_invalidos: 'Faltan datos o alguno no cuadra.',
   desglose_no_cuadra: 'El subtotal más el IVA tiene que dar el total exacto.',
-  orden_no_esta_devuelta: 'Esta compra ya no se puede corregir: cambió de estado.',
+  orden_no_esta_devuelta: 'Esta orden ya no se puede corregir: cambió de estado.',
+  compras_no_autorizadas: 'Tu usuario no está autorizado para compras. Puedes pedir un reembolso.',
   no_encontrado: 'No se encontró.',
 };
 const enPalabras = (e) => DICHO[e?.error] || e?.error || 'No se pudo. Vuelve a intentar.';
@@ -124,7 +133,10 @@ const est = {
   proyectos: [],
   corrigiendo: null,  // la orden que se está corrigiendo, si es que
   orden: null,        // la última orden abierta, para no volver a pedirla
+  puedeComprar: true, // lo dice el servidor; sin respuesta, se asume que sí
+  tipo: 'compra',     // lo que se está pidiendo: compra o reembolso
 };
+const TIPO = { compra: 'Compra', reembolso: 'Reembolso' };
 const LLAVE_ORG = 'supply101:org';
 const LLAVE_NEG = 'supply101:negocio';
 const guardar = (k, v) => { try { localStorage.setItem(k, v); } catch { /* modo privado */ } };
@@ -257,6 +269,15 @@ async function arrancarSesion() {
     decir('err-lista', enPalabras(e));
     return;
   }
+  // Quién puede comprar lo dice el servidor. Si no contesta, se deja la
+  // opción prendida: el servidor lo vuelve a decir al mandar.
+  try {
+    const p = await pedir(`/orgs/${est.org.id}/ordenes/permisos`);
+    est.puedeComprar = p.puede_comprar !== false;
+  } catch { est.puedeComprar = true; }
+  ver('b-nueva-compra', est.puedeComprar);
+  ver('sin-compras', !est.puedeComprar);
+
   const negGuardado = leer(LLAVE_NEG);
   est.negocio = est.negocios.find((n) => n.id === negGuardado) || est.negocios[0] || null;
   if (est.negocio) guardar(LLAVE_NEG, est.negocio.id);
@@ -301,6 +322,8 @@ async function verLista() {
 
 function renglon(o) {
   const e = ESTADO[o.estado] || { texto: o.estado, clase: 'marca gris' };
+  const reembolso = o.tipo === 'reembolso';
+  const aQuien = reembolso ? 'reembolso' : escapar(o.proveedor_nombre || 'sin proveedor');
   const vence = o.fecha_maxima_pago
     ? (o.estado === 'en_buzon' && o.fecha_maxima_pago < hoy()
         ? `venció el ${o.fecha_maxima_pago}` : `para el ${o.fecha_maxima_pago}`)
@@ -308,7 +331,7 @@ function renglon(o) {
   return `<a class="renglon" href="#/orden/${o.id}">
     <span class="texto">
       <b>${escapar(o.concepto)}</b>
-      <small>${escapar(o.folio)} · ${escapar(o.proveedor_nombre || 'sin proveedor')} · ${vence}</small>
+      <small>${escapar(o.folio)} · ${aQuien} · ${vence}</small>
       <small style="margin-top:4px"><span class="${e.clase}">${e.texto}</span>${
         o.estado === 'devuelta' && o.nota_contador ? ` «${escapar(o.nota_contador)}»` : ''}</small>
     </span>
@@ -320,21 +343,47 @@ function renglon(o) {
 /* ─────────────── pedir una compra ─────────────── */
 
 $('b-nueva-compra').onclick = () => irA('/pedir', HONDURA.pedir);
+$('b-nuevo-reembolso').onclick = () => irA('/reembolso', HONDURA.pedir);
 /* «← Mis compras» dice a dónde va, así que va hasta allá: desde el
  * formulario es un paso atrás y desde una corrección son dos. Y retrocede, no
  * apila: si escribiera una entrada nueva, el siguiente «atrás» reabriría la
  * pantalla que se acaba de cerrar. */
 $('b-volver-1').onclick = $('b-volver-2').onclick = () => irA('/', HONDURA.lista);
 
-async function verPedir(orden) {
+/** Compra o reembolso: cambian las palabras, no los campos. Al corregir, el
+ *  tipo es el de la orden y no se toca —corregir un reembolso no lo vuelve
+ *  compra—. Sin llave de compras, la opción se apaga y se dice por qué. */
+function ponerTipo(tipo, fijo) {
+  if (tipo === 'compra' && !est.puedeComprar) tipo = 'reembolso';
+  est.tipo = tipo;
+  const re = tipo === 'reembolso';
+  for (const b of document.querySelectorAll('#tipo .opcion')) {
+    b.setAttribute('aria-checked', String(b.dataset.tipo === tipo));
+    b.disabled = fijo ? b.dataset.tipo !== tipo : (b.dataset.tipo === 'compra' && !est.puedeComprar);
+  }
+  ver('pedir-sin-compras', !est.puedeComprar && !fijo);
+  const corrigiendo = !!est.corrigiendo;
+  $('pedir-t').textContent = corrigiendo ? `Corregir ${est.corrigiendo.folio}` : re ? 'Pedir un reembolso' : 'Pedir una compra';
+  $('pedir-sub').textContent = corrigiendo
+    ? 'Conserva el mismo folio y toda su historia: una orden corregida no es otra orden.'
+    : re ? 'Ya pusiste el dinero y se te regresa. Le llega directo a quien paga.'
+    : 'Le llega directo a quien paga. Nadie tiene que autorizarla antes.';
+  $('b-pedir').textContent = corrigiendo ? 'Volver a mandarla' : re ? 'Pedir el reembolso' : 'Pedir la compra';
+  $('monto-l').textContent = re ? 'Cuánto pagaste' : 'Cuánto es';
+  $('concepto-l').textContent = re ? 'Qué compraste' : 'Qué se compra';
+  $('concepto').placeholder = re ? 'Gasolina de la camioneta' : 'Triplay de 18 mm, 12 hojas';
+  $('proveedor-l').textContent = re ? 'Dónde lo compraste (si quieres)' : 'A quién se le compra';
+  $('archivo-l').textContent = re ? 'Foto o PDF del ticket o la factura' : 'Foto o PDF de la cotización';
+}
+for (const b of document.querySelectorAll('#tipo .opcion')) {
+  b.onclick = () => { if (!b.disabled) ponerTipo(b.dataset.tipo, false); };
+}
+
+async function verPedir(orden, tipo = 'compra') {
   est.corrigiendo = orden || null;
   mostrar('v-pedir');
   decir('err-pedir', '');
-  $('pedir-t').textContent = orden ? `Corregir ${orden.folio}` : 'Pedir una compra';
-  $('pedir-sub').textContent = orden
-    ? 'Conserva el mismo folio y toda su historia: una compra corregida no es otra compra.'
-    : 'Le llega directo a quien paga. Nadie tiene que autorizarla antes.';
-  $('b-pedir').textContent = orden ? 'Volver a mandarla' : 'Pedir la compra';
+  ponerTipo(orden ? (orden.tipo || 'compra') : tipo, !!orden);
   ver('archivo', !orden);
   ver('bloque-partida', false);
 
@@ -428,6 +477,7 @@ $('f-pedir').onsubmit = async (ev) => {
 
   const cuerpo = {
     negocio_id: est.negocio?.id,
+    tipo: est.tipo,
     proveedor_id: $('proveedor').value || null,
     proveedor_nombre: $('proveedor').value
       ? (est.proveedores.find((p) => p.id === $('proveedor').value)?.nombre || null)
@@ -465,7 +515,9 @@ $('f-pedir').onsubmit = async (ev) => {
           // La compra ya quedó pedida, que es lo que importa. Se dice qué pasó
           // con la foto en vez de fingir que subió.
           irA(`/orden/${orden.id}`, HONDURA.orden);
-          decir('err-lista', `La compra quedó pedida, pero la cotización no subió: ${enPalabras(e)}`);
+          decir('err-lista', est.tipo === 'reembolso'
+            ? `El reembolso quedó pedido, pero el ticket no subió: ${enPalabras(e)}`
+            : `La compra quedó pedida, pero la cotización no subió: ${enPalabras(e)}`);
           return;
         }
       }
@@ -497,6 +549,7 @@ async function verDetalle(id) {
   const o = r.orden;
   est.orden = o;
   const e = ESTADO[o.estado] || { texto: o.estado, clase: 'marca gris' };
+  const reembolso = o.tipo === 'reembolso';
   const cotizaciones = (r.archivos || []).filter((a) => a.de !== 'pago');
   const comprobantes = (r.archivos || []).filter((a) => a.de === 'pago');
 
@@ -508,12 +561,14 @@ async function verDetalle(id) {
 
   $('detalle').innerHTML = `
     <h1>${escapar(o.concepto)}</h1>
-    <p class="sub">${escapar(o.folio)} · ${escapar(o.proveedor_nombre || 'sin proveedor')}</p>
-    <p><span class="${e.clase}">${e.texto}</span>${o.urgente ? ' <span class="marca pend">Urgente</span>' : ''}</p>
+    <p class="sub">${escapar(o.folio)}${reembolso ? ' · reembolso' : ''}${
+      o.proveedor_nombre ? ` · ${escapar(o.proveedor_nombre)}` : reembolso ? '' : ' · sin proveedor'}</p>
+    <p><span class="${e.clase}">${e.texto}</span>${reembolso ? ` <span class="marca gris">${TIPO.reembolso}</span>` : ''}${
+      o.urgente ? ' <span class="marca pend">Urgente</span>' : ''}</p>
 
     <div class="tarjeta" style="margin-top:12px">
       <dl class="datos">
-        <div><dt>Cuánto</dt><dd><b>${pesos(o.monto, o.moneda)}</b></dd></div>
+        <div><dt>${reembolso ? 'Cuánto se te regresa' : 'Cuánto'}</dt><dd><b>${pesos(o.monto, o.moneda)}</b></dd></div>
         ${o.con_factura ? `<div><dt>Subtotal e IVA</dt><dd>${pesos(o.subtotal, o.moneda)} + ${pesos(o.iva, o.moneda)}</dd></div>` : ''}
         <div><dt>${o.estado === 'pagada' ? 'Se pagó el' : 'Se tiene que pagar'}</dt><dd>${
           o.estado === 'pagada' ? escapar(String(o.pagada_at || '').slice(0, 10)) : escapar(o.fecha_maxima_pago || 'sin fecha')}</dd></div>
@@ -527,10 +582,10 @@ async function verDetalle(id) {
     ${o.estado === 'devuelta' ? `<button class="b" id="b-corregir" type="button">Corregirla y volver a mandarla</button>` : ''}
 
     ${comprobantes.length ? `<h2>El comprobante del pago</h2>
-      <p class="sub">Con esto le reclamas al proveedor si dice que no le llegó.</p>
+      <p class="sub">${reembolso ? 'Con esto sabes de dónde y cuándo te lo regresaron.' : 'Con esto le reclamas al proveedor si dice que no le llegó.'}</p>
       ${comprobantes.map(papel).join('')}` : ''}
 
-    ${cotizaciones.length ? `<h2>La cotización</h2>${cotizaciones.map(papel).join('')}` : ''}
+    ${cotizaciones.length ? `<h2>${reembolso ? 'El ticket' : 'La cotización'}</h2>${cotizaciones.map(papel).join('')}` : ''}
 
     <h2>Su historia</h2>
     <ol class="historia">${(r.eventos || []).map((ev) => `<li>
@@ -557,7 +612,8 @@ function enrutar() {
   if (mc) { sellar(HONDURA.corregir); return verCorregir(mc[1]); }
   const m = /^#\/orden\/(.+)$/.exec(h);
   if (m) { sellar(HONDURA.orden); return verDetalle(m[1]); }
-  if (h === '#/pedir') { sellar(HONDURA.pedir); return verPedir(null); }
+  if (h === '#/pedir') { sellar(HONDURA.pedir); return verPedir(null, 'compra'); }
+  if (h === '#/reembolso') { sellar(HONDURA.pedir); return verPedir(null, 'reembolso'); }
   sellar(HONDURA.lista);
   return verLista();
 }

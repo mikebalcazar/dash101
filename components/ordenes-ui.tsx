@@ -5,7 +5,7 @@
  * detalle: tres colores distintos para «devuelta» serían tres pantallas que
  * parecen de apps distintas. */
 
-import { ESTADO_ORDEN, vencida, type Orden } from "@/lib/ordenes";
+import { ESTADO_ORDEN, TIPO_ORDEN, vencida, type Orden } from "@/lib/ordenes";
 import { formatMontoExact } from "@/lib/format";
 
 const COLOR: Record<Orden["estado"], string> = {
@@ -21,6 +21,26 @@ export function Estado({ orden }: { orden: Orden }) {
       {ESTADO_ORDEN[orden.estado]}
     </span>
   );
+}
+
+/** «Reembolso», cuando lo es. Una compra no lleva marca: es lo de siempre,
+ *  y marcar las dos sólo le quitaría fuerza a la que importa distinguir. */
+export function Tipo({ orden }: { orden: Orden }) {
+  if (orden.tipo !== "reembolso") return null;
+  return (
+    <span className="inline-block rounded-lg px-2 py-0.5 text-[11px] font-medium bg-cream text-ink-dim border border-black/10">
+      {TIPO_ORDEN.reembolso}
+    </span>
+  );
+}
+
+/** A quién se le paga: al proveedor en una compra, a quien la pidió en un
+ *  reembolso. Es el renglón chico debajo del concepto. */
+export function AQuien({ orden }: { orden: Orden }) {
+  if (orden.tipo === "reembolso") {
+    return <>a {orden.solicitante_nombre || orden.solicitante_correo || "quien lo pidió"}</>;
+  }
+  return <>{orden.proveedor_nombre || "sin proveedor"}</>;
 }
 
 /** La fecha máxima de pago, y en rojo si ya se pasó. Se compara por día: una

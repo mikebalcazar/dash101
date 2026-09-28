@@ -1,6 +1,14 @@
 "use client";
 
-/* Pedir una compra.
+/* Pedir una compra, o un reembolso (0.47.0).
+ *
+ * Mike, 28-sep-2026: «poner una opción en el tipo de orden si es reembolso o
+ * compra (…) si el usuario no está autorizado para compras, que solo le diga
+ * “tu usuario no está autorizado para compras” y solo le permita ingresar un
+ * reembolso». Es UNA pantalla con un selector arriba, no dos: los campos son
+ * los mismos y sólo cambian las palabras (qué compraste, dónde, el ticket).
+ * Quién puede comprar lo dice el servidor (`/ordenes/permisos`); aquí sólo
+ * se apaga la opción y se enseña su motivo.
  *
  * Pensada para el teléfono: una columna, campos grandes, y el total primero
  * —que es lo único que la persona trae en la cabeza cuando abre esto parada
@@ -13,12 +21,15 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useNegocioActivo } from "@/lib/negocio-activo-context";
 import { listProveedores } from "@/lib/proveedores";
 import { listProyectos } from "@/lib/proyectos";
 import { SoltarArchivo } from "@/components/soltar-archivo";
-import { crearOrden, desglosar, listPartidasDe, subirArchivo, type PartidaDeProyecto } from "@/lib/ordenes";
+import {
+  crearOrden, desglosar, getPermisosOrdenes, listPartidasDe, subirArchivo,
+  type PartidaDeProyecto, type TipoOrden,
+} from "@/lib/ordenes";
 import { formatMontoExact } from "@/lib/format";
 import { BOTON, CAJA, CAJA_NUM, ETIQUETA } from "@/components/ordenes-ui";
 import type { Proveedor, Proyecto } from "@/types/schema";
@@ -31,7 +42,14 @@ const hoy = () => {
 
 export default function NuevaOrdenPage() {
   const router = useRouter();
+  const params = useSearchParams();
   const { activo, loading: cargandoNegocio } = useNegocioActivo();
+
+  // `?tipo=reembolso` abre directo en reembolso (es la liga del botón de
+  // «Mis compras» y la del inicio).
+  const [tipo, setTipo] = useState<TipoOrden>(params.get("tipo") === "reembolso" ? "reembolso" : "compra");
+  const [puedeComprar, setPuedeComprar] = useState(true);
+  const reembolso = tipo === "reembolso";
 
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
@@ -64,6 +82,14 @@ export default function NuevaOrdenPage() {
       } catch (e) {
         setError(e instanceof Error ? e.message : "Error");
       }
+      // Si el servidor dice que no se puede comprar, la opción se apaga y
+      // la pantalla se queda en reembolso. Si no contesta, se deja como
+      // está: el servidor lo vuelve a decir al mandar.
+      try {
+        const p = await getPermisosOrdenes();
+        setPuedeComprar(p.puede_comprar);
+        if (!p.puede_comprar) setTipo("reembolso");
+      } catch { /* se decide al mandar */ }
     })();
   }, [activo, cargandoNegocio]);
 
@@ -108,6 +134,7 @@ export default function NuevaOrdenPage() {
     try {
       const o = await crearOrden({
         negocio_id: activo.id,
+        tipo,
         proveedor_id: proveedorId || null,
         proveedor_nombre: nombreProveedor || null,
         proyecto_id: proyectoId || null,
@@ -127,7 +154,7 @@ export default function NuevaOrdenPage() {
           await subirArchivo("ordenes", o.id, archivo);
         } catch (e) {
           router.push(`/ordenes/${o.id}?aviso=${encodeURIComponent(
-            `La compra quedó pedida, pero la cotización no se subió: ${e instanceof Error ? e.message : "error"}`,
+            `${reembolso ? "El reembolso quedó pedido, pero el ticket" : "La compra quedó pedida, pero la cotización"} no se subió: ${e instanceof Error ? e.message : "error"}`,
           )}`);
           return;
         }
@@ -151,9 +178,11 @@ export default function NuevaOrdenPage() {
   return (
     <div className="max-w-xl">
       <div className="mb-5">
-        <h2 className="text-lg font-medium text-ink-dim">Pedir una compra</h2>
+        <h2 className="text-lg font-medium text-ink-dim">{reembolso ? "Pedir un reembolso" : "Pedir una compra"}</h2>
         <p className="text-xs text-ink-muted mt-0.5">
-          Le llega directo a quien paga. No hace falta que nadie la autorice antes.
+          {reembolso
+            ? "Ya pusiste el dinero y se te regresa. Le llega directo a quien paga."
+            : "Le llega directo a quien paga. No hace falta que nadie la autorice antes."}
         </p>
       </div>
 
@@ -163,7 +192,36 @@ export default function NuevaOrdenPage() {
 
       <div className="bg-white border border-black/5 rounded-2xl p-4 space-y-4">
         <div>
-          <label className={ETIQUETA} htmlFor="monto">Cuánto es (total, con IVA si lleva)</label>
+          <span className={ETIQUETA}>Qué es</span>
+          <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Tipo de orden">
+            {(["compra", "reembolso"] as const).map((t) => {
+              const apagado = t === "compra" && !puedeComprar;
+              const activa = tipo === t;
+              return (
+                <button
+                  key={t} type="button" role="radio" aria-checked={activa} disabled={apagado}
+                  data-tipo={t}
+                  onClick={() => setTipo(t)}
+                  className={`rounded-xl px-3 py-2.5 text-sm font-medium border transition ${
+                    activa ? "bg-ink text-cream border-ink" : "bg-white text-ink-dim border-black/10 hover:border-ink/30"
+                  } disabled:opacity-40 disabled:cursor-not-allowed`}
+                >
+                  {t === "compra" ? "Compra" : "Reembolso"}
+                </button>
+              );
+            })}
+          </div>
+          {!puedeComprar && (
+            <p className="text-[11px] text-mauve-900 mt-2" data-aviso="sin-compras">
+              Tu usuario no está autorizado para compras. Puedes pedir un reembolso.
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label className={ETIQUETA} htmlFor="monto">
+            {reembolso ? "Cuánto pagaste (total, con IVA si lleva)" : "Cuánto es (total, con IVA si lleva)"}
+          </label>
           <input
             id="monto" className={`${CAJA_NUM} text-lg`} inputMode="decimal" placeholder="0.00"
             value={monto} onChange={(e) => setMonto(e.target.value)}
@@ -171,15 +229,15 @@ export default function NuevaOrdenPage() {
         </div>
 
         <div>
-          <label className={ETIQUETA} htmlFor="concepto">Qué se compra</label>
+          <label className={ETIQUETA} htmlFor="concepto">{reembolso ? "Qué compraste" : "Qué se compra"}</label>
           <input
-            id="concepto" className={CAJA} placeholder="Triplay de 18 mm, 12 hojas"
+            id="concepto" className={CAJA} placeholder={reembolso ? "Gasolina de la camioneta" : "Triplay de 18 mm, 12 hojas"}
             value={concepto} onChange={(e) => setConcepto(e.target.value)}
           />
         </div>
 
         <div>
-          <label className={ETIQUETA} htmlFor="proveedor">A quién se le compra</label>
+          <label className={ETIQUETA} htmlFor="proveedor">{reembolso ? "Dónde lo compraste (si quieres)" : "A quién se le compra"}</label>
           <select id="proveedor" className={CAJA} value={proveedorId} onChange={(e) => setProveedorId(e.target.value)}>
             <option value="">Otro (lo escribo)</option>
             {proveedores.map((p) => (
@@ -280,7 +338,7 @@ export default function NuevaOrdenPage() {
               la cámara, que es de donde sale casi siempre. */}
           <SoltarArchivo
             id="archivo"
-            etiqueta="Foto o PDF de la cotización"
+            etiqueta={reembolso ? "Foto o PDF del ticket o la factura" : "Foto o PDF de la cotización"}
             acepta="image/*,application/pdf"
             archivo={archivo}
             alEscoger={setArchivo}
@@ -288,7 +346,7 @@ export default function NuevaOrdenPage() {
         </div>
 
         <button className={`${BOTON} w-full`} disabled={!listo} onClick={() => void guardar()}>
-          {guardando ? "Pidiendo…" : "Pedir la compra"}
+          {guardando ? "Pidiendo…" : reembolso ? "Pedir el reembolso" : "Pedir la compra"}
         </button>
       </div>
     </div>

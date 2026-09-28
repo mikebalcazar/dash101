@@ -75,7 +75,7 @@ async function app(hashInicial = '#/') {
     const mc = /^#\/corregir\/(.+)$/.exec(h);
     if (mc) { m.sellar(HONDURA.corregir); visto.push('corregir'); return; }
     if (/^#\/orden\/(.+)$/.test(h)) { m.sellar(HONDURA.orden); visto.push('orden'); return; }
-    if (h === '#/pedir') { m.sellar(HONDURA.pedir); visto.push('pedir'); return; }
+    if (h === '#/pedir' || h === '#/reembolso') { m.sellar(HONDURA.pedir); visto.push('pedir'); return; }
     m.sellar(HONDURA.lista); visto.push('lista');
   };
   g.window.addEventListener('hashchange', enrutar);

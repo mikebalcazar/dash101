@@ -125,3 +125,11 @@ ol.historia li:last-child { border-bottom: 0; }
 ol.historia small { color: var(--tinta-2); display: block; }
 
 .oculto { display: none !important; }
+
+/* El selector compra / reembolso (0.47.0): dos botones que se ven como
+   pestañas. El apagado es el de compra cuando la API dice que no. */
+.opciones { display: flex; gap: 6px; background: var(--fondo); border: 1px solid var(--linea); border-radius: 12px; padding: 4px; }
+.opcion { flex: 1; padding: 10px; border: 0; border-radius: 9px; background: transparent; color: var(--tinta-2); font-weight: 600; }
+.opcion[aria-checked="true"] { background: var(--tinta); color: #fff; }
+.opcion:disabled { opacity: .4; }
+button.b.claro { background: var(--sup); color: var(--tinta); border: 1px solid var(--linea); margin-top: 8px; }

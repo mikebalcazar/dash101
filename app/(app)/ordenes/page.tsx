@@ -1,18 +1,22 @@
 "use client";
 
-/* Mis órdenes de compra.
+/* Mis órdenes de compra, y mis reembolsos (0.47.0).
  *
  * Un miembro ve SÓLO las suyas, y eso no lo decide esta pantalla: lo filtra
  * el servidor. Aquí sólo se ordenan las devueltas arriba, con su motivo a la
- * vista, porque son las únicas que piden algo de quien las pidió. */
+ * vista, porque son las únicas que piden algo de quien las pidió.
+ *
+ * Los reembolsos van en la misma lista, con su marca: son el mismo papel con
+ * otro folio (RE-), y separarlos en otra pantalla obligaría a buscar en dos
+ * lados «qué me deben». */
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { getBuzon, listMisOrdenes, type Orden } from "@/lib/ordenes";
 import { useNegocioActivo } from "@/lib/negocio-activo-context";
 import { ErrorApi } from "@/lib/api/cliente";
-import { Dinero, Estado, Vence } from "@/components/ordenes-ui";
-import { IconInbox, IconPlus, IconShoppingCart } from "@tabler/icons-react";
+import { AQuien, Dinero, Estado, Tipo, Vence } from "@/components/ordenes-ui";
+import { IconInbox, IconPlus, IconReceiptRefund, IconShoppingCart } from "@tabler/icons-react";
 
 /** Las devueltas primero; dentro de cada grupo, la más nueva arriba. */
 const ORDEN_DE_LA_LISTA: Record<Orden["estado"], number> = {
@@ -63,17 +67,27 @@ export default function MisOrdenesPage() {
     <div>
       <div className="flex justify-between items-baseline mb-5 gap-3">
         <div>
-          <h2 className="text-lg font-medium text-ink-dim">Mis compras</h2>
+          <h2 className="text-lg font-medium text-ink-dim">Mis compras y reembolsos</h2>
           <p className="text-xs text-ink-muted mt-0.5">
             Lo que tú pediste, y en qué va cada una.
           </p>
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 mb-4">
         <Link
           href="/ordenes/nueva"
-          className="flex items-center gap-1.5 bg-ink hover:bg-ink/90 text-cream rounded-xl px-3.5 py-2 text-sm font-medium transition shrink-0"
+          className="flex items-center justify-center gap-1.5 bg-ink hover:bg-ink/90 text-cream rounded-xl px-3.5 py-2.5 text-sm font-medium transition"
         >
           <IconPlus size={14} />
           Pedir una compra
+        </Link>
+        <Link
+          href="/ordenes/nueva?tipo=reembolso"
+          className="flex items-center justify-center gap-1.5 bg-white border border-black/10 hover:border-ink/30 text-ink-dim rounded-xl px-3.5 py-2.5 text-sm font-medium transition"
+        >
+          <IconReceiptRefund size={14} />
+          Pedir un reembolso
         </Link>
       </div>
 
@@ -99,7 +113,7 @@ export default function MisOrdenesPage() {
           <IconShoppingCart size={22} className="text-ink-muted mx-auto mb-2" />
           <p className="text-sm font-medium text-ink-dim mb-1">Todavía no pides nada</p>
           <p className="text-xs text-ink-muted">
-            Pide una compra y le llega directo a quien paga. No hace falta que nadie la autorice antes.
+            Pide una compra o un reembolso y le llega directo a quien paga. No hace falta que nadie lo autorice antes.
           </p>
         </div>
       ) : (
@@ -115,10 +129,11 @@ export default function MisOrdenesPage() {
                   {o.concepto}
                 </p>
                 <p className="text-[11px] text-ink-muted truncate">
-                  {o.folio} · {o.proveedor_nombre || "sin proveedor"} · <Vence orden={o} />
+                  {o.folio} · <AQuien orden={o} /> · <Vence orden={o} />
                 </p>
                 <div className="mt-1 flex items-center gap-2 flex-wrap">
                   <Estado orden={o} />
+                  <Tipo orden={o} />
                   {o.estado === "devuelta" && o.nota_contador && (
                     <span className="text-[11px] text-mauve-900">«{o.nota_contador}»</span>
                   )}

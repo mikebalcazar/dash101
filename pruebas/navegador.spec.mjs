@@ -428,6 +428,78 @@ test('pedir una compra desde el celular, pagarla, y que el que la pidió lo vea'
   await ctx.close();
 });
 
+/* ═══════════════ 5b · un reembolso, de punta a punta (0.47.0) ═══════════════
+ *
+ * Mike, 28-sep: «que el trabajador pueda pedir reembolsos y en dash le
+ * aparezcan (similar a las Órdenes de compra) (…) en el buzón (…) una pestaña
+ * (…) de reembolsos pendientes (…) y debe de estar también el total de
+ * reembolsos pendientes en la pantalla inicial junto con los otros totales».
+ * Se camina eso: pedirlo, verlo en la tarjeta del inicio, en la pestaña del
+ * buzón, pagarlo, y que el egreso salga como reembolso a la persona. */
+test('pedir un reembolso, verlo en el inicio y en su pestaña del buzón, y pagarlo', async () => {
+  const { ctx, pag, errores } = await pestana({ width: 390, height: 844 }, true);
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  const { neg, cuenta } = await negocioDePruebas(pag);
+  await elegirNegocio(pag, neg.id);
+
+  // ── pedirlo, desde la liga del botón «Pedir un reembolso» ──
+  await pag.goto(`${URL}/ordenes/nueva?tipo=reembolso`, { waitUntil: 'load' });
+  await pag.locator('[data-tipo="reembolso"][aria-checked="true"]').waitFor({ timeout: 15000 });
+  await pag.getByLabel('Cuánto pagaste (total, con IVA si lleva)').fill('850');
+  await pag.getByLabel('Qué compraste').fill('Gasolina del navegador');
+  await pag.getByLabel('Con factura').uncheck();
+  await pag.getByRole('button', { name: 'Pedir el reembolso' }).click();
+  await pag.waitForURL((u) => /\/ordenes\/[^/]+$/.test(u.pathname) && !u.pathname.endsWith('/nueva'), { timeout: 30000 });
+  await pag.waitForTimeout(1000);
+  let dice = await texto(pag);
+  assert.match(dice, /RE-\d+/, 'folio de reembolso');
+  assert.match(dice, /Reembolso/, 'marcado como reembolso');
+  assert.match(dice, /\$850\.00/, 'en pesos');
+  const folio = dice.match(/RE-\d+/)[0];
+  const id = new URL(pag.url()).pathname.split('/').pop();
+
+  // ── el inicio lo cuenta y lo resta ──
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  const tarjeta = pag.locator('[data-tarjeta="reembolsos-pendientes"]');
+  await tarjeta.waitFor({ timeout: 20000 });
+  const pendientes = await tarjeta.innerText();
+  assert.match(pendientes, /Reembolsos pendientes/);
+  assert.match(pendientes, /\$850/, 'el total de reembolsos pendientes está en el inicio');
+  assert.match(await texto(pag), /− reembolsos pendientes/, 'y el capital total dice que los resta');
+
+  // ── la pestaña del buzón ──
+  await tarjeta.click();
+  await pag.waitForURL((u) => u.pathname.endsWith('/ordenes/buzon'), { timeout: 20000 });
+  await pag.locator('[data-pestana="reembolso"][aria-selected="true"]').waitFor({ timeout: 20000 });
+  await pag.getByText(folio).first().waitFor({ timeout: 20000 });
+  const total = await pag.locator('[data-total="reembolso"]').innerText();
+  assert.match(total, /\$850\.00/, 'la pestaña suma sus reembolsos');
+  await pag.locator('[data-pestana="compra"]').click();
+  assert.ok(!(await texto(pag)).includes(folio), 'y en la de compras no está');
+
+  // ── pagarlo, con los mismos botones ──
+  await pag.goto(`${URL}/ordenes/${id}`, { waitUntil: 'load' });
+  await pag.getByRole('button', { name: 'Pagar', exact: true }).click();
+  await pag.getByLabel('De qué cuenta sale').selectOption(cuenta.id);
+  await pag.getByRole('button', { name: 'Registrar el pago' }).click();
+  await pag.getByText(/Pagada\./).waitFor({ timeout: 30000 });
+
+  const movs = filas(await api(pag, `/orgs/${ORG}/movimientos?cuenta_id=${cuenta.id}`));
+  const suyos = movs.filter((m) => (m.descripcion || '').includes(folio));
+  assert.equal(suyos.length, 1, 'un solo egreso');
+  assert.equal(suyos[0].tipo, 'egreso', 'es salida de dinero');
+  assert.equal(suyos[0].categoria, 'reembolso', 'registrado como reembolso, no como compra');
+  assert.equal(suyos[0].monto, 85000);
+
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  await tarjeta.waitFor({ timeout: 20000 });
+  assert.ok(!/\$850/.test(await tarjeta.innerText()), 'pagado, ya no está pendiente en el inicio');
+
+  console.log(`    ${folio}: pedido, visto en el inicio y en su pestaña, pagado como reembolso`);
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
 /* ═══════════════ 6 · dar de alta un cliente sin salirse del proyecto ═══════
  *
  * Lo pidió Mike el 20-sep: antes, para crear un proyecto de un cliente nuevo
