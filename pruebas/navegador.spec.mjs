@@ -460,12 +460,21 @@ test('pedir un reembolso, verlo en el inicio y en su pestaña del buzón, y paga
   const id = pag.url().replace(/[?#].*$/, '').split('/').pop();
 
   // ── el inicio lo cuenta y lo resta ──
+  // La cifra se compara contra lo que dice la API para ESTE negocio, no
+  // contra $850 a secas: una corrida anterior que se haya caído a la mitad
+  // deja su reembolso en el buzón, y la tarjeta los suma todos (que es lo
+  // correcto). Los enteros de pesos, que es como se pinta el inicio.
+  const enteros = (t) => t.replace(/[^\d]/g, '');
+  const resumen = await api(pag, `/orgs/${ORG}/ordenes/resumen?negocio_id=${neg.id}`);
+  assert.ok(resumen.reembolsos.total >= 85000, 'la API ya cuenta el reembolso');
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
   const tarjeta = pag.locator('[data-tarjeta="reembolsos-pendientes"]');
   await tarjeta.waitFor({ timeout: 20000 });
   const pendientes = await tarjeta.innerText();
   assert.match(pendientes, /Reembolsos pendientes/);
-  assert.match(pendientes, /\$850/, 'el total de reembolsos pendientes está en el inicio');
+  const cifra = (pendientes.match(/\$[\d,]+/) || [''])[0];
+  assert.equal(enteros(cifra), String(Math.round(resumen.reembolsos.total / 100)),
+    'el total de reembolsos pendientes está en el inicio, en pesos, y es el de la API');
   assert.match(await texto(pag), /− reembolsos pendientes/, 'y el capital total dice que los resta');
 
   // ── la pestaña del buzón ──
@@ -474,7 +483,7 @@ test('pedir un reembolso, verlo en el inicio y en su pestaña del buzón, y paga
   await pag.locator('[data-pestana="reembolso"][aria-selected="true"]').waitFor({ timeout: 20000 });
   await pag.getByText(folio).first().waitFor({ timeout: 20000 });
   const total = await pag.locator('[data-total="reembolso"]').innerText();
-  assert.match(total, /\$850\.00/, 'la pestaña suma sus reembolsos');
+  assert.equal(enteros(total), String(resumen.reembolsos.total), 'la pestaña suma sus reembolsos (en pesos con centavos)');
   await pag.locator('[data-pestana="compra"]').click();
   assert.ok(!(await texto(pag)).includes(folio), 'y en la de compras no está');
 
@@ -492,11 +501,17 @@ test('pedir un reembolso, verlo en el inicio y en su pestaña del buzón, y paga
   assert.equal(suyos[0].categoria, 'reembolso', 'registrado como reembolso, no como compra');
   assert.equal(suyos[0].monto, 85000);
 
+  const despues = await api(pag, `/orgs/${ORG}/ordenes/resumen?negocio_id=${neg.id}`);
+  assert.equal(resumen.reembolsos.total - despues.reembolsos.total, 85000, 'pagado, ya no está pendiente');
+  // Lo que otras corridas hayan dejado en el buzón de este negocio se paga
+  // aquí, para que el siguiente recorrido arranque limpio.
+  const sobrantes = filas(await api(pag, `/orgs/${ORG}/ordenes/buzon?negocio_id=${neg.id}&tipo=reembolso`));
+  for (const o of sobrantes) await api(pag, `/orgs/${ORG}/ordenes/${o.id}/pagar`, { method: 'POST', body: { cuenta_id: cuenta.id } });
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
   await tarjeta.waitFor({ timeout: 20000 });
-  assert.ok(!/\$850/.test(await tarjeta.innerText()), 'pagado, ya no está pendiente en el inicio');
+  assert.match(await tarjeta.innerText(), /\$0\b/, 'con todo pagado, el inicio dice cero');
 
-  console.log(`    ${folio}: pedido, visto en el inicio y en su pestaña, pagado como reembolso`);
+  console.log(`    ${folio}: pedido, visto en el inicio y en su pestaña, pagado como reembolso (${sobrantes.length} sobrantes pagados)`);
   assert.deepEqual(errores, [], 'cero errores de JavaScript');
   await ctx.close();
 });
