@@ -456,7 +456,8 @@ test('pedir un reembolso, verlo en el inicio y en su pestaña del buzón, y paga
   assert.match(dice, /Reembolso/, 'marcado como reembolso');
   assert.match(dice, /\$850\.00/, 'en pesos');
   const folio = dice.match(/RE-\d+/)[0];
-  const id = new URL(pag.url()).pathname.split('/').pop();
+  // `URL` aquí es la dirección de la app, no el constructor: se lee a mano.
+  const id = pag.url().replace(/[?#].*$/, '').split('/').pop();
 
   // ── el inicio lo cuenta y lo resta ──
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
