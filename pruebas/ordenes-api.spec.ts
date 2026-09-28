@@ -24,8 +24,8 @@ import { createCliente } from "@/lib/clientes";
 import { createProveedor } from "@/lib/proveedores";
 import { createProyecto } from "@/lib/proyectos";
 import {
-  corregirOrden, crearOrden, desglosar, devolverOrden, getBuzon, listContadores,
-  listMisOrdenes, listPartidasDe, marcarContador, pagarOrden, vencida, verOrden,
+  corregirOrden, crearOrden, desglosar, devolverOrden, getBuzon, getPermisosOrdenes, getResumenOrdenes,
+  listContadores, listMisOrdenes, listPartidasDe, marcarContador, pagarOrden, vencida, verOrden,
 } from "@/lib/ordenes";
 import {
   crearCfdi, getCuadre, getIva, ligarCfdi, listCfdi, listPendientes, cancelarCfdi,
@@ -201,6 +201,49 @@ describe("devolver y corregir", () => {
     expect(r.eventos.map((e) => e.que)).toEqual(
       expect.arrayContaining(["creada", "devuelta", "corregida"]),
     );
+  });
+});
+
+/* 0.47.0 · Reembolsos. Lo que aportan estas pruebas: que las cifras nuevas
+ * —el buzón por pestaña y el resumen del inicio— lleguen a la pantalla en
+ * PESOS y cuadren entre sí, y que el egreso de un reembolso salga como
+ * reembolso a la persona, no como compra a un proveedor. */
+describe("reembolsos", () => {
+  let re = "";
+
+  it("se pide como reembolso y sale con folio RE-, en pesos", async () => {
+    const o = await crearOrden({ negocio_id: ids.negocio, tipo: "reembolso", concepto: "Gasolina", monto: 850, con_factura: false });
+    re = o.id;
+    expect(o.tipo).toBe("reembolso");
+    expect(o.folio).toMatch(/^RE-/);
+    expect(o.monto).toBe(850);
+    expect((await listMisOrdenes(ids.negocio)).some((x) => x.id === re && x.tipo === "reembolso")).toBe(true);
+    const p = await getPermisosOrdenes();
+    expect(p.puede_comprar, "esta cuenta sí compra").toBe(true);
+  });
+
+  it("la pestaña de reembolsos suma sólo reembolsos, y el resumen del inicio cuadra con ella", async () => {
+    const pestana = await getBuzon(ids.negocio, "reembolso");
+    expect(pestana.filas.every((x) => x.tipo === "reembolso")).toBe(true);
+    expect(pestana.filas.some((x) => x.id === re)).toBe(true);
+    expect(pestana.total).toBe(850);
+    const compras = await getBuzon(ids.negocio, "compra");
+    expect(compras.filas.some((x) => x.id === re), "y no sale en la de compras").toBe(false);
+    const resumen = await getResumenOrdenes(ids.negocio);
+    expect(resumen.reembolsos.total, "en PESOS, y es lo que resta del capital").toBe(850);
+    expect(resumen.reembolsos.cuantas).toBe(1);
+    expect(resumen.compras.total).toBe(compras.total);
+  });
+
+  it("al pagarlo, el egreso es un reembolso a la persona y la pestaña se vacía", async () => {
+    const r = await pagarOrden(re, { cuenta_id: ids.banco });
+    expect(r.orden.estado).toBe("pagada");
+    expect(r.movimiento.monto, "centavos crudos de la API, que la pantalla no pinta").toBe(85000);
+    const mov = (r as unknown as { movimiento: { categoria: string; contraparte_nombre: string | null; tipo: string } }).movimiento;
+    expect(mov.categoria).toBe("reembolso");
+    expect(mov.tipo, "es una salida de dinero, como una compra").toBe("egreso");
+    const resumen = await getResumenOrdenes(ids.negocio);
+    expect(resumen.reembolsos.total).toBe(0);
   });
 });
 

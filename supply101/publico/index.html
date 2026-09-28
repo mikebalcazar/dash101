@@ -81,6 +81,8 @@
       <select id="negocio"></select>
     </div>
     <button class="b" id="b-nueva-compra" type="button">Pedir una compra</button>
+    <button class="b claro" id="b-nuevo-reembolso" type="button">Pedir un reembolso</button>
+    <p class="aviso gris oculto" id="sin-compras">Tu usuario no está autorizado para compras. Puedes pedir un reembolso.</p>
     <p class="aviso mal oculto" id="err-lista"></p>
     <p class="aviso bien oculto" id="ok-lista"></p>
     <div id="lista"></div>
@@ -92,15 +94,22 @@
     <h1 id="pedir-t">Pedir una compra</h1>
     <p class="sub" id="pedir-sub">Le llega directo a quien paga. Nadie tiene que autorizarla antes.</p>
     <form id="f-pedir">
-      <label for="monto">Cuánto es
+      <label>Qué es</label>
+      <div class="opciones" id="tipo" role="radiogroup" aria-label="Tipo de orden">
+        <button type="button" class="opcion" data-tipo="compra" role="radio" aria-checked="true">Compra</button>
+        <button type="button" class="opcion" data-tipo="reembolso" role="radio" aria-checked="false">Reembolso</button>
+      </div>
+      <p class="aviso gris oculto" id="pedir-sin-compras" style="margin-top:8px">Tu usuario no está autorizado para compras. Puedes pedir un reembolso.</p>
+
+      <label for="monto"><span id="monto-l">Cuánto es</span>
         <span class="pista">El total, con IVA si lleva.</span>
       </label>
       <input id="monto" class="cifra grande" inputmode="decimal" placeholder="0.00" required>
 
-      <label for="concepto">Qué se compra</label>
+      <label for="concepto" id="concepto-l">Qué se compra</label>
       <input id="concepto" placeholder="Triplay de 18 mm, 12 hojas" required>
 
-      <label for="proveedor">A quién se le compra</label>
+      <label for="proveedor" id="proveedor-l">A quién se le compra</label>
       <select id="proveedor"></select>
       <input id="proveedor-nuevo" placeholder="Nombre del proveedor" style="margin-top:8px">
 
@@ -135,7 +144,7 @@
         <p class="aviso mal oculto" id="err-iva">El subtotal más el IVA tiene que dar el total exacto.</p>
       </div>
 
-      <label for="archivo">Foto o PDF de la cotización</label>
+      <label for="archivo" id="archivo-l">Foto o PDF de la cotización</label>
       <input id="archivo" type="file" accept="image/*,application/pdf">
 
       <p class="aviso mal oculto" id="err-pedir"></p>

@@ -35,7 +35,7 @@ const items: NavItem[] = [
   { href: "/clientes", icon: IconUsers, label: "Clientes" },
   { href: "/proveedores", icon: IconTruck, label: "Proveedores" },
   { href: "/opex", icon: IconReceipt, label: "OPEX" },
-  { href: "/ordenes", icon: IconShoppingCart, label: "Compras" },
+  { href: "/ordenes", icon: IconShoppingCart, label: "Compras y reembolsos" },
   { href: "/nomina", icon: IconCash, label: "Raya" },
   { href: "/fiscal", icon: IconReceiptTax, label: "Fiscal" },
   { href: "/conciliacion", icon: IconScale, label: "Conciliación" },

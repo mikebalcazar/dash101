@@ -161,6 +161,41 @@ test('cuando la pagan, la app enseña el comprobante', async () => {
   assert.equal(await pag.locator('img[alt="comprobante.png"]').count(), 1, 'el comprobante se ve');
 });
 
+/* 0.47.0 · Un reembolso desde el mismo formulario. Mike, 28-sep: «podría ser
+ * el mismo portal de supply, pero poner una opción en el tipo de orden si es
+ * reembolso o compra». Se mide que salga con folio RE-, marcado como
+ * reembolso, y que la lista lo enseñe junto a las compras. Esta cuenta SÍ
+ * tiene la llave de compras; el caso de quien no la tiene («tu usuario no
+ * está autorizado para compras») se mide en la API, que es donde se decide. */
+test('se pide un reembolso desde el mismo formulario, y sale con folio RE-', async () => {
+  await pag.goto(`${URL}/#/`, { waitUntil: 'load' });
+  await pag.getByRole('button', { name: 'Pedir un reembolso' }).click();
+  await pag.waitForFunction(() => location.hash === '#/reembolso');
+  assert.equal(await pag.locator('#tipo .opcion[data-tipo="reembolso"]').getAttribute('aria-checked'), 'true', 'la opción reembolso queda marcada');
+  assert.match(await pag.locator('#pedir-t').innerText(), /Pedir un reembolso/);
+
+  await pag.getByLabel('Cuánto pagaste').fill('850');
+  await pag.getByLabel('Qué compraste').fill('Gasolina de supply101');
+  await pag.locator('#con-factura').uncheck();
+  await pag.getByRole('button', { name: 'Pedir el reembolso' }).click();
+  await pag.waitForFunction(() => location.hash.startsWith('#/orden/'), { timeout: 30000 });
+  await pag.waitForTimeout(1200);
+
+  const dice = await pag.evaluate(() => document.body.innerText);
+  assert.match(dice, /RE-\d+/, 'trae folio de reembolso, no de compra');
+  assert.match(dice, /Reembolso/, 'y dice que es reembolso');
+  assert.match(dice, /\$850\.00/, 'en pesos');
+  assert.match(dice, /Esperando pago/, 'cae al buzón de quien paga, como una compra');
+
+  // Y la opción se cambia en el mismo formulario: abrir «pedir» y picar
+  // Reembolso deja el mismo estado que la liga directa.
+  await pag.goto(`${URL}/#/pedir`, { waitUntil: 'load' });
+  await pag.locator('#tipo .opcion[data-tipo="reembolso"]').click();
+  assert.match(await pag.locator('#b-pedir').innerText(), /Pedir el reembolso/);
+  await pag.locator('#tipo .opcion[data-tipo="compra"]').click();
+  assert.match(await pag.locator('#b-pedir').innerText(), /Pedir la compra/);
+});
+
 test('la compra sale en mis compras, y a 390 no hay barrido ni errores', async () => {
   await pag.goto(`${URL}/#/`, { waitUntil: 'load' });
   // Dentro de la lista, no en cualquier parte: el detalle sigue en el DOM,
@@ -170,7 +205,7 @@ test('la compra sale en mis compras, y a 390 no hay barrido ni errores', async (
   assert.match(dice, /Pagada/);
   assert.ok(!/116000/.test(dice), 'el dinero, en pesos');
 
-  for (const h of ['#/', '#/pedir']) {
+  for (const h of ['#/', '#/pedir', '#/reembolso']) {
     await pag.goto(`${URL}/${h}`, { waitUntil: 'load' });
     await pag.waitForTimeout(1200);
     const m = await pag.evaluate(() => ({ ancho: document.documentElement.scrollWidth, ventana: window.innerWidth }));

@@ -17,9 +17,21 @@ import { apiBase, org } from './fuente';
 
 export type EstadoOrden = 'en_buzon' | 'devuelta' | 'pagada' | 'rechazada';
 
+/** Contrato 0.47.0 · Una compra se le paga a un proveedor; un reembolso se le
+ *  regresa a quien puso el dinero. Mike, 28-sep-2026: «poner una opción en el
+ *  tipo de orden si es reembolso o compra». Mismo camino, otro folio (RE-) y
+ *  otra categoría en el egreso. */
+export type TipoOrden = 'compra' | 'reembolso';
+
+export const TIPO_ORDEN: Record<TipoOrden, string> = {
+  compra: 'Compra',
+  reembolso: 'Reembolso',
+};
+
 export interface Orden {
   id: string;
   folio: string;
+  tipo: TipoOrden;
   negocio_id: string;
   solicitante_usuario_id: string;
   solicitante_correo: string | null;
@@ -99,6 +111,8 @@ export async function listMisOrdenes(negocio_id?: string | null): Promise<Orden[
 
 export interface OrdenInput {
   negocio_id: string;
+  /** Sin él, es compra. */
+  tipo?: TipoOrden;
   proveedor_id?: string | null;
   proveedor_nombre?: string | null;
   proyecto_id?: string | null;
@@ -118,6 +132,7 @@ export interface OrdenInput {
 export async function crearOrden(d: OrdenInput): Promise<Orden> {
   const cuerpo: Record<string, unknown> = {
     negocio_id: d.negocio_id,
+    tipo: d.tipo ?? 'compra',
     proveedor_id: d.proveedor_id ?? null,
     proveedor_nombre: d.proveedor_nombre ?? null,
     proyecto_id: d.proyecto_id || null,
@@ -161,9 +176,16 @@ export async function corregirOrden(id: string, d: Partial<OrdenInput>): Promise
 
 /* ─────────────── lo que ve quien paga ─────────────── */
 
-export async function getBuzon(negocio_id?: string | null): Promise<Buzon> {
+/** Con `tipo`, una sola pestaña (compras o reembolsos) con SUS totales: la
+ *  cifra de arriba tiene que ser la suma de los renglones de abajo, y en la
+ *  pestaña de reembolsos esos renglones son sólo los reembolsos. */
+export async function getBuzon(negocio_id?: string | null, tipo?: TipoOrden | null): Promise<Buzon> {
+  const q = new URLSearchParams();
+  if (negocio_id) q.set('negocio_id', negocio_id);
+  if (tipo) q.set('tipo', tipo);
+  const qs = q.toString();
   const r = await pedir<{ filas: FilaOrden[]; total: number; vence_esta_semana: number; vencidas: number }>(
-    `${base()}/buzon${negocio_id ? `?negocio_id=${encodeURIComponent(negocio_id)}` : ''}`,
+    `${base()}/buzon${qs ? `?${qs}` : ''}`,
   );
   return {
     filas: r.filas.map(orden),
@@ -172,6 +194,29 @@ export async function getBuzon(negocio_id?: string | null): Promise<Buzon> {
     vencidas: r.vencidas,
   };
 }
+
+/** Lo que hay en el buzón, en dos cifras (0.47.0), EN PESOS. Para el inicio:
+ *  Mike pidió «el total de reembolsos pendientes en la pantalla inicial junto
+ *  con los otros totales», y que reste del capital de la empresa. Lo lee
+ *  quien ve dinero aunque no pague; los renglones siguen siendo del buzón. */
+export interface ResumenOrdenes {
+  compras: { total: number; cuantas: number };
+  reembolsos: { total: number; cuantas: number };
+}
+
+export async function getResumenOrdenes(negocio_id?: string | null): Promise<ResumenOrdenes> {
+  const r = await pedir<ResumenOrdenes>(`${base()}/resumen${negocio_id ? `?negocio_id=${encodeURIComponent(negocio_id)}` : ''}`);
+  return {
+    compras: { total: aPesos(r.compras.total), cuantas: r.compras.cuantas },
+    reembolsos: { total: aPesos(r.reembolsos.total), cuantas: r.reembolsos.cuantas },
+  };
+}
+
+/** Qué puede hacer quien pregunta (0.47.0). En dash101 casi siempre puede
+ *  comprar; la excepción vive en supply101, donde quien no trae la llave de
+ *  compras entra sólo a reembolsos. Se pinta lo que diga el servidor. */
+export const getPermisosOrdenes = () =>
+  pedir<{ puede_comprar: boolean; puede_pagar: boolean }>(`${base()}/permisos`);
 
 export async function pagarOrden(id: string, d: { cuenta_id: string; fecha?: string; nota?: string }) {
   const r = await pedir<{ orden: FilaOrden; movimiento: { id: string; monto: number }; correo: { enviado: boolean; motivo?: string; para?: string } }>(

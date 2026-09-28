@@ -23,7 +23,7 @@ import {
 } from "@/lib/ordenes";
 import { formatMontoExact } from "@/lib/format";
 import { SoltarArchivo } from "@/components/soltar-archivo";
-import { BOTON, CAJA, CAJA_NUM, Dinero, ETIQUETA, Estado, Vence } from "@/components/ordenes-ui";
+import { AQuien, BOTON, CAJA, CAJA_NUM, Dinero, ETIQUETA, Estado, Tipo, Vence } from "@/components/ordenes-ui";
 import type { Cuenta } from "@/types/schema";
 import { IconArrowLeft, IconFileText } from "@tabler/icons-react";
 
@@ -129,7 +129,7 @@ export default function OrdenPage() {
   if (!orden) {
     return (
       <div className="bg-white border border-black/5 rounded-2xl p-10 text-center">
-        <p className="text-sm font-medium text-ink-dim mb-1">No se encontró esta compra</p>
+        <p className="text-sm font-medium text-ink-dim mb-1">No se encontró esta orden</p>
         {error && <p className="text-xs text-ink-muted">{error}</p>}
       </div>
     );
@@ -156,7 +156,7 @@ export default function OrdenPage() {
           <div className="flex-1 min-w-0">
             <h2 className="text-lg font-medium text-ink-dim">{orden.concepto}</h2>
             <p className="text-xs text-ink-muted mt-0.5">
-              {orden.folio} · {orden.proveedor_nombre || "sin proveedor"}
+              {orden.folio} · <AQuien orden={orden} />
             </p>
             <p className="text-xs mt-0.5"><Vence orden={orden} /></p>
           </div>
@@ -165,13 +165,15 @@ export default function OrdenPage() {
 
         <div className="mt-3 flex items-center gap-2 flex-wrap">
           <Estado orden={orden} />
+          <Tipo orden={orden} />
           {orden.urgente && (
             <span className="inline-block rounded-lg px-2 py-0.5 text-[11px] font-medium bg-mauve-50 text-mauve-900">
               Urgente
             </span>
           )}
           <span className="text-[11px] text-ink-muted">
-            La pidió {orden.solicitante_nombre || orden.solicitante_correo || "alguien"}
+            {orden.tipo === "reembolso" ? "Lo pidió" : "La pidió"} {orden.solicitante_nombre || orden.solicitante_correo || "alguien"}
+            {orden.tipo === "reembolso" && orden.proveedor_nombre && <> · compró en {orden.proveedor_nombre}</>}
           </span>
         </div>
 
@@ -185,7 +187,7 @@ export default function OrdenPage() {
       {archivos.length > 0 && (
         <div className="bg-white border border-black/5 rounded-2xl p-4 mb-4">
           <h3 className="text-xs font-medium text-ink-muted uppercase tracking-wide mb-2">
-            Cotización y comprobantes
+            {orden.tipo === "reembolso" ? "Ticket y comprobantes" : "Cotización y comprobantes"}
           </h3>
           <div className="space-y-2">
             {archivos.map((a) => (
@@ -257,8 +259,9 @@ export default function OrdenPage() {
                 />
               </div>
               <p className="text-[11px] text-ink-muted">
-                Al pagar se registra el egreso por {formatMontoExact(orden.monto, orden.moneda)} y se le avisa por
-                correo a quien la pidió. No hay que capturar el movimiento aparte.
+                {orden.tipo === "reembolso"
+                  ? <>Al pagar se registra el egreso por {formatMontoExact(orden.monto, orden.moneda)} como reembolso a {orden.solicitante_nombre || orden.solicitante_correo || "quien lo pidió"}, y se le avisa por correo. No hay que capturar el movimiento aparte.</>
+                  : <>Al pagar se registra el egreso por {formatMontoExact(orden.monto, orden.moneda)} y se le avisa por correo a quien la pidió. No hay que capturar el movimiento aparte.</>}
               </p>
               <div className="flex gap-2">
                 <button className={`${BOTON} flex-1`} disabled={!cuentaId || trabajando} onClick={() => void pagar()}>
@@ -313,7 +316,7 @@ export default function OrdenPage() {
                 Conserva el mismo folio y toda su historia: una orden corregida no es otra orden.
               </p>
               <div>
-                <label className={ETIQUETA} htmlFor="concepto2">Qué se compra</label>
+                <label className={ETIQUETA} htmlFor="concepto2">{orden.tipo === "reembolso" ? "Qué compraste" : "Qué se compra"}</label>
                 <input
                   id="concepto2" className={CAJA} value={conceptoNuevo}
                   onChange={(e) => setConceptoNuevo(e.target.value)}

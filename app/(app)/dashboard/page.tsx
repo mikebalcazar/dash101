@@ -7,6 +7,7 @@ import { listCuentas } from "@/lib/cuentas";
 import { listMovimientos } from "@/lib/movimientos";
 import { MarcaFiscal } from "@/components/marca-fiscal";
 import { listProyectos } from "@/lib/proyectos";
+import { getResumenOrdenes, type ResumenOrdenes } from "@/lib/ordenes";
 import type { Cuenta, Movimiento, Proyecto } from "@/types/schema";
 import { formatMonto, formatDateShort } from "@/lib/format";
 import { Timestamp } from "firebase/firestore";
@@ -19,6 +20,7 @@ import {
   IconCircleDashed,
   IconPlus,
   IconFolder,
+  IconReceiptRefund,
 } from "@tabler/icons-react";
 
 function iconoCuenta(tipo: string) {
@@ -54,6 +56,7 @@ export default function DashboardPage() {
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
+  const [pendientes, setPendientes] = useState<ResumenOrdenes | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -67,11 +70,16 @@ export default function DashboardPage() {
       listCuentas(activo.id),
       listMovimientos(activo.id, { max: 5 }),
       listProyectos(activo.id),
+      // Los reembolsos pendientes (0.47.0). Si la API dice que no —una
+      // cuenta que no ve dinero no llega aquí de todos modos—, se pintan
+      // en cero y el tablero no se cae por eso.
+      getResumenOrdenes(activo.id).catch(() => null),
     ])
-      .then(([cs, ms, ps]) => {
+      .then(([cs, ms, ps, re]) => {
         setCuentas(cs);
         setMovimientos(ms);
         setProyectos(ps);
+        setPendientes(re);
       })
       .catch((e) => console.error(e))
       .finally(() => setLoading(false));
@@ -107,11 +115,17 @@ export default function DashboardPage() {
    *   líquido    = lo que hay en las cuentas, hoy
    *   por cobrar = lo vendido que el cliente todavía no paga
    *   por pagar  = lo comprometido con proveedores que todavía no sale
-   *   total      = líquido + por cobrar − por pagar
+   *   reembolsos = lo que la gente ya puso de su bolsa y espera en el buzón
+   *   total      = líquido + por cobrar − por pagar − reembolsos pendientes
    *
    * El total NO suma las cuentas por pagar: son una deuda. Sumarlas daría un
-   * número más grande y más falso. */
+   * número más grande y más falso. Los reembolsos pendientes también restan
+   * (Mike, 28-sep-2026: «la suma de reembolsos pendientes sí debe impactar
+   * en la suma total para reflejar el balance de la empresa»): ese dinero ya
+   * se gastó, sólo que todavía está en la cuenta porque salió de otra. */
   const liquido = cuentas.reduce((s, c) => s + (c.saldo_actual ?? 0), 0);
+  const reembolsosPendientes = pendientes?.reembolsos.total ?? 0;
+  const cuantosReembolsos = pendientes?.reembolsos.cuantas ?? 0;
   const proyectosActivos = proyectos.filter((p) => p.estado !== "cerrado");
 
   /** Por proyecto, el mismo corte que el de arriba. Nunca en negativo: un
@@ -125,7 +139,7 @@ export default function DashboardPage() {
   const balances = proyectosActivos.map((p) => ({ proyecto: p, ...balance(p) }));
   const porCobrar = balances.reduce((s, b) => s + b.porCobrar, 0);
   const porPagar = balances.reduce((s, b) => s + b.porPagar, 0);
-  const capitalTotal = liquido + porCobrar - porPagar;
+  const capitalTotal = liquido + porCobrar - porPagar - reembolsosPendientes;
   const sumaProyectos = balances.reduce(
     (a, b) => ({
       liquido: a.liquido + b.liquido,
@@ -148,7 +162,7 @@ export default function DashboardPage() {
               {formatMonto(capitalTotal, activo.moneda)}
             </p>
             <p className="text-xs text-ink-muted mt-2">
-              Líquido + por cobrar − por pagar
+              Líquido + por cobrar − por pagar − reembolsos pendientes
             </p>
           </div>
           <div className="w-20 h-20 rounded-full bg-sky-50 flex items-center justify-center shrink-0">
@@ -158,7 +172,7 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
         <div className="bg-white border border-black/5 rounded-2xl p-4">
           <p className="text-xs text-ink-muted font-medium">Capital líquido</p>
           <p className="text-xl font-medium text-ink-dim mt-1 tabular-nums">
@@ -186,6 +200,23 @@ export default function DashboardPage() {
             Comprometido con proveedores que no ha salido
           </p>
         </div>
+        <Link
+          href="/ordenes/buzon?tipo=reembolso"
+          className="bg-white border border-black/5 rounded-2xl p-4 hover:border-black/20 transition"
+          data-tarjeta="reembolsos-pendientes"
+        >
+          <p className="text-xs text-ink-muted font-medium flex items-center gap-1">
+            <IconReceiptRefund size={13} /> Reembolsos pendientes
+          </p>
+          <p className="text-xl font-medium text-ink-dim mt-1 tabular-nums">
+            {formatMonto(reembolsosPendientes, activo.moneda)}
+          </p>
+          <p className="text-[11px] text-ink-muted mt-1">
+            {cuantosReembolsos === 0
+              ? "Nadie espera que le regresen dinero"
+              : `${cuantosReembolsos} ${cuantosReembolsos === 1 ? "reembolso en el buzón" : "reembolsos en el buzón"}`}
+          </p>
+        </Link>
       </div>
 
       {/* El mismo corte, proyecto por proyecto. */}
