@@ -227,6 +227,11 @@ jobs:
       # producción no se construye.
       - name: Traer el navegador
         run: npx playwright install chromium --with-deps
+      # La foto del ticket se achica a 1600 de lado antes de subir (batería y
+      # datos móviles, 29-sep-2026). Se mide con una foto fabricada en un
+      # lienzo, sin API: sólo necesita el navegador.
+      - name: La foto de supply101 se achica antes de subir
+        run: node supply101/pruebas/la-foto-se-achica.mjs
       - name: Con un navegador, contra staging
         id: navegador
         continue-on-error: true
