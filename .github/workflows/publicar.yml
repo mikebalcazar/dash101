@@ -95,6 +95,12 @@ jobs:
       - name: El «atrás» del navegador de supply101
         run: node supply101/pruebas/el-atras.mjs
 
+      # El alta de proveedor desde «Pedir» (29-sep-2026): lo que manda a la
+      # API, que el nuevo quede escogido, y que un rechazo señale el campo.
+      # Con la API fingida, así que tampoco necesita red.
+      - name: El alta de proveedor de supply101
+        run: node supply101/pruebas/el-proveedor-nuevo.mjs
+
       # ── staging ──────────────────────────────────────────────────────────
       # La empresa se decide al construir (lib/fuente.ts), así que hay que
       # construir una vez por entorno: el nombre queda dentro del paquete.

@@ -108,6 +108,55 @@
       <label for="proveedor" id="proveedor-l">A quién se le compra</label>
       <select id="proveedor"></select>
       <input id="proveedor-nuevo" placeholder="Nombre del proveedor" style="margin-top:8px">
+      <button type="button" class="liso" id="b-alta-proveedor" style="margin-top:6px">＋ Dar de alta un proveedor nuevo</button>
+
+      <!-- Alta de proveedor (Mike, 29-sep-2026): nombre, RFC, cuenta (CLABE,
+           banco, beneficiario), contacto y ubicación de Google Maps. Vive
+           dentro de «Pedir» para no salir del formulario a medias. -->
+      <div id="alta-proveedor" class="tarjeta oculto" style="margin-top:10px">
+        <p class="sub" style="margin:0"><b>Proveedor nuevo.</b> Sólo el nombre es obligatorio; lo demás sirve para pagarle y encontrarlo.</p>
+        <label for="pv-nombre" style="margin-top:8px">Nombre</label>
+        <input id="pv-nombre" placeholder="Maderas del Sur" autocomplete="organization">
+        <label for="pv-rfc">RFC</label>
+        <input id="pv-rfc" placeholder="MDS010101AB1" autocapitalize="characters" style="text-transform:uppercase">
+        <div class="fila">
+          <div>
+            <label for="pv-correo">Correo de contacto</label>
+            <input id="pv-correo" type="email" inputmode="email" placeholder="ventas@maderas.mx">
+          </div>
+          <div>
+            <label for="pv-telefono">Teléfono de contacto</label>
+            <input id="pv-telefono" type="tel" inputmode="tel" placeholder="55 1234 5678">
+          </div>
+        </div>
+        <label for="pv-clabe">CLABE <span class="pista">18 dígitos; se revisa que cuadre.</span></label>
+        <input id="pv-clabe" inputmode="numeric" maxlength="24" placeholder="012 180 00123456789 0">
+        <div class="fila">
+          <div>
+            <label for="pv-banco">Banco</label>
+            <input id="pv-banco" placeholder="BBVA">
+          </div>
+          <div>
+            <label for="pv-beneficiario">Beneficiario</label>
+            <input id="pv-beneficiario" placeholder="A nombre de quién está la cuenta">
+          </div>
+        </div>
+        <label for="pv-direccion">Dirección</label>
+        <input id="pv-direccion" placeholder="Calle, número, colonia, ciudad">
+        <label for="pv-maps">Ubicación en Google Maps
+          <span class="pista">Pega la liga que da «Compartir» en Google Maps, o toma la de donde estás parado.</span>
+        </label>
+        <div class="fila">
+          <input id="pv-maps" inputmode="url" placeholder="https://maps.app.goo.gl/…">
+          <button type="button" class="b claro" id="pv-aqui" style="flex:0 0 auto;margin-top:0">📍 Aquí</button>
+        </div>
+        <a id="pv-maps-ver" class="liga oculto" target="_blank" rel="noopener" href="#">Abrir en Google Maps ↗</a>
+        <p id="err-proveedor" class="aviso mal oculto"></p>
+        <div class="fila" style="margin-top:12px">
+          <button type="button" class="b" id="pv-guardar">Guardar el proveedor</button>
+          <button type="button" class="b claro" id="pv-cancelar" style="margin-top:0">Cancelar</button>
+        </div>
+      </div>
 
       <label for="proyecto">Para qué proyecto
         <span class="pista">Si no es de ninguno, déjalo en gasto general.</span>

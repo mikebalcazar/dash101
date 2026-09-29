@@ -133,3 +133,7 @@ ol.historia small { color: var(--tinta-2); display: block; }
 .opcion[aria-checked="true"] { background: var(--tinta); color: #fff; }
 .opcion:disabled { opacity: .4; }
 button.b.claro { background: var(--sup); color: var(--tinta); border: 1px solid var(--linea); margin-top: 8px; }
+
+/* alta de proveedor (29-sep-2026) */
+.campo-mal { border-color: var(--mal) !important; outline: 2px solid var(--mal-suave); }
+a.liga { display: inline-block; margin-top: 6px; font-size: 13px; color: var(--marca); }
