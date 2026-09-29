@@ -9,6 +9,7 @@
     "lint": "next lint",
     "prueba": "vitest run",
     "tipos": "tsc --noEmit",
+    "peso": "node scripts/peso-arranque.mjs",
     "worker:build": "opennextjs-cloudflare build",
     "worker:previo": "opennextjs-cloudflare preview",
     "tipos:worker": "tsc -p tsconfig.worker.json --noEmit",
