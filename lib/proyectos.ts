@@ -50,6 +50,9 @@ export interface ItemProyectoInput {
   cantidad?: number;
   fecha_entrega?: Date | null;
   quell_id?: string | null;
+  /** La partida (pestaña) en la que va. Sin mandarla no se toca; vacía es
+   *  «sin partida». Mike, 29-sep: pestañas «tipo los libros de Excel». */
+  partida?: string;
 }
 
 function nuevoId(): string {

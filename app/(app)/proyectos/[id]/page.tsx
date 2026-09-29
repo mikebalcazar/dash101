@@ -53,6 +53,8 @@ interface ItemForm {
    *  porque `precio_venta` es la suma de los importes de las líneas. */
   monto: string;
   fecha_entrega: string; // yyyy-mm-dd | ""
+  /** La partida (pestaña) en la que va. Vacía es «sin partida». */
+  partida: string;
 }
 
 /** El importe de la línea a partir de lo que se capturó. Se redondea al
@@ -134,6 +136,7 @@ export default function ProyectoDetallePage() {
             cantidad: String(cant),
             unitario: (Math.round((pr.monto / cant) * 100) / 100).toFixed(2),
             monto: String(pr.monto),
+            partida: pr.partida ?? "",
             fecha_entrega: tsToInput(pr.fecha_entrega),
           };
         })
@@ -190,6 +193,7 @@ export default function ProyectoDetallePage() {
             cantidad: Math.trunc(parseFloat(pr.cantidad) || 1) || 1,
             monto: parseFloat(pr.monto) || 0,
             fecha_entrega: pr.fecha_entrega ? new Date(pr.fecha_entrega + "T12:00:00") : null,
+            partida: pr.partida.trim(),
           })),
         partidas: partidasValidas.map((p) => ({
           proveedor_id: p.proveedor_id,
@@ -386,7 +390,14 @@ export default function ProyectoDetallePage() {
           <ItemsDelProyecto
             proyecto={p}
             alCambiar={() => { void loadProyecto(); }}
-            alEditarLista={() => setEditMode("items")}
+            alEditarLista={(partida) => {
+              /* Desde una pestaña, «+ Ítem en esta partida»: se abre la
+               * lista con un renglón nuevo ya puesto en esa partida. */
+              if (partida !== undefined) {
+                setItemsEdit((prev) => [...prev, { id: "", nombre: "", descripcion: "", cantidad: "1", unitario: "", monto: "", fecha_entrega: "", partida }]);
+              }
+              setEditMode("items");
+            }}
           />
 
           {/* Lo acordado con cada proveedor. Se llamaba «Partidas de
@@ -576,8 +587,10 @@ function ProyectoEditForm(props: EditFormProps) {
   const addItem = () =>
     props.setItems((prev) => [
       ...prev,
-      { id: "", nombre: "", descripcion: "", cantidad: "1", unitario: "", monto: "", fecha_entrega: "" },
+      { id: "", nombre: "", descripcion: "", cantidad: "1", unitario: "", monto: "", fecha_entrega: "", partida: "" },
     ]);
+  /** Las partidas que ya existen en la lista, para proponerlas al teclear. */
+  const partidasDeLaLista = Array.from(new Set(props.items.map((p) => p.partida.trim()).filter(Boolean)));
   /** Tocar la cantidad o el precio por pieza recalcula el importe en el
    *  momento: si se guardara con el importe viejo, el precio de venta diría
    *  una cosa y la pantalla otra. */
@@ -729,6 +742,9 @@ function ProyectoEditForm(props: EditFormProps) {
         <p className="text-[11px] text-ink-muted mb-2">
           Lo que el cliente ve en su estado de cuenta. Cada ingreso se asigna a un ítem.
         </p>
+        <datalist id="partidas-de-la-lista">
+          {partidasDeLaLista.map((pa) => <option key={pa} value={pa} />)}
+        </datalist>
         {props.items.length === 0 ? (
           <div className="bg-cream/60 rounded-xl p-4 text-center text-xs text-ink-muted">
             Sin ítems.
@@ -785,6 +801,18 @@ function ProyectoEditForm(props: EditFormProps) {
                     value={pr.descripcion}
                     onChange={(e) => updateItem(i, { descripcion: e.target.value })}
                     className="flex-1 min-w-0 bg-bg border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
+                  />
+                  {/* La partida (pestaña) del ítem. Texto libre con las que
+                    * ya hay como propuesta: escribir «Cocina» crea la pestaña
+                    * si no existía. */}
+                  <input
+                    type="text"
+                    list="partidas-de-la-lista"
+                    aria-label="Partida"
+                    placeholder="Partida (pestaña)"
+                    value={pr.partida}
+                    onChange={(e) => updateItem(i, { partida: e.target.value })}
+                    className="w-36 bg-bg border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
                   />
                   <label className="text-[10px] text-ink-muted whitespace-nowrap">Entrega</label>
                   <input

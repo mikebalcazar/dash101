@@ -261,3 +261,49 @@ describe("el tope de 500 no puede esconder ítems (lo de HOLCIM)", () => {
     expect(d.precio_venta).toBe(60);
   });
 });
+
+describe("la partida (pestaña) del ítem viaja al crear y al editar (29-sep)", () => {
+  /* Mike, 29-sep: «dividir por partidas (…) pestañas, tipo los libros de
+   * Excel». Hasta hoy la pantalla de la lista no conocía la partida: la
+   * quitaba al guardar. Ahora viaja si se manda, y si no se manda no se toca.
+   * La regla del «no se toca» importa: cualquier pantalla vieja que guarde
+   * la lista sin partida borraría las pestañas de todo el proyecto. */
+  let proyecto = "";
+
+  it("un ítem nuevo nace en la partida que se le dijo", async () => {
+    proyecto = await createProyecto(uid, {
+      nombre: "Casa con partidas", cliente_id: ids.cliente, cliente_nombre: "Cliente Uno",
+      negocio_id: ids.negocio, negocio_nombre: "Taller",
+      precio_venta: 0, estado: "activo", fecha_inicio: new Date(2026, 8, 1), partidas: [],
+      items: [{ nombre: "Barra", monto: 100, partida: "Cocina" }, { nombre: "Puerta", monto: 50 }],
+    });
+    const p = (await getProyecto(proyecto))!;
+    const barra = p.items!.find((i) => i.nombre === "Barra")!;
+    const puerta = p.items!.find((i) => i.nombre === "Puerta")!;
+    expect(barra.partida).toBe("Cocina");
+    expect(puerta.partida ?? "", "sin decir nada, sin partida").toBe("");
+  });
+
+  it("guardar la lista SIN mandar la partida no la borra", async () => {
+    const antes = (await getProyecto(proyecto))!;
+    await updateProyecto(proyecto, {
+      items: antes.items!.map((i) => ({ id: i.id, nombre: i.nombre, monto: i.monto })),
+    });
+    const p = (await getProyecto(proyecto))!;
+    expect(p.items!.find((i) => i.nombre === "Barra")!.partida).toBe("Cocina");
+  });
+
+  it("y mandarla la cambia, o la quita con vacío", async () => {
+    const antes = (await getProyecto(proyecto))!;
+    await updateProyecto(proyecto, {
+      items: antes.items!.map((i) => ({ id: i.id, nombre: i.nombre, monto: i.monto, partida: i.nombre === "Barra" ? "Baño" : "Recámaras" })),
+    });
+    let p = (await getProyecto(proyecto))!;
+    expect(p.items!.map((i) => [i.nombre, i.partida]).sort()).toEqual([["Barra", "Baño"], ["Puerta", "Recámaras"]]);
+    await updateProyecto(proyecto, {
+      items: p.items!.map((i) => ({ id: i.id, nombre: i.nombre, monto: i.monto, partida: "" })),
+    });
+    p = (await getProyecto(proyecto))!;
+    expect(p.items!.every((i) => (i.partida ?? "") === "")).toBe(true);
+  });
+});

@@ -1151,6 +1151,94 @@ test('el archivo de la factura: se escoge y se ve antes de guardar', async () =>
   await ctx.close();
 });
 
+/* ═══════════════ 6b · las partidas como pestañas de un libro ═══════════════
+ *
+ * Mike, 29-sep: «dividir por partidas (grupos de cotizaciones) los ítems. Ir
+ * poniendo nuevos grupos de ítems que se van autorizando (…) pestañas, tipo
+ * los libros de Excel. Como si fueran folders.»
+ *
+ * Las pestañas existían desde el 20-sep pero sólo salían con más de una
+ * partida, y como todo caía en «Sin partida», nadie las veía. Se camina lo
+ * que él pidió: la barra a la vista, «+» para abrir una pestaña, mover un
+ * ítem a ella, renombrarla, y capturar un ítem nuevo directo en ella. */
+
+test('las partidas son pestañas: se crea una con «+», se mueve un ítem, se renombra y se captura en ella', async () => {
+  const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  const { neg } = await negocioDePruebas(pag);
+  await elegirNegocio(pag, neg.id);
+  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes?negocio_id=${neg.id}`)).find((c) => c.nombre === CLIENTE_PRUEBAS);
+  if (!cliente) cliente = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS, negocio_id: neg.id } });
+  const proyecto = await api(pag, `/orgs/${ORG}/proyectos`, {
+    method: 'POST',
+    body: { nombre: `Partidas ${Date.now().toString(36).slice(-5)}`, cliente_id: cliente.id, negocio_id: neg.id, estado: 'activo' },
+  });
+  const ids = {};
+  for (const [nombre, monto] of [['Cocina', 100_00], ['Clóset', 200_00], ['Isla', 50_00]]) {
+    const it = await api(pag, `/orgs/${ORG}/items`, {
+      method: 'POST',
+      body: { nombre, monto, cantidad: 1, estado: 'vendido', proyecto_id: proyecto.id, cliente_id: cliente.id, negocio_id: neg.id },
+    });
+    ids[nombre] = it.id;
+  }
+  const partidaDe = async (nombre) => (filas(await api(pag, `/orgs/${ORG}/items?proyecto_id=${proyecto.id}`)).find((i) => i.nombre === nombre)?.partida ?? '');
+
+  await pag.goto(`${URL}/proyectos/${proyecto.id}`, { waitUntil: 'load' });
+  await pag.getByText('Ítems del proyecto').first().waitFor({ timeout: 20000 });
+
+  // 1 · La barra está a la vista aunque todo esté en «Sin partida».
+  const barra = pag.getByRole('tablist', { name: 'Partidas' });
+  await barra.waitFor({ timeout: 15000 });
+  assert.ok(await pag.getByRole('tab', { name: /^Todas \(3\)/ }).isVisible(), 'con «Todas» y sus tres ítems');
+
+  // 2 · «+» abre una pestaña nueva, vacía, y la deja seleccionada.
+  await pag.locator('[data-nueva-partida]').click();
+  await pag.getByLabel('Nombre de la partida nueva').fill('Etapa 2');
+  await pag.locator('[data-crear-partida]').click();
+  const etapa2 = pag.getByRole('tab', { name: /^Etapa 2 \(0\)/ });
+  await etapa2.waitFor({ timeout: 5000 });
+  assert.equal(await etapa2.getAttribute('aria-selected'), 'true', 'la pestaña nueva queda abierta');
+  assert.ok(await pag.locator('[data-partida-abierta="Etapa 2"]').isVisible(), 'con sus botones de renombrar y de ítem nuevo');
+
+  // 3 · Mover un ítem a la pestaña, desde su «+».
+  await pag.getByRole('tab', { name: /^Todas/ }).click();
+  await pag.getByRole('button', { name: 'Ver el detalle de Isla' }).click();
+  await pag.locator(`[data-partida-de="${ids.Isla}"]`).selectOption('Etapa 2');
+  await pag.getByRole('tab', { name: /^Etapa 2 \(1\)/ }).waitFor({ timeout: 15000 });
+  assert.equal(await partidaDe('Isla'), 'Etapa 2', 'quedó GUARDADO en el ítem');
+  assert.equal(await partidaDe('Cocina'), '', 'y los demás no se movieron');
+
+  // 4 · Renombrarla: sus ítems cambian de partida.
+  await pag.getByRole('tab', { name: /^Etapa 2 \(1\)/ }).click();
+  await pag.locator('[data-renombrar-partida]').click();
+  await pag.getByLabel('Nombre nuevo de la partida').fill('Etapa dos');
+  await pag.locator('[data-guardar-nombre]').click();
+  await pag.getByRole('tab', { name: /^Etapa dos \(1\)/ }).waitFor({ timeout: 15000 });
+  assert.equal(await partidaDe('Isla'), 'Etapa dos', 'el nombre nuevo llegó al ítem');
+  assert.equal(await pag.getByRole('tab', { name: /^Etapa 2/ }).count(), 0, 'y la vieja ya no está');
+
+  // 5 · Un ítem nuevo directo en la pestaña: el editor abre con el renglón ya
+  //     en «Etapa dos», y al guardar el ítem nace ahí.
+  await pag.locator('[data-nuevo-item-en-partida]').click();
+  const renglones = pag.locator('input[placeholder^="Ítem ("]');
+  await renglones.first().waitFor({ timeout: 15000 });
+  assert.equal(await renglones.count(), 4, 'los tres que hay más el nuevo');
+  const partidas = pag.getByLabel('Partida', { exact: true });
+  assert.equal(await partidas.nth(3).inputValue(), 'Etapa dos', 'el renglón nuevo ya trae la partida');
+  await renglones.nth(3).fill('Zoclo');
+  await pag.getByLabel('Precio por pieza').nth(3).fill('10');
+  await pag.getByRole('button', { name: /Guardar cambios/ }).click();
+  await pag.getByRole('button', { name: /Editar el proyecto/ }).first().waitFor({ timeout: 30000 });
+  await pag.waitForTimeout(1000);
+  assert.equal(await partidaDe('Zoclo'), 'Etapa dos', 'nació en su pestaña');
+  assert.equal(await partidaDe('Isla'), 'Etapa dos', 'y guardar la lista no le borró la partida a nadie');
+  await pag.getByRole('tab', { name: /^Etapa dos \(2\)/ }).waitFor({ timeout: 15000 });
+
+  console.log(`    partidas: Etapa 2 → Etapa dos, con Isla movida y Zoclo capturado en ella`);
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
 /* ═══════════════ 7 · el otro sentido de la puerta, al final ═══════════════ */
 
 test('un código equivocado NO entra', async () => {

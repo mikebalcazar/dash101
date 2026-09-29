@@ -252,6 +252,7 @@ function filaItem(p: ItemProyectoInput, proyecto: { id: string; negocio_id: stri
     nombre: p.nombre, descripcion: oNulo(p.descripcion), monto: A.aCentavos(p.monto),
     cantidad: cantidadDe(p), moneda: 'MXN', estado: 'vendido',
     tipo: 'mueble', fecha_entrega: dia(p.fecha_entrega),
+    ...(p.partida !== undefined ? { partida: p.partida.trim().slice(0, 80) } : {}),
   };
 }
 
@@ -354,6 +355,9 @@ export async function updateProyecto(
       const campos = {
         nombre: p.nombre, descripcion: oNulo(p.descripcion), monto: A.aCentavos(p.monto),
         cantidad: cantidadDe(p), fecha_entrega: dia(p.fecha_entrega),
+        // La partida sólo viaja si la pantalla la mandó: una pantalla que no
+        // la conoce no debe borrarla al guardar la lista.
+        ...(p.partida !== undefined ? { partida: p.partida.trim().slice(0, 80) } : {}),
       };
       if (!p.id) { await crear('items', filaItem(p, donde)); continue; }
       quedan.add(p.id);
