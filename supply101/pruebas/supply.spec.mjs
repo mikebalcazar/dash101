@@ -130,8 +130,11 @@ test('se pide una compra desde el teléfono, con foto y con su desglose', async 
   folio = dice.match(/OC-\d+/)[0];
   // La foto se sube DESPUÉS de crear la orden —hasta entonces no hay id del
   // que colgarla—, así que se espera a que aparezca en vez de contarla ya.
-  await pag.locator('img[alt="cotizacion.png"]').waitFor({ timeout: 15000 });
-  assert.equal(await pag.locator('img[alt="cotizacion.png"]').count(), 1, 'la cotización se ve');
+  // Y sube achicada (publico/imagen.js, 29-sep): la app la convierte a JPEG
+  // antes de mandarla, así que el archivo que cuelga se llama .jpg aunque
+  // se haya escogido un .png.
+  await pag.locator('img[alt="cotizacion.jpg"]').waitFor({ timeout: 15000 });
+  assert.equal(await pag.locator('img[alt="cotizacion.jpg"]').count(), 1, 'la cotización se ve, ya achicada');
 });
 
 test('cuando la pagan, la app enseña el comprobante', async () => {
