@@ -314,6 +314,14 @@ export async function propagarClienteUid(
   return { proyectos: proySnap.size, movimientos: nMovs };
 }
 
+/** Juntar dos proyectos en uno: `queda` se queda con todo, `seVa` desaparece.
+ *  Con `seco` sólo dice qué se movería. Devuelve las cuentas por tabla para
+ *  poder decírselo a quien lo hizo: es algo que no se deshace. */
+export async function fusionarProyectos(queda: string, seVa: string, seco = false): Promise<escribir.FusionDeProyectos> {
+  if (fuente() !== 'api') throw new Error('Fusionar proyectos necesita la API.');
+  return escribir.fusionarProyectos(queda, seVa, seco);
+}
+
 export async function deleteProyecto(id: string): Promise<void> {
   if (fuente() === 'api') return escribir.deleteProyecto(id);
   await deleteDoc(doc(db, "proyectos", id));
