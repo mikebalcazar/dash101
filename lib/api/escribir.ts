@@ -182,6 +182,28 @@ export async function fusionarClientes(queda: string, seVa: string): Promise<{ m
   }
 }
 
+/** Juntar dos proyectos en uno (contrato 0.52.0). `queda` se queda con todo y
+ *  `seVa` desaparece: ítems (con su partida), partidas, movimientos, órdenes,
+ *  cotizaciones, archivos y su obra de quell si el que se queda no tenía.
+ *  Con `seco` sólo cuenta. No se deshace, y la API sólo se lo deja hacer al
+ *  dueño y a la administración. */
+export type FusionDeProyectos = {
+  seco: boolean;
+  se_va: { id: string; nombre: string };
+  movidos: Record<string, number>;
+  obra_suelta: boolean;
+};
+export async function fusionarProyectos(queda: string, seVa: string, seco = false): Promise<FusionDeProyectos> {
+  try {
+    return await pedir<FusionDeProyectos>(`${ruta('proyectos', queda)}/fusionar`, {
+      method: 'POST',
+      body: { se_va_id: seVa, seco },
+    });
+  } catch (e) {
+    return enClaro(e, 'proyectos');
+  }
+}
+
 export async function updateCliente(id: string, d: Partial<Omit<ClienteInput, 'negocio_id'>>): Promise<void> {
   await cambiar('clientes', id, {
     nombre: d.nombre,

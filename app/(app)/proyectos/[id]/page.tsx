@@ -19,6 +19,7 @@ import { formatDateShort } from "@/lib/format";
 import { ObraDelProyecto } from "@/components/obra-del-proyecto";
 import { desglose } from "@/lib/estado-proyecto";
 import { ItemsDelProyecto } from "@/components/items-del-proyecto";
+import { FusionarProyecto } from "@/components/fusionar-proyecto";
 
 const ESTADO_STYLE: Record<string, string> = {
   planeando: "bg-cream text-ink-muted",
@@ -451,6 +452,10 @@ export default function ProyectoDetallePage() {
               </div>
             )}
           </div>
+
+          {/* ¿Está repetido? Juntar dos proyectos que son el mismo
+              (contrato 0.52.0). Mike, 29-sep: «quiero fusionar proyectos». */}
+          <FusionarProyecto proyecto={p} negocioId={p.negocio_id} onFusionado={() => { void loadProyecto(); }} />
 
           {/* Zona peligrosa */}
           <div className="mt-8 pt-6 border-t border-mauve-50">
