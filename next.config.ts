@@ -57,6 +57,19 @@ const FIREBASE_NAVEGADOR = {
   "@firebase/firestore": "@firebase/firestore/dist/index.esm2017.js",
 };
 
+/* Firebase, fuera del paquete cuando la fuente es la API (29-sep-2026).
+ *
+ * Con `FUENTE=api` —lo publicado desde el 16-sep— nadie le habla a Firebase,
+ * pero los módulos de `lib/` conservan su rama `firestore` y lo importan
+ * arriba del archivo, así que webpack metía el SDK entero (Auth y Firestore,
+ * unos 385 KB de los ~775 KB del arranque) en TODAS las pantallas: un
+ * teléfono lo bajaba, lo leía y lo compilaba para no usarlo. Se decide aquí,
+ * al construir, igual que la fuente: los tres paquetes se apuntan a
+ * `lib/sin-firebase.ts`, que tiene los mismos nombres, pesa nada y dice por
+ * qué no si alguien lo llama. Con `FUENTE=firestore` no se toca nada. */
+const SIN_FIREBASE = ["firebase/app", "firebase/auth", "firebase/firestore"];
+export const sinFirebase = () => process.env.NEXT_PUBLIC_FUENTE !== "firestore";
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   async rewrites() {
@@ -64,11 +77,14 @@ const nextConfig: NextConfig = {
     return [{ source: "/s101/:ruta*", destination: `${API_ORIGEN}/:ruta*` }];
   },
   webpack(config, { isServer }) {
+    config.resolve.alias = { ...config.resolve.alias };
     if (EN_WORKER && isServer) {
-      config.resolve.alias = { ...config.resolve.alias };
       for (const [de, a] of Object.entries(FIREBASE_NAVEGADOR)) {
         config.resolve.alias[de] = path.resolve(process.cwd(), "node_modules", a);
       }
+    }
+    if (sinFirebase()) {
+      for (const de of SIN_FIREBASE) config.resolve.alias[de] = path.resolve(process.cwd(), "lib/sin-firebase.ts");
     }
     return config;
   },

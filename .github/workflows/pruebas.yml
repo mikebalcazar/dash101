@@ -39,3 +39,9 @@ jobs:
         run: npx vitest run --reporter=verbose
       - name: Que Next construya
         run: npm run build
+      # Lo que viaja en el arranque, en todas las pantallas. El tope está
+      # puesto justo arriba de lo que pesa hoy sin Firebase (363 KB): si
+      # alguien vuelve a meter el SDK —o cualquier cosa gorda— al layout, esto
+      # lo dice antes de publicar (29-sep-2026, batería en móvil).
+      - name: El arranque no engorda
+        run: node scripts/peso-arranque.mjs 450
