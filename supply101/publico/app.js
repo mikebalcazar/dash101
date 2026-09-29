@@ -399,6 +399,8 @@ async function verPedir(orden, tipo = 'compra') {
   $('archivo').value = '';
   tocado = false;
   refrescarIva();
+  limpiarAltaProveedor();
+  abrirAltaProveedor(false);
 
   // Los pools: proveedores y proyectos. Si la API dice que no —una cuenta de
   // nómina sin permiso para verlos—, se sigue sin ellos: el nombre del
@@ -427,6 +429,94 @@ let tocado = false;  // ¿alguien editó el desglose a mano?
 
 const refrescarProveedor = () => ver('proveedor-nuevo', !$('proveedor').value);
 $('proveedor').onchange = refrescarProveedor;
+
+/* ─────────────── alta de proveedor ───────────────
+ * Mike, 29-sep-2026: «poner la opción de dar de alta a un nuevo proveedor, y
+ * dentro de los datos deben poder agregar: nombre, RFC, número de cuenta
+ * (CLABE y banco y beneficiario), email de contacto, teléfono de contacto,
+ * ubicación (si se puede guardar una ubicación de Google Maps)».
+ * Se guarda por el CRUD genérico de la API (POST /orgs/:o/proveedores); la
+ * API revisa CLABE, RFC y correo y contesta 400 con `errores` por campo. La
+ * ubicación es la liga que Google Maps comparte, o la de donde está parado
+ * quien lo da de alta («📍 Aquí» → https://www.google.com/maps?q=lat,lng). */
+const PV_CAMPOS = ['nombre', 'rfc', 'correo', 'telefono', 'clabe', 'banco', 'beneficiario', 'direccion', 'maps'];
+function abrirAltaProveedor(abrir) {
+  ver('alta-proveedor', abrir);
+  ver('b-alta-proveedor', !abrir);
+  $('err-proveedor').classList.add('oculto');
+  if (abrir) {
+    // Si ya había escrito un nombre en «Otro», se aprovecha.
+    if (!$('pv-nombre').value && !$('proveedor').value) $('pv-nombre').value = $('proveedor-nuevo').value.trim();
+    refrescarMapsVer();
+    $('pv-nombre').focus();
+  }
+}
+function limpiarAltaProveedor() {
+  for (const c of PV_CAMPOS) $('pv-' + c).value = '';
+  for (const el of document.querySelectorAll('#alta-proveedor .campo-mal')) el.classList.remove('campo-mal');
+  refrescarMapsVer();
+}
+function refrescarMapsVer() {
+  const u = $('pv-maps').value.trim();
+  const a = $('pv-maps-ver');
+  a.href = u || '#';
+  ver('pv-maps-ver', /^https:\/\//i.test(u));
+}
+$('pv-maps').oninput = refrescarMapsVer;
+$('b-alta-proveedor').onclick = () => abrirAltaProveedor(true);
+$('pv-cancelar').onclick = () => abrirAltaProveedor(false);
+$('pv-aqui').onclick = () => {
+  if (!navigator.geolocation) return decir('err-proveedor', 'Este navegador no da la ubicación. Pega la liga de Google Maps.');
+  const b = $('pv-aqui'); b.disabled = true; b.textContent = 'Buscando…';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const { latitude, longitude } = pos.coords;
+      $('pv-maps').value = `https://www.google.com/maps?q=${latitude.toFixed(6)},${longitude.toFixed(6)}`;
+      refrescarMapsVer();
+      b.disabled = false; b.textContent = '📍 Aquí';
+    },
+    () => {
+      decir('err-proveedor', 'No se pudo tomar la ubicación. Pega la liga de Google Maps.');
+      b.disabled = false; b.textContent = '📍 Aquí';
+    },
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
+  );
+};
+$('pv-guardar').onclick = async () => {
+  $('err-proveedor').classList.add('oculto');
+  for (const el of document.querySelectorAll('#alta-proveedor .campo-mal')) el.classList.remove('campo-mal');
+  const nombre = $('pv-nombre').value.trim();
+  if (!nombre) { $('pv-nombre').classList.add('campo-mal'); $('pv-nombre').focus(); return decir('err-proveedor', 'Escribe el nombre del proveedor.'); }
+  const cuerpo = {
+    nombre,
+    rfc: $('pv-rfc').value.trim().toUpperCase(),
+    correo: $('pv-correo').value.trim(),
+    telefono: $('pv-telefono').value.trim(),
+    clabe: $('pv-clabe').value.replace(/[\s-]/g, ''),
+    banco: $('pv-banco').value.trim(),
+    beneficiario: $('pv-beneficiario').value.trim(),
+    direccion: $('pv-direccion').value.trim(),
+    maps_url: $('pv-maps').value.trim(),
+  };
+  const b = $('pv-guardar'); const antes = b.textContent; b.disabled = true; b.textContent = 'Guardando…';
+  try {
+    const p = await pedir(`/orgs/${est.org.id}/proveedores`, { method: 'POST', body: cuerpo });
+    est.proveedores = [...est.proveedores, p].sort((x, y) => (x.nombre_norm || x.nombre).localeCompare(y.nombre_norm || y.nombre));
+    $('proveedor').innerHTML = `<option value="">Otro (lo escribo)</option>` +
+      est.proveedores.map((q) => `<option value="${q.id}">${escapar(q.nombre)}</option>`).join('');
+    $('proveedor').value = p.id;
+    $('proveedor-nuevo').value = '';
+    refrescarProveedor();
+    limpiarAltaProveedor();
+    abrirAltaProveedor(false);
+    decir('err-pedir', `Proveedor «${p.nombre}» dado de alta. Ya está escogido para esta compra.`, 'bien');
+  } catch (e) {
+    const errores = (e && e.detalle && e.detalle.errores) || {};
+    const campos = Object.keys(errores);
+    for (const k of campos) { const el = $('pv-' + (k === 'maps_url' ? 'maps' : k)); if (el) el.classList.add('campo-mal'); }
+    decir('err-proveedor', campos.length ? campos.map((k) => errores[k]).join(' ') : (e && e.error === 'sin_permiso' ? 'Tu usuario no puede dar de alta proveedores.' : 'No se pudo guardar el proveedor. Intenta otra vez.'));
+  } finally { b.disabled = false; b.textContent = antes; }
+};
 
 function refrescarIva() {
   const con = $('con-factura').checked;
