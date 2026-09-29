@@ -86,11 +86,28 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
    *  pantalla enfrente: «el botón de editar de arriba debería ser para la
    *  info del proyecto. Abajo en la sección de la lista de ítems debería
    *  haber otro botón de editar para editar la lista». Va aquí, junto a
-   *  acomodar y agrupar, que es donde se trabaja la lista. */
-  alEditarLista?: () => void;
+   *  acomodar y agrupar, que es donde se trabaja la lista.
+   *
+   *  Con `partida` (29-sep), se abre con un renglón nuevo ya puesto en esa
+   *  pestaña: «+ Ítem en esta partida». */
+  alEditarLista?: (partida?: string) => void;
 }) {
   const items: ItemProyecto[] = useMemo(() => proyecto.items ?? [], [proyecto.items]);
   const [pestana, setPestana] = useState<string>("");
+  /* LAS PESTAÑAS COMO LIBRO DE EXCEL (Mike, 29-sep): «dividir por partidas
+   * (grupos de cotizaciones) los ítems (…) ir poniendo nuevos grupos de
+   * ítems que se van autorizando (…) pestañas, tipo los libros de Excel».
+   *
+   * Una partida es texto en cada ítem, así que una pestaña VACÍA no existe
+   * en la base: vive aquí, en `nuevas`, hasta que se le pone el primer ítem
+   * (moviéndolo, o creándolo en ella). Cada cotización aprobada abre la
+   * suya sola —la API pone la partida con su nombre—; aquí se crean a mano,
+   * se renombran y se mueven ítems entre ellas. */
+  const [nuevas, setNuevas] = useState<string[]>([]);
+  const [creando, setCreando] = useState(false);
+  const [nombreNueva, setNombreNueva] = useState("");
+  const [renombrando, setRenombrando] = useState(false);
+  const [nombreNuevo, setNombreNuevo] = useState("");
   const [modo, setModo] = useState<"ver" | "acomodar" | "juntar">("ver");
   const [error, setError] = useState("");
   const [hecho, setHecho] = useState("");
@@ -210,14 +227,56 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
       .map(({ _i, ...f }) => { void _i; return f; });
   }, [items]);
 
-  /** Las pestañas: «Todas» y una por partida, en el orden en que salen. */
+  /** Las pestañas: «Todas» y una por partida, en el orden en que salen, más
+   *  las que se crearon aquí y todavía no tienen ítem. */
   const partidas = useMemo(() => {
     const vistas: string[] = [];
     for (const f of filas) if (!vistas.includes(f.partida)) vistas.push(f.partida);
+    for (const n of nuevas) if (!vistas.includes(n)) vistas.push(n);
     return vistas;
-  }, [filas]);
+  }, [filas, nuevas]);
+  /** Las partidas con nombre, para el desplegable de «mover a». */
+  const nombresDePartida = partidas.filter(Boolean);
 
   const visibles = pestana === "" ? filas : filas.filter((f) => f.partida === (pestana === SIN ? "" : pestana));
+  /** La pestaña abierta es una partida de verdad (no «Todas», ni «Sin
+   *  partida», ni las de fuera del alcance). */
+  const enPartida = pestana !== "" && pestana !== SIN && pestana !== NO_APROBADOS && pestana !== CANCELADOS;
+
+  const crearPartida = () => {
+    const nombre = nombreNueva.trim().slice(0, 80);
+    if (!nombre) return;
+    if (!partidas.includes(nombre)) setNuevas((p) => [...p, nombre]);
+    setPestana(nombre); setCreando(false); setNombreNueva(""); setHecho(""); setError("");
+  };
+
+  /** Mover ítems a otra partida: un solo envío (`acomodar`) y se vuelve a
+   *  leer el proyecto. Vacía es «sin partida». */
+  const moverDePartida = async (ids: string[], partida: string) => {
+    if (!ids.length) return;
+    setMoviendo(ids[0]); setError(""); setHecho("");
+    try {
+      await acomodar(proyecto.id!, ids.map((id) => ({ id, partida })));
+      setHecho(`${ids.length === 1 ? "Movido" : `${ids.length} movidos`} a «${partida || "Sin partida"}».`);
+      alCambiar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo mover.");
+    } finally {
+      setMoviendo("");
+    }
+  };
+
+  /** Renombrar la pestaña abierta: es mandar sus ítems con el nombre nuevo. */
+  const renombrarPartida = async () => {
+    const nuevo = nombreNuevo.trim().slice(0, 80);
+    if (!nuevo || nuevo === pestana) { setRenombrando(false); return; }
+    const suyos = filas.filter((f) => f.partida === pestana).map((f) => f.id);
+    setNuevas((p) => p.map((n) => (n === pestana ? nuevo : n)));
+    setRenombrando(false);
+    if (suyos.length) await moverDePartida(suyos, nuevo);
+    else setHecho(`La pestaña ahora se llama «${nuevo}».`);
+    setPestana(nuevo);
+  };
 
   /** La lista agrupada por producto, conservando el orden: un producto ocupa
    *  el lugar de su primera pieza.
@@ -261,7 +320,7 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
           {alEditarLista && (
             <button
               type="button"
-              onClick={alEditarLista}
+              onClick={() => alEditarLista()}
               className="mt-3 text-xs px-3 py-1.5 rounded-xl border border-black/10 bg-white text-ink-dim inline-flex items-center gap-1 hover:border-black/25"
             >
               <IconEdit size={13} /> Editar la lista
@@ -285,31 +344,124 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
         </span>
       </div>
 
-      {/* Las pestañas. Se enseñan siempre que haya más de una partida: con
-          una sola, una fila de pestañas es un adorno que ocupa alto. */}
-      {(partidas.length > 1 || hayFuera) && (
-        <div className="flex gap-1 overflow-x-auto pb-2 -mx-1 px-1" role="tablist" aria-label="Partidas">
-          {[{ v: "", t: `Todas (${filas.length})` },
-            ...partidas.map((pa) => ({
-              v: pa === "" ? SIN : pa,
-              t: `${pa === "" ? "Sin partida" : pa} (${filas.filter((f) => f.partida === pa).length})`,
-            })),
-            ...(fuera.no_aprobados.length ? [{ v: NO_APROBADOS, t: `No aprobados (${fuera.no_aprobados.length})` }] : []),
-            ...(fuera.cancelados.length ? [{ v: CANCELADOS, t: `Cancelados (${fuera.cancelados.length})` }] : []),
-          ].map((op) => (
-            <button
-              key={op.v}
-              type="button"
-              role="tab"
-              aria-selected={pestana === op.v}
-              onClick={() => setPestana(op.v)}
-              className={`whitespace-nowrap text-xs px-3 py-1.5 rounded-xl border ${
-                pestana === op.v ? "bg-ink text-cream border-ink" : "bg-white border-black/10 text-ink-dim"
-              }`}
-            >
-              {op.t}
+      {/* Las pestañas, siempre a la vista, como las hojas de un libro de
+          Excel (Mike, 29-sep). Hasta hoy sólo salían con más de una partida,
+          y como todo caía en «Sin partida», nadie las veía nunca. El «+» al
+          final abre una pestaña nueva. */}
+      <div className="flex gap-1 overflow-x-auto pb-2 -mx-1 px-1 items-center" role="tablist" aria-label="Partidas">
+        {[{ v: "", t: `Todas (${filas.length})` },
+          ...partidas.map((pa) => ({
+            v: pa === "" ? SIN : pa,
+            t: `${pa === "" ? "Sin partida" : pa} (${filas.filter((f) => f.partida === pa).length})`,
+          })),
+        ].map((op) => (
+          <button
+            key={op.v}
+            type="button"
+            role="tab"
+            aria-selected={pestana === op.v}
+            onClick={() => { setPestana(op.v); setRenombrando(false); }}
+            className={`whitespace-nowrap text-xs px-3 py-1.5 rounded-xl border ${
+              pestana === op.v ? "bg-ink text-cream border-ink" : "bg-white border-black/10 text-ink-dim"
+            }`}
+          >
+            {op.t}
+          </button>
+        ))}
+        {creando ? (
+          <form
+            className="flex gap-1 items-center"
+            onSubmit={(e) => { e.preventDefault(); crearPartida(); }}
+          >
+            <input
+              autoFocus
+              type="text"
+              aria-label="Nombre de la partida nueva"
+              placeholder="Nombre de la partida"
+              value={nombreNueva}
+              maxLength={80}
+              onChange={(e) => setNombreNueva(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Escape") { setCreando(false); setNombreNueva(""); } }}
+              className="w-40 bg-white border border-black/10 rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:border-ink/40"
+            />
+            <button type="submit" data-crear-partida className="text-xs px-2.5 py-1.5 rounded-xl bg-ink text-cream">Crear</button>
+            <button type="button" onClick={() => { setCreando(false); setNombreNueva(""); }} className="text-xs px-2 py-1.5 rounded-xl border border-black/10 bg-white text-ink-dim" aria-label="Cancelar">
+              <IconX size={12} />
             </button>
-          ))}
+          </form>
+        ) : (
+          <button
+            type="button"
+            data-nueva-partida
+            title="Nueva partida (pestaña)"
+            onClick={() => { setCreando(true); setNombreNueva(""); }}
+            className="whitespace-nowrap text-xs px-2.5 py-1.5 rounded-xl border border-dashed border-black/20 bg-white text-ink-dim inline-flex items-center gap-1"
+          >
+            <IconPlus size={12} /> Partida
+          </button>
+        )}
+        {[
+          ...(fuera.no_aprobados.length ? [{ v: NO_APROBADOS, t: `No aprobados (${fuera.no_aprobados.length})` }] : []),
+          ...(fuera.cancelados.length ? [{ v: CANCELADOS, t: `Cancelados (${fuera.cancelados.length})` }] : []),
+        ].map((op) => (
+          <button
+            key={op.v}
+            type="button"
+            role="tab"
+            aria-selected={pestana === op.v}
+            onClick={() => { setPestana(op.v); setRenombrando(false); }}
+            className={`whitespace-nowrap text-xs px-3 py-1.5 rounded-xl border ${
+              pestana === op.v ? "bg-ink text-cream border-ink" : "bg-white border-black/10 text-ink-dim"
+            }`}
+          >
+            {op.t}
+          </button>
+        ))}
+      </div>
+
+      {/* La pestaña abierta: renombrarla, y un ítem nuevo directo en ella. */}
+      {enPartida && modo === "ver" && (
+        <div className="flex gap-2 mb-2 flex-wrap items-center" data-partida-abierta={pestana}>
+          {renombrando ? (
+            <form className="flex gap-1 items-center" onSubmit={(e) => { e.preventDefault(); void renombrarPartida(); }}>
+              <input
+                autoFocus
+                type="text"
+                aria-label="Nombre nuevo de la partida"
+                value={nombreNuevo}
+                maxLength={80}
+                onChange={(e) => setNombreNuevo(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Escape") setRenombrando(false); }}
+                className="w-44 bg-white border border-black/10 rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:border-ink/40"
+              />
+              <button type="submit" data-guardar-nombre className="text-xs px-2.5 py-1.5 rounded-xl bg-ink text-cream">Guardar</button>
+              <button type="button" onClick={() => setRenombrando(false)} className="text-xs px-2 py-1.5 rounded-xl border border-black/10 bg-white text-ink-dim">Cancelar</button>
+            </form>
+          ) : (
+            <button
+              type="button"
+              data-renombrar-partida
+              onClick={() => { setNombreNuevo(pestana); setRenombrando(true); }}
+              className="text-xs px-2.5 py-1.5 rounded-xl border border-black/10 bg-white text-ink-dim inline-flex items-center gap-1"
+            >
+              <IconEdit size={13} /> Renombrar «{pestana}»
+            </button>
+          )}
+          {alEditarLista && (
+            <button
+              type="button"
+              data-nuevo-item-en-partida
+              onClick={() => alEditarLista(pestana)}
+              className="text-xs px-2.5 py-1.5 rounded-xl border border-black/10 bg-white text-ink-dim inline-flex items-center gap-1"
+            >
+              <IconPlus size={13} /> Ítem en esta partida
+            </button>
+          )}
+          {!filas.some((f) => f.partida === pestana) && (
+            <span className="text-[11px] text-ink-muted">
+              Pestaña vacía: mueve un ítem aquí desde su «+», o crea uno en ella. Si la dejas vacía, no se guarda.
+            </span>
+          )}
         </div>
       )}
 
@@ -317,7 +469,7 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
         {alEditarLista && (
           <button
             type="button"
-            onClick={alEditarLista}
+            onClick={() => alEditarLista()}
             className="text-xs px-2.5 py-1.5 rounded-xl border border-black/10 bg-white text-ink-dim inline-flex items-center gap-1"
           >
             <IconEdit size={13} /> Editar la lista
@@ -397,6 +549,8 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
                     alMover={mover}
                     alCambiarProducto={cambiarProducto}
                     alSeparar={separar}
+                    partidas={nombresDePartida}
+                    alMoverDePartida={moverDePartida}
                   />
                 ) : (
                   bloque.filas.map((pr) => (
@@ -409,6 +563,8 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
                       alMover={mover}
                       alCambiarProducto={cambiarProducto}
                       alSeparar={separar}
+                      partidas={nombresDePartida}
+                      alMoverDePartida={moverDePartida}
                     />
                   ))
                 ),
@@ -435,7 +591,7 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
  * puerta?»— se lee junto al nombre, no a dos dedos de distancia.
  */
 function FilaDeItem({
-  fila, opciones, pestana, moviendo, alMover, alCambiarProducto, alSeparar, sangrada = false,
+  fila, opciones, pestana, moviendo, alMover, alCambiarProducto, alSeparar, partidas, alMoverDePartida, sangrada = false,
 }: {
   fila: Fila;
   opciones: Opciones;
@@ -444,6 +600,9 @@ function FilaDeItem({
   alMover: (id: string, que: "aprobar" | "cancelar", motivo?: string) => void;
   alCambiarProducto: (id: string, escogido: string) => void;
   alSeparar: (que: { producto: string } | { item: string }) => void;
+  /** Las pestañas con nombre, para moverlo de una a otra. */
+  partidas: string[];
+  alMoverDePartida: (ids: string[], partida: string) => void;
   sangrada?: boolean;
 }) {
   const [abierta, setAbierta] = useState(false);
@@ -517,6 +676,17 @@ function FilaDeItem({
                 </div>
               </div>
               <div className="sm:col-span-3">
+                <p className="text-[10px] text-ink-muted uppercase tracking-wide mb-1">En qué partida (pestaña) va</p>
+                <SelectorDePartida
+                  valor={fila.partida}
+                  partidas={partidas}
+                  ocupado={moviendo === fila.id}
+                  etiqueta={`Partida de ${fila.nombre}`}
+                  marca={fila.id}
+                  alEscoger={(pa) => alMoverDePartida([fila.id], pa)}
+                />
+              </div>
+              <div className="sm:col-span-3">
                 <p className="text-[10px] text-ink-muted uppercase tracking-wide mb-1">De qué producto es</p>
                 <SelectorDeProducto
                   fila={fila}
@@ -559,7 +729,7 @@ function FilaDeItem({
  * propio dropdown, que es como se saca una del grupo.
  */
 function ProductoEnLaLista({
-  producto, piezas, abierto, alAbrir, opciones, pestana, moviendo, alMover, alCambiarProducto, alSeparar,
+  producto, piezas, abierto, alAbrir, opciones, pestana, moviendo, alMover, alCambiarProducto, alSeparar, partidas, alMoverDePartida,
 }: {
   producto: Producto;
   piezas: Fila[];
@@ -571,7 +741,12 @@ function ProductoEnLaLista({
   alMover: (id: string, que: "aprobar" | "cancelar", motivo?: string) => void;
   alCambiarProducto: (id: string, escogido: string) => void;
   alSeparar: (que: { producto: string } | { item: string }) => void;
+  partidas: string[];
+  alMoverDePartida: (ids: string[], partida: string) => void;
 }) {
+  /* Las piezas de un producto pueden estar en varias pestañas; el
+   * desplegable del renglón mueve TODAS las que se ven aquí de un golpe. */
+  const partidaComun = piezas.every((f) => f.partida === piezas[0]?.partida) ? (piezas[0]?.partida ?? "") : "__varias__";
   const cuantas = piezas.reduce((s, f) => s + (f.cantidad ?? 1), 0);
   const monto = piezas.reduce((s, f) => s + f.monto, 0);
   const pagado = piezas.reduce((s, f) => s + (f.pagado ?? 0), 0);
@@ -627,6 +802,16 @@ function ProductoEnLaLista({
             <IconArrowsSplit size={12} />
             {moviendo === producto.id ? "Separando…" : "Separar"}
           </button>
+          <div className="mt-1">
+            <SelectorDePartida
+              valor={partidaComun}
+              partidas={partidas}
+              ocupado={piezas.some((f) => moviendo === f.id)}
+              etiqueta={`Partida de ${producto.nombre}`}
+              marca={`pr:${producto.id}`}
+              alEscoger={(pa) => alMoverDePartida(piezas.map((f) => f.id), pa)}
+            />
+          </div>
         </td>
       </tr>
       {abierto &&
@@ -640,10 +825,48 @@ function ProductoEnLaLista({
             alMover={alMover}
             alCambiarProducto={alCambiarProducto}
             alSeparar={alSeparar}
+            partidas={partidas}
+            alMoverDePartida={alMoverDePartida}
             sangrada
           />
         ))}
     </>
+  );
+}
+
+/* ─────────────── el desplegable de la partida ───────────────
+ *
+ * Mover un ítem (o las piezas de un producto) a otra pestaña. Las opciones
+ * son las pestañas que hay, más «Sin partida». Escoger mueve en el momento:
+ * es un solo envío y se ve al instante en la pestaña.
+ */
+function SelectorDePartida({
+  valor, partidas, ocupado, etiqueta, marca, alEscoger,
+}: {
+  valor: string;
+  partidas: string[];
+  ocupado: boolean;
+  etiqueta: string;
+  marca: string;
+  alEscoger: (partida: string) => void;
+}) {
+  const varias = valor === "__varias__";
+  return (
+    <label className="block">
+      <span className="sr-only">{etiqueta}</span>
+      <select
+        value={varias ? "__varias__" : valor}
+        disabled={ocupado}
+        data-partida-de={marca}
+        aria-label={etiqueta}
+        onChange={(e) => { if (e.target.value !== "__varias__") alEscoger(e.target.value); }}
+        className="w-full max-w-[16rem] bg-white border border-black/10 rounded-lg px-2 py-1 text-[11px] text-ink-dim focus:outline-none focus:border-ink/40 disabled:opacity-50"
+      >
+        {varias && <option value="__varias__">En varias partidas…</option>}
+        <option value="">Sin partida</option>
+        {partidas.map((pa) => <option key={pa} value={pa}>{pa}</option>)}
+      </select>
+    </label>
   );
 }
 
@@ -1038,9 +1261,11 @@ function FueraDelAlcance({
     <div className="bg-white border border-black/5 rounded-2xl p-3">
       <p className="text-xs text-ink-muted mb-2">
         {cual === "no_aprobados" ? (
-          <>Tienen precio y toda su información, pero <b>no cuentan</b> en el precio de venta y no
-          salen en el plano de la obra hasta que los apruebes. Suman {formatMonto(suma, "MXN")} si
-          entraran todos.</>
+          <>Tienen precio y toda su información, pero <b>no cuentan</b> en el precio de venta hasta
+          que los apruebes. Suman {formatMonto(suma, "MXN")} si entraran todos. Los requerimientos
+          levantados en la obra están también en el borrador «Requerimientos» del proyecto en
+          quote101: ahí se les pone precio y tipo y se mandan al cliente; al aprobarse esa cotización
+          caen en su pestaña.</>
         ) : (
           <>Estuvieron aprobados y se cancelaron, así que ya no cuentan. Se quedan aquí para
           poder consultarlos; si alguno se revive, vuelve a sumar.</>
