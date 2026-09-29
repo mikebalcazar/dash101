@@ -224,13 +224,29 @@ test('entra por el propio Worker y la sesión aguanta al cambiar de pantalla', a
      * cualquier «Pruebas de …» en vez de nombrarlos uno por uno: el 20-sep
      * esto dejó el flujo en rojo cuando supply101 creó el suyo. */
     await pag.waitForFunction(
-      () => /Taller Demo|Pruebas de |Sin negocios/.test(document.body.innerText),
+      () => /Taller Demo|Pruebas de |Sin negocio/.test(document.body.innerText),
       null, { timeout: 20000 },
     );
     assert.ok(!pag.url().includes('/login'), `${ruta} no devolvió al login`);
     assert.equal((await api(pag, '/yo')).usuario.correo, CORREO, `${ruta}: la sesión sigue viva`);
   }
   assert.equal((await api(pag, '/yo')).usuario.correo, CORREO, 'la sesión aguantó seis pantallas');
+
+  /* UN SOLO NEGOCIO (Mike, 29-sep): la barra DICE el negocio, ya no lo
+   * escoge ni ofrece crear otro. Hasta hoy era un botón con desplegable. */
+  assert.equal(await pag.locator('[data-negocio-actual]').count(), 1, 'la barra dice cuál es el negocio');
+  assert.equal(await pag.getByRole('button', { name: /Taller Demo|Pruebas de / }).count(), 0, 'y ya no es un botón para cambiarlo');
+  assert.equal(await pag.getByRole('link', { name: /Crear nuevo negocio/ }).count(), 0, 'ni ofrece crear otro');
+  /* La demo tiene varios negocios a propósito (Taller Demo para las capturas
+   * y uno por cada prueba que escribe), así que la pantalla del negocio
+   * enseña la fusión: se comprueba que está, y NO se toca. */
+  await pag.goto(`${URL}/negocios`, { waitUntil: 'load' });
+  await pag.locator('[data-fusion-de-negocios]').waitFor({ timeout: 20000 });
+  assert.ok((await pag.getByRole('radio').count()) >= 2, 'con un radio por negocio para escoger cuál se queda');
+  assert.equal(await pag.getByRole('link', { name: /Crear negocio/ }).count(), 0, 'y sin botón de crear');
+  await pag.goto(`${URL}/negocios/nuevo`, { waitUntil: 'load' });
+  await pag.locator('[data-un-solo-negocio]').waitFor({ timeout: 20000 });
+  assert.equal(await pag.locator('input[placeholder="Cafetería Sur"]').count(), 0, 'la pantalla de alta ya no da de alta: ya hay negocio');
   assert.deepEqual(errores, [], 'cero errores de JavaScript');
   estado = await ctx.storageState();
   await ctx.close();
