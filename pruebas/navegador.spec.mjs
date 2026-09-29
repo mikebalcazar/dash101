@@ -247,6 +247,13 @@ test('entra por el propio Worker y la sesión aguanta al cambiar de pantalla', a
   await pag.goto(`${URL}/negocios/nuevo`, { waitUntil: 'load' });
   await pag.locator('[data-un-solo-negocio]').waitFor({ timeout: 20000 });
   assert.equal(await pag.locator('input[placeholder="Cafetería Sur"]').count(), 0, 'la pantalla de alta ya no da de alta: ya hay negocio');
+  /* Mike, 29-sep, con la pantalla enfrente: «ya puedes quitar ese menú y
+   * pasarlo a configuración». El menú ya no trae «Negocio»; Configuración
+   * (que apuntaba a /settings sin que /settings existiera) lo trae. */
+  assert.equal(await pag.getByRole('button', { name: /^Negocios?$/ }).count() + await pag.getByRole('link', { name: /^Negocios?$/ }).count(), 0, 'el menú ya no trae «Negocio»');
+  await pag.goto(`${URL}/settings`, { waitUntil: 'load' });
+  await pag.locator('[data-configuracion-negocio]').waitFor({ timeout: 20000 });
+  assert.ok(/Configuración/.test(await pag.locator('body').innerText()), 'Configuración existe y trae el negocio');
   assert.deepEqual(errores, [], 'cero errores de JavaScript');
   estado = await ctx.storageState();
   await ctx.close();
