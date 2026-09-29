@@ -13,7 +13,6 @@ import {
   IconChartLine,
   IconSettings,
   IconLogout,
-  IconBuildingSkyscraper,
   IconUsersGroup,
   IconScale,
   IconShoppingCart,
@@ -28,7 +27,6 @@ type NavItem = { href: string; icon: typeof IconHome; label: string };
 
 const items: NavItem[] = [
   { href: "/dashboard", icon: IconHome, label: "Inicio" },
-  { href: "/negocios", icon: IconBuildingSkyscraper, label: "Negocio" },
   { href: "/proyectos", icon: IconFolder, label: "Proyectos" },
   { href: "/cuentas", icon: IconWallet, label: "Cuentas" },
   { href: "/movimientos", icon: IconArrowsExchange, label: "Movimientos" },
