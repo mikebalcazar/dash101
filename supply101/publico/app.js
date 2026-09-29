@@ -27,6 +27,7 @@
  */
 
 import { irA, sellar } from './navegar.js';
+import { achicarImagen } from './imagen.js';
 
 /* ─────────────── lo básico ─────────────── */
 
@@ -502,7 +503,9 @@ $('f-pedir').onsubmit = async (ev) => {
       const f = $('archivo').files?.[0];
       if (f) {
         const forma = new FormData();
-        forma.set('archivo', f);
+        // Una foto de cámara pesa de 3 a 12 MB; a 1600 de lado se lee igual
+        // y sube en segundos con datos móviles (batería, 29-sep-2026).
+        forma.set('archivo', await achicarImagen(f));
         forma.set('de_tabla', 'ordenes');
         forma.set('de_id', orden.id);
         try {
@@ -551,7 +554,7 @@ async function verDetalle(id) {
 
   const papel = (a) => a.mime && a.mime.startsWith('image/')
     ? `<a class="papel" href="/s101/orgs/${est.org.id}/archivos/${a.id}" target="_blank" rel="noreferrer">
-         <img src="/s101/orgs/${est.org.id}/archivos/${a.id}" alt="${escapar(a.nombre)}"></a>`
+         <img src="/s101/orgs/${est.org.id}/archivos/${a.id}" alt="${escapar(a.nombre)}" loading="lazy" decoding="async"></a>`
     : `<a class="papel" href="/s101/orgs/${est.org.id}/archivos/${a.id}" target="_blank" rel="noreferrer">
          <span class="pdf">📄 ${escapar(a.nombre)}</span></a>`;
 
