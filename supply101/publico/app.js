@@ -278,19 +278,15 @@ async function arrancarSesion() {
   ver('b-nueva-compra', est.puedeComprar);
   ver('sin-compras', !est.puedeComprar);
 
+  /* UN SOLO NEGOCIO (Mike, 29-sep): «borres de dash (y de todas las
+   * plataformas) la opción de agregar diferentes negocios (…) Todo es para
+   * un negocio nada más». Aquí había un desplegable cuando la empresa tenía
+   * más de uno; ya no: se toma el de la empresa. Si por lo que sea todavía
+   * hay varios (antes de que quien dirige los junte en dash101), se toma el
+   * primero, y el que se había escogido se respeta mientras exista. */
   const negGuardado = leer(LLAVE_NEG);
   est.negocio = est.negocios.find((n) => n.id === negGuardado) || est.negocios[0] || null;
   if (est.negocio) guardar(LLAVE_NEG, est.negocio.id);
-
-  const sel = $('negocio');
-  sel.innerHTML = est.negocios.map((n) => `<option value="${n.id}">${escapar(n.nombre)}</option>`).join('');
-  if (est.negocio) sel.value = est.negocio.id;
-  ver('picker-negocio', est.negocios.length > 1);
-  sel.onchange = () => {
-    est.negocio = est.negocios.find((n) => n.id === sel.value) || null;
-    if (est.negocio) guardar(LLAVE_NEG, est.negocio.id);
-    verLista();
-  };
 
   enrutar();
 }

@@ -12,7 +12,7 @@ import { IconArrowLeft } from "@tabler/icons-react";
 export default function NuevoNegocioPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { refresh } = useNegocioActivo();
+  const { refresh, negocios, loading } = useNegocioActivo();
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [rfc, setRfc] = useState("");
@@ -40,6 +40,23 @@ export default function NuevoNegocioPage() {
       setSubmitting(false);
     }
   };
+
+  /* UN SOLO NEGOCIO (Mike, 29-sep). Esta pantalla sólo sirve para el
+   * primero: con uno ya dado de alta, no hay nada que crear. */
+  if (!loading && negocios.length > 0) {
+    return (
+      <div className="max-w-lg">
+        <Link href="/negocios" className="text-xs text-ink-muted inline-flex items-center gap-1 mb-4 hover:text-ink-dim transition">
+          <IconArrowLeft size={13} />
+          Volver
+        </Link>
+        <p className="text-sm text-ink-dim" data-un-solo-negocio>
+          La suite trabaja con un solo negocio por empresa, y ésta ya tiene el suyo:{" "}
+          <b>{negocios[0].nombre}</b>. Lo que se captura va ahí.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-lg">
