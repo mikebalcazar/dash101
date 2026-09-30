@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { NegocioActivoProvider } from "@/lib/negocio-activo-context";
 import { Sidebar } from "@/components/sidebar";
 import { Topbar } from "@/components/topbar";
+import { VersionNueva } from "@/components/version-nueva";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -37,6 +38,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <Topbar />
             {children}
           </main>
+          <VersionNueva />
         </div>
       </div>
     </NegocioActivoProvider>

@@ -44,3 +44,6 @@ node_modules
 # `npm run worker:build`.
 .open-next/
 .wrangler/
+# la deja el flujo al publicar (version-nueva.js la compara)
+supply101/publico/huella.txt
+public/huella.txt
