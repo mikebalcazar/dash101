@@ -28,4 +28,11 @@ describe("workers.dev manda al dominio propio", () => {
     const r = await pide("https://dash101-staging.mike-929.workers.dev/", staging);
     expect(r.status).toBe(200);
   });
+  it("sin la «s»: http en el dominio propio manda a https con 301 (30-sep-2026)", async () => {
+    const r = await pide("http://dash101.taller101.com/proyectos?x=1", prod);
+    expect(r.status).toBe(301);
+    expect(r.headers.get("location")).toBe("https://dash101.taller101.com/proyectos?x=1");
+    expect((await pide("http://dash101.taller101.com/", prod, { method: "POST" })).status).not.toBe(301);
+    expect((await pide("http://dash101-staging.mike-929.workers.dev/", staging)).status).not.toBe(301);
+  });
 });
