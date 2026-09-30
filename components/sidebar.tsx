@@ -2,6 +2,9 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { useEffect, useState } from "react";
+import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { getResumenOrdenes } from "@/lib/ordenes";
 import {
   IconHome,
   IconFolder,
@@ -33,7 +36,8 @@ const items: NavItem[] = [
   { href: "/clientes", icon: IconUsers, label: "Clientes" },
   { href: "/proveedores", icon: IconTruck, label: "Proveedores" },
   { href: "/opex", icon: IconReceipt, label: "OPEX" },
-  { href: "/ordenes", icon: IconShoppingCart, label: "Compras y reembolsos" },
+  // «Compras» a secas (Mike, 30-sep-2026): los reembolsos viven adentro.
+  { href: "/ordenes", icon: IconShoppingCart, label: "Compras" },
   { href: "/nomina", icon: IconCash, label: "Raya" },
   { href: "/fiscal", icon: IconReceiptTax, label: "Fiscal" },
   { href: "/conciliacion", icon: IconScale, label: "Conciliación" },
@@ -45,6 +49,20 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, signOut } = useAuth();
+  const { activo } = useNegocioActivo();
+  /* El circulito de Compras (Mike, 30-sep-2026: «un circulito con la
+   * cantidad de órdenes sin pagar, como de mensajes sin leer»): compras y
+   * reembolsos en el buzón, del negocio activo. Se vuelve a pedir al cambiar
+   * de pantalla, que es cuando algo se pudo haber pagado; quien no ve dinero
+   * no recibe el número y no ve el circulito. */
+  const [porPagar, setPorPagar] = useState(0);
+  useEffect(() => {
+    let vivo = true;
+    getResumenOrdenes(activo?.id)
+      .then((r) => { if (vivo) setPorPagar(r.compras.cuantas + r.reembolsos.cuantas); })
+      .catch(() => { if (vivo) setPorPagar(0); });
+    return () => { vivo = false; };
+  }, [activo, pathname]);
 
   const initials = (user?.displayName || user?.email || "U")
     .split(/[\s@]/)
@@ -81,7 +99,18 @@ export function Sidebar() {
                 : "text-ink-muted hover:bg-black/5 hover:text-ink-dim"
             }`}
           >
-            <Icon size={19} className="shrink-0" />
+            <span className="relative shrink-0 flex">
+              <Icon size={19} className="shrink-0" />
+              {item.href === "/ordenes" && porPagar > 0 && (
+                <span
+                  data-pendientes={porPagar}
+                  title={`${porPagar} sin pagar`}
+                  className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-mauve-900 text-cream text-[10px] font-medium leading-none flex items-center justify-center tabular-nums"
+                >
+                  {porPagar > 99 ? "99+" : porPagar}
+                </span>
+              )}
+            </span>
             <span className="hidden sm:block text-sm">{item.label}</span>
           </button>
         );

@@ -7,7 +7,8 @@ import { listCuentas } from "@/lib/cuentas";
 import { listMovimientos } from "@/lib/movimientos";
 import { MarcaFiscal } from "@/components/marca-fiscal";
 import { listProyectos } from "@/lib/proyectos";
-import { getResumenOrdenes, type ResumenOrdenes } from "@/lib/ordenes";
+import { getBuzon, getResumenOrdenes, type Buzon, type ResumenOrdenes } from "@/lib/ordenes";
+import { FilasBuzon } from "@/components/ordenes-ui";
 import type { Cuenta, Movimiento, Proyecto } from "@/types/schema";
 import { formatMonto, formatDateShort } from "@/lib/format";
 import { Timestamp } from "firebase/firestore";
@@ -57,6 +58,10 @@ export default function DashboardPage() {
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
   const [pendientes, setPendientes] = useState<ResumenOrdenes | null>(null);
+  /* El buzón en el inicio (Mike, 30-sep-2026): todas las órdenes por pagar,
+   * compras y reembolsos, como en el buzón. Sólo lo trae quien paga: a los
+   * demás la API les dice que no, y aquí no se pinta nada. */
+  const [buzon, setBuzon] = useState<Buzon | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -74,12 +79,14 @@ export default function DashboardPage() {
       // cuenta que no ve dinero no llega aquí de todos modos—, se pintan
       // en cero y el tablero no se cae por eso.
       getResumenOrdenes(activo.id).catch(() => null),
+      getBuzon(activo.id, null).catch(() => null),
     ])
-      .then(([cs, ms, ps, re]) => {
+      .then(([cs, ms, ps, re, bz]) => {
         setCuentas(cs);
         setMovimientos(ms);
         setProyectos(ps);
         setPendientes(re);
+        setBuzon(bz);
       })
       .catch((e) => console.error(e))
       .finally(() => setLoading(false));
@@ -218,6 +225,26 @@ export default function DashboardPage() {
           </p>
         </Link>
       </div>
+
+      {/* El buzón, aquí mismo (Mike, 30-sep-2026): lo que hay por pagar, lo
+          que vence primero arriba. Al pagarse sale de aquí y queda como
+          movimiento. */}
+      {buzon && buzon.filas.length > 0 && (
+        <section className="pt-2" data-seccion="por-pagar">
+          <div className="flex justify-between items-baseline mb-3">
+            <h2 className="text-sm font-medium text-ink-dim">
+              Por pagar <span className="text-ink-muted font-normal tabular-nums">{buzon.filas.length}</span>
+            </h2>
+            <Link href="/ordenes/buzon" className="text-xs text-ink-muted hover:text-ink-dim">
+              Abrir el buzón →
+            </Link>
+          </div>
+          <FilasBuzon filas={buzon.filas.slice(0, 8)} />
+          {buzon.filas.length > 8 && (
+            <p className="text-[11px] text-ink-muted mt-2">Y {buzon.filas.length - 8} más en el buzón.</p>
+          )}
+        </section>
+      )}
 
       {/* El mismo corte, proyecto por proyecto. */}
       <section className="pt-2">

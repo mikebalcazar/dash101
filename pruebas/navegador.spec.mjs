@@ -510,6 +510,18 @@ test('pedir un reembolso, verlo en el inicio y en su pestaña del buzón, y paga
   await pag.locator('[data-pestana="compra"]').click();
   assert.ok(!(await texto(pag)).includes(folio), 'y en la de compras no está');
 
+  // ── el menú dice «Compras», el circulito cuenta y el buzón está en el inicio (30-sep-2026) ──
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  assert.equal(await pag.locator('aside button[title="Compras"]').count(), 1, 'el menú dice «Compras» a secas');
+  assert.equal(await pag.locator('aside button[title="Compras y reembolsos"]').count(), 0, 'y ya no «Compras y reembolsos»');
+  const globo = pag.locator('[data-pendientes]');
+  await globo.waitFor({ timeout: 20000 });
+  assert.equal(await globo.innerText(), String(resumen.compras.cuantas + resumen.reembolsos.cuantas),
+    'el circulito de Compras cuenta las órdenes sin pagar, compras y reembolsos');
+  const seccion = pag.locator('[data-seccion="por-pagar"]');
+  await seccion.waitFor({ timeout: 20000 });
+  assert.ok((await seccion.innerText()).includes(folio), 'el buzón del inicio trae el reembolso por pagar');
+
   // ── pagarlo, con los mismos botones ──
   await pag.goto(`${URL}/ordenes/${id}`, { waitUntil: 'load' });
   await pag.getByRole('button', { name: 'Pagar', exact: true }).click();
@@ -523,6 +535,18 @@ test('pedir un reembolso, verlo en el inicio y en su pestaña del buzón, y paga
   assert.equal(suyos[0].tipo, 'egreso', 'es salida de dinero');
   assert.equal(suyos[0].categoria, 'reembolso', 'registrado como reembolso, no como compra');
   assert.equal(suyos[0].monto, 85000);
+
+  // ── pagada, sale del buzón del inicio y el movimiento lleva a su orden ──
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  await pag.locator('[data-tarjeta="reembolsos-pendientes"]').waitFor({ timeout: 20000 });
+  const seccionDespues = pag.locator('[data-seccion="por-pagar"]');
+  if (await seccionDespues.count()) assert.ok(!(await seccionDespues.innerText()).includes(folio), 'pagada, ya no está en el buzón del inicio');
+  await pag.goto(`${URL}/movimientos`, { waitUntil: 'load' });
+  const liga = pag.locator(`[data-orden-de="${suyos[0].id}"]`);
+  await liga.waitFor({ timeout: 20000 });
+  await liga.click();
+  await pag.waitForURL((u) => u.pathname.endsWith(`/ordenes/${id}`), { timeout: 20000 });
+  assert.match(await texto(pag), /Pagada/, 'desde el movimiento se llega a la orden, ya pagada, con su historia');
 
   const despues = await api(pag, `/orgs/${ORG}/ordenes/resumen?negocio_id=${neg.id}`);
   assert.equal(resumen.reembolsos.total - despues.reembolsos.total, 85000, 'pagado, ya no está pendiente');

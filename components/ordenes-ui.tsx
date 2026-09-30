@@ -5,6 +5,7 @@
  * detalle: tres colores distintos para «devuelta» serían tres pantallas que
  * parecen de apps distintas. */
 
+import Link from "next/link";
 import { ESTADO_ORDEN, TIPO_ORDEN, vencida, type Orden } from "@/lib/ordenes";
 import { formatMontoExact } from "@/lib/format";
 
@@ -80,3 +81,46 @@ export const CAJA_NUM = `${CAJA} text-right tabular-nums`;
 export const ETIQUETA = "block text-xs font-medium text-ink-muted mb-1";
 export const BOTON =
   "bg-ink hover:bg-ink/90 text-cream rounded-xl px-4 py-2.5 text-sm font-medium transition disabled:opacity-40";
+
+/** Los renglones del buzón: lo que vence primero arriba (lo ordena el
+ *  servidor). Los pinta igual el buzón y el inicio (Mike, 30-sep-2026: «desde
+ *  la pantalla principal venga el buzón de todas las órdenes por pagar»). */
+export function FilasBuzon({ filas }: { filas: Orden[] }) {
+  return (
+    <div className="bg-white border border-black/5 rounded-2xl overflow-hidden">
+      {filas.map((o) => (
+        <Link
+          key={o.id}
+          href={`/ordenes/${o.id}`}
+          data-orden={o.id}
+          className={`flex items-start gap-3 px-4 py-3 border-b border-black/5 last:border-b-0 hover:bg-cream/50 transition ${
+            vencida(o) ? "bg-mauve-50/40" : ""
+          }`}
+        >
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-ink-dim line-clamp-2">{o.concepto}</p>
+            <p className="text-[11px] text-ink-muted truncate">
+              {o.folio} · <AQuien orden={o} />
+              {o.tipo !== "reembolso" && <> · {o.solicitante_nombre || o.solicitante_correo || "alguien"}</>}
+            </p>
+            <p className="text-[11px] mt-0.5 flex items-center gap-2 flex-wrap">
+              <Vence orden={o} />
+              {o.tipo === "reembolso" && <Tipo orden={o} />}
+              {o.urgente && (
+                <span className="inline-block rounded-lg px-2 py-0.5 text-[11px] font-medium bg-mauve-50 text-mauve-900">
+                  Urgente
+                </span>
+              )}
+              {!o.con_factura && <span className="text-ink-muted">sin factura</span>}
+            </p>
+          </div>
+          <div className="text-right">
+            <Dinero orden={o} />
+            <div className="mt-1"><Estado orden={o} /></div>
+          </div>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
