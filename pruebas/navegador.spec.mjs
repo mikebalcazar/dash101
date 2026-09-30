@@ -557,6 +557,8 @@ test('pedir un reembolso, verlo en el inicio y en su pestaña del buzón, y paga
   await liga.waitFor({ timeout: 20000 });
   await liga.click();
   await pag.waitForURL((u) => u.pathname.endsWith(`/ordenes/${id}`), { timeout: 20000 });
+  // La orden se pide al llegar: se espera a que diga «Pagada», no se lee el «Cargando…» (corrida 36777167927).
+  await pag.getByText(/Pagada/).first().waitFor({ timeout: 20000 });
   assert.match(await texto(pag), /Pagada/, 'desde el movimiento se llega a la orden, ya pagada, con su historia');
 
   const despues = await api(pag, `/orgs/${ORG}/ordenes/resumen?negocio_id=${neg.id}`);
