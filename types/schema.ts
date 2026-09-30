@@ -9,7 +9,8 @@ export type EstadoProyecto = "planeando" | "activo" | "pausado" | "finiquito" | 
 export type EstadoPartida = "pendiente" | "parcial" | "pagado";
 export type TipoMovimiento = "ingreso" | "egreso";
 /** `personal` y `otro` son de la suite; `cuenta`, `opex` y `ajuste` son de Firestore (la API los importa como `otro`). */
-export type TipoContraparte = "cliente" | "proveedor" | "cuenta" | "opex" | "ajuste" | "personal" | "otro";
+/** `accionista` desde el contrato 0.57.0: un retiro de utilidades. */
+export type TipoContraparte = "cliente" | "proveedor" | "cuenta" | "opex" | "ajuste" | "personal" | "accionista" | "otro";
 export type EstadoInvitacion = "pendiente" | "aceptada" | "revocada" | "expirada";
 
 export type FrecuenciaOpex = "semanal" | "mensual" | "anual";
@@ -87,6 +88,26 @@ export interface Proveedor {
   creado_at: Timestamp | FieldValue;
   creado_por: string;
 }
+
+/** Un accionista del negocio (contrato 0.57.0). Mike, 30-sep-2026: «un
+ *  módulo de accionistas donde se registren pagos a los accionistas como
+ *  retiro de utilidades». El retiro no es una tabla: es un egreso con
+ *  categoría CATEGORIA_RETIRO_UTILIDADES y contraparte `accionista`. */
+export interface Accionista {
+  id: string;
+  negocio_id: string;
+  nombre: string;
+  rfc: string;
+  correo: string;
+  telefono: string;
+  /** Participación, 0 a 100; null si no se capturó. */
+  porcentaje: number | null;
+  notas: string;
+  activo: boolean;
+}
+
+/** La categoría del egreso que es un retiro de utilidades (0.57.0). */
+export const CATEGORIA_RETIRO_UTILIDADES = "retiro_utilidades";
 
 export interface PartidaProyecto {
   proveedor_id: string;

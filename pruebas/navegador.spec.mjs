@@ -606,6 +606,63 @@ test('pedir un reembolso, verlo en el inicio y en su pestaña del buzón, y paga
 
 const CLIENTE_PRUEBAS = 'Cliente de navegador';
 
+/* ═══════════════ accionistas: alta y retiro desde el celular ═══════════════ */
+
+test('accionistas a 390×844: se da de alta uno, se le registra un retiro, y queda como egreso con su categoría', async () => {
+  const { ctx, pag, errores } = await pestana({ width: 390, height: 844 }, true);
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  const { neg, cuenta } = await negocioDePruebas(pag);
+  await elegirNegocio(pag, neg.id);
+
+  const nombre = `Socio del navegador ${Date.now().toString(36)}`;
+  await pag.goto(`${URL}/accionistas`, { waitUntil: 'load' });
+  await pag.getByRole('button', { name: 'Nuevo accionista' }).waitFor({ timeout: 30000 });
+  await pag.getByRole('button', { name: 'Nuevo accionista' }).click();
+  await pag.getByPlaceholder('Nombre completo').fill(nombre);
+  await pag.getByLabel('Participación %').fill('25');
+  await pag.getByRole('button', { name: 'Dar de alta' }).click();
+  const tarjeta = pag.locator(`[data-accionista="${nombre}"]`);
+  await tarjeta.waitFor({ timeout: 30000 });
+  assert.match(await tarjeta.innerText(), /25% de participación/, 'la tarjeta enseña la participación');
+  assert.equal(await tarjeta.getAttribute('data-baja'), null, 'y está activo');
+
+  // El retiro: $1,234.50 de la caja de pruebas.
+  await tarjeta.getByRole('button', { name: 'Registrar retiro' }).click();
+  await tarjeta.getByLabel('Monto').fill('1234.5');
+  await tarjeta.getByLabel('De qué cuenta sale').selectOption(cuenta.id);
+  await tarjeta.getByLabel('Concepto').fill('Retiro del navegador');
+  await tarjeta.getByRole('button', { name: 'Registrar el retiro' }).click();
+  await pag.waitForFunction(([n]) => document.querySelector(`[data-accionista="${n}"] [data-retirado]`)?.getAttribute('data-retirado') === '1234.5', [nombre], { timeout: 30000 });
+  assert.match(await tarjeta.innerText(), /\$1,234\.50/, 'el retirado en pesos, con centavos');
+  const lista = await pag.locator('[data-retiros]').innerText();
+  assert.ok(lista.includes(nombre) && /−\$1,234\.50/.test(lista) && lista.includes('Retiro del navegador'), 'el retiro sale en la lista de abajo con su concepto');
+
+  // Y en la API es un egreso con la categoría y la contraparte que lo apartan.
+  const movs = filas(await movimientosDe(pag, `cuenta_id=${cuenta.id}`));
+  const retiro = movs.find((m) => m.contraparte_nombre === nombre);
+  assert.ok(retiro, 'el movimiento existe');
+  assert.equal(retiro.tipo, 'egreso');
+  assert.equal(retiro.monto, 123450, 'en centavos');
+  assert.equal(retiro.categoria, 'retiro_utilidades');
+  assert.equal(retiro.contraparte_tipo, 'accionista');
+  assert.equal(retiro.descripcion, 'Retiro del navegador');
+
+  const m = await pag.evaluate(() => ({ ancho: document.documentElement.scrollWidth, ventana: window.innerWidth }));
+  assert.ok(m.ancho <= m.ventana, `sin barrido horizontal a 390: ${m.ancho} ≤ ${m.ventana}`);
+
+  // Se da de baja y no desaparece: queda en «dados de baja» con lo retirado.
+  await tarjeta.getByRole('button', { name: `Dar de baja a ${nombre}` }).click();
+  await pag.getByRole('button', { name: /dado de baja|dados de baja/ }).waitFor({ timeout: 30000 });
+  await pag.getByRole('button', { name: /dado de baja|dados de baja/ }).click();
+  const baja = pag.locator(`[data-accionista="${nombre}"][data-baja]`);
+  await baja.waitFor({ timeout: 30000 });
+  assert.match(await baja.innerText(), /\$1,234\.50/, 'lo retirado sigue en su renglón');
+
+  console.log(`    ${nombre}: alta a 390×844, retiro de 123450 centavos de ${CUENTA_PRUEBAS}, baja sin perder el retirado`);
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
 test('se da de alta un cliente desde «nuevo proyecto», y avisa del parecido', async () => {
   const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
   // Primero la página: `api()` habla por `/s101`, que es relativo, y sin una

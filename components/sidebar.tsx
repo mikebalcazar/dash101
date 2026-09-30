@@ -20,7 +20,9 @@ import {
   IconScale,
   IconShoppingCart,
   IconReceiptTax,
-  IconCash,} from "@tabler/icons-react";
+  IconCash,
+  IconCoins,
+} from "@tabler/icons-react";
 
 /* El menú lleva el nombre al lado del ícono desde el 20-sep (lo pidió Mike):
  * un ícono sin texto se adivina, y adivinar cuesta. En el teléfono el texto se
@@ -39,6 +41,9 @@ const items: NavItem[] = [
   // «Compras» a secas (Mike, 30-sep-2026): los reembolsos viven adentro.
   { href: "/ordenes", icon: IconShoppingCart, label: "Compras" },
   { href: "/nomina", icon: IconCash, label: "Raya" },
+  // Mike, 30-sep-2026: «un módulo de accionistas donde se registren pagos a
+  // los accionistas como retiro de utilidades».
+  { href: "/accionistas", icon: IconCoins, label: "Accionistas" },
   { href: "/fiscal", icon: IconReceiptTax, label: "Fiscal" },
   { href: "/conciliacion", icon: IconScale, label: "Conciliación" },
   { href: "/flujo", icon: IconChartLine, label: "Flujo" },
