@@ -137,3 +137,13 @@ button.b.claro { background: var(--sup); color: var(--tinta); border: 1px solid 
 /* alta de proveedor (29-sep-2026) */
 .campo-mal { border-color: var(--mal) !important; outline: 2px solid var(--mal-suave); }
 a.liga { display: inline-block; margin-top: 6px; font-size: 13px; color: var(--marca); }
+
+/* Cuentas del proveedor y documentos de respaldo (30-sep-2026). */
+.pv-cuenta { border: 1px solid var(--linea); border-radius: 12px; padding: 10px; margin-top: 8px; position: relative; }
+.pv-cuenta .quitar { position: absolute; top: 6px; right: 8px; background: none; border: 0; font-size: 18px; color: var(--tinta-2); padding: 2px 6px; }
+.cuentas-lista, .docs-lista { list-style: none; margin: 6px 0 0; padding: 0; }
+.cuentas-lista li, .docs-lista li { display: flex; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--linea); font-size: 14px; }
+.cuentas-lista li > span, .docs-lista li > a, .docs-lista li > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.cuentas-lista .clabe { font-variant-numeric: tabular-nums; color: var(--tinta-2); font-size: 13px; }
+.cuentas-lista .quitar, .docs-lista .quitar { background: none; border: 0; font-size: 18px; color: var(--tinta-2); padding: 2px 6px; flex: 0 0 auto; }
+
