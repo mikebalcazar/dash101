@@ -92,6 +92,15 @@ const pesos2 = (centavos) =>
   new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(centavos / 100);
 const filas = (x) => (Array.isArray(x) ? x : x?.filas ?? []);
 
+/* La lista de la API se queda en 500 filas si no se le pide más, ordenada por
+ * fecha de la más vieja a la más nueva. La org demo de staging ya pasó de 500
+ * movimientos (cada corrida deja los suyos), y el 30-sep la conciliación
+ * escribió su ajuste, la pantalla lo dijo, y la lista sin tope no lo enseñó:
+ * quedaba en la fila 501. La app pide `?limite=` con el total (lib/api/
+ * cliente.ts); aquí se pide el tope máximo de una vez. */
+const TODOS = 'limite=5000';
+const movimientosDe = (pag, filtro = '') => api(pag, `/orgs/${ORG}/movimientos?${filtro ? filtro + '&' : ''}${TODOS}`);
+
 let nav;
 let estado = null; // la sesión que abre la primera prueba
 before(async () => { nav = await chromium.launch(); });
@@ -268,7 +277,7 @@ test('el dinero se pinta en centavos correctos (Taller Demo, sólo lectura)', as
   const demo = filas(await api(pag, `/orgs/${ORG}/negocios`)).find((n) => n.nombre === NEGOCIO_DEMO);
   assert.ok(demo, `existe el negocio «${NEGOCIO_DEMO}» en ${ORG}`);
   const cuentas = filas(await api(pag, `/orgs/${ORG}/cuentas?negocio_id=${demo.id}`));
-  const movs = filas(await api(pag, `/orgs/${ORG}/movimientos`));
+  const movs = filas(await movimientosDe(pag));
   assert.ok(cuentas.length >= 1 && movs.length >= 1, 'hay cuentas y movimientos que cuadrar');
 
   const banco = cuentas.find((c) => c.tipo === 'banco') ?? cuentas[0];
@@ -305,8 +314,8 @@ test('conciliar: la que cuadra no deja ajuste, la que no cuadra sí, y el saldo 
   await elegirNegocio(pag, neg.id);
 
   const ajustesDe = async () =>
-    filas(await api(pag, `/orgs/${ORG}/movimientos`)).filter((m) => m.cuenta_id === cuenta.id && m.categoria === AJUSTE);
-  const saldoActual = async () => saldoCentavos(cuenta, filas(await api(pag, `/orgs/${ORG}/movimientos`)));
+    filas(await movimientosDe(pag, `cuenta_id=${cuenta.id}`)).filter((m) => m.categoria === AJUSTE);
+  const saldoActual = async () => saldoCentavos(cuenta, filas(await movimientosDe(pag, `cuenta_id=${cuenta.id}`)));
   const filaDe = (nombre) => pag.getByRole('row', { name: new RegExp(nombre) });
   const esperarEnFila = (nombre, trozo) => pag.waitForFunction(([n, x]) => {
     const r = [...document.querySelectorAll('tr')].find((f) => f.innerText.includes(n));
@@ -445,7 +454,7 @@ test('pedir una compra desde el celular, pagarla, y que el que la pidió lo vea'
   await pag.getByText(/Pagada\./).waitFor({ timeout: 30000 });
 
   // ── y el egreso quedó, por el monto exacto y una sola vez ──
-  const movs = filas(await api(pag, `/orgs/${ORG}/movimientos?cuenta_id=${cuenta.id}`));
+  const movs = filas(await movimientosDe(pag, `cuenta_id=${cuenta.id}`));
   const suyos = movs.filter((m) => (m.descripcion || '').includes(folio));
   assert.equal(suyos.length, 1, 'un solo egreso, no dos');
   assert.equal(suyos[0].tipo, 'egreso');
@@ -551,7 +560,7 @@ test('pedir un reembolso, verlo en el inicio y en su pestaña del buzón, y paga
   await pag.getByRole('button', { name: 'Registrar el pago' }).click();
   await pag.getByText(/Pagada\./).waitFor({ timeout: 30000 });
 
-  const movs = filas(await api(pag, `/orgs/${ORG}/movimientos?cuenta_id=${cuenta.id}`));
+  const movs = filas(await movimientosDe(pag, `cuenta_id=${cuenta.id}`));
   const suyos = movs.filter((m) => (m.descripcion || '').includes(folio));
   assert.equal(suyos.length, 1, 'un solo egreso');
   assert.equal(suyos[0].tipo, 'egreso', 'es salida de dinero');
