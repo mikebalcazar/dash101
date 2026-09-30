@@ -359,6 +359,17 @@ test('a 390×844 no hay barrido horizontal ni errores de JavaScript', async () =
     const m = await pag.evaluate(() => ({ ancho: document.documentElement.scrollWidth, ventana: window.innerWidth }));
     assert.ok(m.ancho <= m.ventana + 1, `${ruta}: cero barrido horizontal (${m.ancho} vs ${m.ventana})`);
   }
+  /* El inicio en el teléfono (Mike, 30-sep-2026): el contenido ocupa la
+   * pantalla y el balance por proyecto va en tarjetas apiladas, no en tabla. */
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  await pag.locator('[data-tarjeta="reembolsos-pendientes"]').waitFor({ timeout: 20000 });
+  const anchoMain = await pag.evaluate(() => document.querySelector('main').clientWidth);
+  assert.ok(anchoMain >= 300, `en el teléfono el contenido ocupa la pantalla (main mide ${anchoMain} px)`);
+  const tarjetas = pag.locator('[data-balances="tarjetas"]');
+  if (await tarjetas.count()) {
+    assert.ok(await tarjetas.isVisible(), 'el balance por proyecto va en tarjetas apiladas');
+    assert.ok(await pag.locator('table').first().isHidden(), 'y la tabla se esconde en el teléfono');
+  }
   assert.deepEqual(errores, [], 'cero errores de JavaScript');
   await ctx.close();
 });

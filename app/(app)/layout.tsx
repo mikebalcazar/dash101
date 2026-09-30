@@ -25,10 +25,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <NegocioActivoProvider>
-      <div className="min-h-screen p-4">
-        <div className="max-w-6xl mx-auto bg-bg border border-black/5 rounded-2xl overflow-hidden grid grid-cols-[64px_1fr] sm:grid-cols-[13rem_1fr] min-h-[calc(100vh-2rem)]">
+      {/* En el teléfono el marco no se puede dar el lujo de márgenes: 16 de
+          página + 24 de main + 64 de menú dejaban 246 px para el contenido a
+          390 de ancho, y todo salía apretado y en letra chica (Mike, 30-sep:
+          «Dashboard es inutilizable por el tamaño de la letra y los
+          renglones»). Sin margen exterior, menú de 56 y main de 12. */}
+      <div className="min-h-screen p-0 sm:p-4">
+        <div className="max-w-6xl mx-auto bg-bg border-0 sm:border border-black/5 rounded-none sm:rounded-2xl overflow-hidden grid grid-cols-[56px_1fr] sm:grid-cols-[13rem_1fr] min-h-screen sm:min-h-[calc(100vh-2rem)]">
           <Sidebar />
-          <main className="p-6 min-w-0">
+          <main className="p-3 sm:p-6 min-w-0">
             <Topbar />
             {children}
           </main>

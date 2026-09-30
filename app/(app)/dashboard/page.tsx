@@ -159,13 +159,17 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-3">
-      <section className="bg-cream rounded-3xl p-6">
+      {/* En el teléfono: lo mismo, más grande y con menos letra. Las cifras
+          en dos columnas, las explicaciones sólo en pantalla ancha, y el
+          balance por proyecto en tarjetas apiladas en vez de tabla (Mike,
+          30-sep-2026). */}
+      <section className="bg-cream rounded-3xl p-4 sm:p-6">
         <div className="flex justify-between items-start gap-4">
           <div>
             <p className="text-xs text-ink-muted mb-2 font-medium">
               Capital total de {activo.nombre}
             </p>
-            <p className="text-4xl font-medium tracking-tight text-ink-dim leading-none">
+            <p className="text-3xl sm:text-4xl font-medium tracking-tight text-ink-dim leading-none">
               {formatMonto(capitalTotal, activo.moneda)}
             </p>
             <p className="text-xs text-ink-muted mt-2">
@@ -179,43 +183,43 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-        <div className="bg-white border border-black/5 rounded-2xl p-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
+        <div className="bg-white border border-black/5 rounded-2xl p-3 sm:p-4">
           <p className="text-xs text-ink-muted font-medium">Capital líquido</p>
-          <p className="text-xl font-medium text-ink-dim mt-1 tabular-nums">
+          <p className="text-lg sm:text-xl font-medium text-ink-dim mt-1 tabular-nums">
             {formatMonto(liquido, activo.moneda)}
           </p>
-          <p className="text-[11px] text-ink-muted mt-1">
+          <p className="hidden sm:block text-[11px] text-ink-muted mt-1">
             Lo que hay hoy en {cuentas.length} {cuentas.length === 1 ? "cuenta" : "cuentas"}
           </p>
         </div>
-        <div className="bg-mint-50 rounded-2xl p-4">
+        <div className="bg-mint-50 rounded-2xl p-3 sm:p-4">
           <p className="text-xs text-mint-label font-medium">Cuentas por cobrar</p>
-          <p className="text-xl font-medium text-mint-900 mt-1 tabular-nums">
+          <p className="text-lg sm:text-xl font-medium text-mint-900 mt-1 tabular-nums">
             {formatMonto(porCobrar, activo.moneda)}
           </p>
-          <p className="text-[11px] text-mint-label mt-1 opacity-75">
+          <p className="hidden sm:block text-[11px] text-mint-label mt-1 opacity-75">
             Vendido que el cliente no ha pagado
           </p>
         </div>
-        <div className="bg-mauve-50 rounded-2xl p-4">
+        <div className="bg-mauve-50 rounded-2xl p-3 sm:p-4">
           <p className="text-xs text-mauve-label font-medium">Cuentas por pagar</p>
-          <p className="text-xl font-medium text-mauve-900 mt-1 tabular-nums">
+          <p className="text-lg sm:text-xl font-medium text-mauve-900 mt-1 tabular-nums">
             {formatMonto(porPagar, activo.moneda)}
           </p>
-          <p className="text-[11px] text-mauve-label mt-1 opacity-75">
+          <p className="hidden sm:block text-[11px] text-mauve-label mt-1 opacity-75">
             Comprometido con proveedores que no ha salido
           </p>
         </div>
         <Link
           href="/ordenes/buzon?tipo=reembolso"
-          className="bg-white border border-black/5 rounded-2xl p-4 hover:border-black/20 transition"
+          className="bg-white border border-black/5 rounded-2xl p-3 sm:p-4 hover:border-black/20 transition"
           data-tarjeta="reembolsos-pendientes"
         >
           <p className="text-xs text-ink-muted font-medium flex items-center gap-1">
             <IconReceiptRefund size={13} /> Reembolsos pendientes
           </p>
-          <p className="text-xl font-medium text-ink-dim mt-1 tabular-nums">
+          <p className="text-lg sm:text-xl font-medium text-ink-dim mt-1 tabular-nums">
             {formatMonto(reembolsosPendientes, activo.moneda)}
           </p>
           <p className="text-[11px] text-ink-muted mt-1">
@@ -260,7 +264,45 @@ export default function DashboardPage() {
             <p className="text-sm text-ink-dim">Todavía no hay proyectos abiertos</p>
           </div>
         ) : (
-          <div className="bg-white border border-black/5 rounded-2xl overflow-x-auto">
+          <>
+          <div className="sm:hidden space-y-2" data-balances="tarjetas">
+            {balances.map((b) => (
+              <Link
+                key={b.proyecto.id}
+                href={`/proyectos/${b.proyecto.id}`}
+                data-balance-tarjeta={b.proyecto.id}
+                className="block bg-white border border-black/5 rounded-2xl p-3"
+              >
+                <p className="text-sm font-medium text-ink-dim truncate">{b.proyecto.nombre}</p>
+                {b.proyecto.cliente_nombre && <p className="text-xs text-ink-muted truncate">{b.proyecto.cliente_nombre}</p>}
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 mt-2">
+                  <div>
+                    <p className="text-[11px] text-ink-muted">Líquido</p>
+                    <p className="text-sm tabular-nums text-ink-dim">{formatMonto(b.liquido, activo.moneda)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-ink-muted">Total</p>
+                    <p className="text-sm tabular-nums font-medium text-ink-dim">{formatMonto(b.total, activo.moneda)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-mint-label">Por cobrar</p>
+                    <p className="text-sm tabular-nums text-mint-900">{formatMonto(b.porCobrar, activo.moneda)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-mauve-label">Por pagar</p>
+                    <p className="text-sm tabular-nums text-mauve-900">{formatMonto(b.porPagar, activo.moneda)}</p>
+                  </div>
+                </div>
+              </Link>
+            ))}
+            <div className="bg-cream/60 rounded-2xl p-3 flex justify-between items-baseline">
+              <p className="text-xs text-ink-muted">
+                {balances.length} {balances.length === 1 ? "proyecto abierto" : "proyectos abiertos"}
+              </p>
+              <p className="text-sm tabular-nums font-medium text-ink-dim">{formatMonto(sumaProyectos.total, activo.moneda)}</p>
+            </div>
+          </div>
+          <div className="hidden sm:block bg-white border border-black/5 rounded-2xl overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-[11px] text-ink-muted uppercase tracking-wide">
@@ -278,7 +320,7 @@ export default function DashboardPage() {
                       <Link href={`/proyectos/${b.proyecto.id}`} className="text-ink-dim hover:underline">
                         {b.proyecto.nombre}
                       </Link>
-                      <p className="text-[11px] text-ink-muted truncate">{b.proyecto.cliente_nombre}</p>
+                      <p className="text-xs text-ink-muted truncate">{b.proyecto.cliente_nombre}</p>
                     </td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-ink-dim">
                       {formatMonto(b.liquido, activo.moneda)}
@@ -314,8 +356,9 @@ export default function DashboardPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
-        <p className="text-[11px] text-ink-muted mt-2">
+        <p className="hidden sm:block text-[11px] text-ink-muted mt-2">
           El líquido del proyecto es lo cobrado menos lo pagado a proveedores; no es dinero
           apartado en el banco. El capital líquido de arriba sale de las cuentas.
         </p>
@@ -385,7 +428,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-ink-dim truncate">{p.nombre}</p>
-                  <p className="text-[11px] text-ink-muted truncate">{p.cliente_nombre}</p>
+                  <p className="text-xs text-ink-muted truncate">{p.cliente_nombre}</p>
                 </div>
                 <p className="text-sm font-medium text-ink-dim whitespace-nowrap">
                   {formatMonto(p.disponible ?? 0, "MXN")}
@@ -441,7 +484,7 @@ export default function DashboardPage() {
                       {m.descripcion || m.contraparte_nombre}
                       <MarcaFiscal mov={m} />
                     </p>
-                    <p className="text-[11px] text-ink-muted truncate">
+                    <p className="text-xs text-ink-muted truncate">
                       {dateStr} · {m.cuenta_nombre}
                       {m.proyecto_nombre && ` · ${m.proyecto_nombre}`}
                     </p>

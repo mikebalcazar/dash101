@@ -99,15 +99,15 @@ export function FilasBuzon({ filas }: { filas: Orden[] }) {
         >
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-ink-dim line-clamp-2">{o.concepto}</p>
-            <p className="text-[11px] text-ink-muted truncate">
+            <p className="text-xs text-ink-muted truncate">
               {o.folio} · <AQuien orden={o} />
               {o.tipo !== "reembolso" && <> · {o.solicitante_nombre || o.solicitante_correo || "alguien"}</>}
             </p>
-            <p className="text-[11px] mt-0.5 flex items-center gap-2 flex-wrap">
+            <p className="text-xs mt-0.5 flex items-center gap-2 flex-wrap">
               <Vence orden={o} />
               {o.tipo === "reembolso" && <Tipo orden={o} />}
               {o.urgente && (
-                <span className="inline-block rounded-lg px-2 py-0.5 text-[11px] font-medium bg-mauve-50 text-mauve-900">
+                <span className="inline-block rounded-lg px-2 py-0.5 text-xs font-medium bg-mauve-50 text-mauve-900">
                   Urgente
                 </span>
               )}
