@@ -519,8 +519,16 @@ test('pedir un reembolso, verlo en el inicio y en su pestaña del buzón, y paga
   assert.equal(await pag.locator('aside button[title="Compras y reembolsos"]').count(), 0, 'y ya no «Compras y reembolsos»');
   const globo = pag.locator('[data-pendientes]');
   await globo.waitFor({ timeout: 20000 });
-  assert.equal(await globo.innerText(), String(resumen.compras.cuantas + resumen.reembolsos.cuantas),
-    'el circulito de Compras cuenta las órdenes sin pagar, compras y reembolsos');
+  /* Se compara contra la API en ESTE momento y para ESTE negocio: el
+   * circulito es del negocio activo, y lo que otras corridas dejen en el
+   * buzón cuenta igual. Si no cuadra, el mensaje dice qué negocio tiene la
+   * pantalla y cuánto hay en toda la empresa, para no adivinar. */
+  const ahora = await api(pag, `/orgs/${ORG}/ordenes/resumen?negocio_id=${neg.id}`);
+  const todos = await api(pag, `/orgs/${ORG}/ordenes/resumen`);
+  const cuantos = ahora.compras.cuantas + ahora.reembolsos.cuantas;
+  const enPantalla = (await texto(pag)).match(/Capital total de ([^\n]+)/)?.[1] ?? '?';
+  assert.equal(await globo.innerText(), String(cuantos),
+    `el circulito de Compras cuenta las órdenes sin pagar del negocio activo (pantalla: «${enPantalla}», negocio de la prueba: «${neg.nombre}»; toda la empresa: ${todos.compras.cuantas + todos.reembolsos.cuantas})`);
   const seccion = pag.locator('[data-seccion="por-pagar"]');
   await seccion.waitFor({ timeout: 20000 });
   assert.ok((await seccion.innerText()).includes(folio), 'el buzón del inicio trae el reembolso por pagar');
