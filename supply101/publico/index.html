@@ -109,6 +109,34 @@
       <select id="proveedor"></select>
       <input id="proveedor-nuevo" placeholder="Nombre del proveedor" style="margin-top:8px">
       <button type="button" class="liso" id="b-alta-proveedor" style="margin-top:6px">＋ Dar de alta un proveedor nuevo</button>
+      <button type="button" class="liso oculto" id="b-ficha-proveedor" style="margin-top:6px">Ver la ficha del proveedor: cuentas y documentos</button>
+
+      <!-- La ficha del proveedor ya dado de alta (Mike, 30-sep-2026): sus
+           datos, sus cuentas (se agregan y se quitan) y sus documentos de
+           respaldo (se suben y se quitan). La pinta app.js (pintarFicha). -->
+      <div id="ficha-proveedor" class="tarjeta oculto" style="margin-top:10px">
+        <p class="sub" style="margin:0"><b id="fc-nombre"></b></p>
+        <p class="sub" id="fc-datos" style="margin:4px 0 0"></p>
+        <a id="fc-maps" class="liga oculto" target="_blank" rel="noopener" href="#">Abrir en Google Maps ↗</a>
+        <label style="margin-top:10px">Cuentas bancarias</label>
+        <ul id="fc-cuentas" class="cuentas-lista"></ul>
+        <div class="fila">
+          <input id="fc-alias" placeholder="Alias (Nómina, Dólares…)">
+          <input id="fc-clabe" inputmode="numeric" maxlength="24" placeholder="CLABE">
+        </div>
+        <div class="fila">
+          <input id="fc-banco" placeholder="Banco">
+          <input id="fc-beneficiario" placeholder="Beneficiario">
+        </div>
+        <button type="button" class="liso" id="fc-agregar">＋ Agregar esta cuenta</button>
+        <label for="fc-docs" style="margin-top:10px">Documentos de respaldo</label>
+        <ul id="fc-docs-lista" class="docs-lista"></ul>
+        <input id="fc-docs" type="file" multiple accept="image/*,application/pdf">
+        <p id="err-ficha" class="aviso mal oculto"></p>
+        <div class="fila" style="margin-top:12px">
+          <button type="button" class="b claro" id="fc-cerrar" style="margin-top:0">Cerrar la ficha</button>
+        </div>
+      </div>
 
       <!-- Alta de proveedor (Mike, 29-sep-2026): nombre, RFC, cuenta (CLABE,
            banco, beneficiario), contacto y ubicación de Google Maps. Vive
@@ -129,18 +157,11 @@
             <input id="pv-telefono" type="tel" inputmode="tel" placeholder="55 1234 5678">
           </div>
         </div>
-        <label for="pv-clabe">CLABE <span class="pista">18 dígitos; se revisa que cuadre.</span></label>
-        <input id="pv-clabe" inputmode="numeric" maxlength="24" placeholder="012 180 00123456789 0">
-        <div class="fila">
-          <div>
-            <label for="pv-banco">Banco</label>
-            <input id="pv-banco" placeholder="BBVA">
-          </div>
-          <div>
-            <label for="pv-beneficiario">Beneficiario</label>
-            <input id="pv-beneficiario" placeholder="A nombre de quién está la cuenta">
-          </div>
-        </div>
+        <!-- Cuentas bancarias (Mike, 30-sep-2026): más de una, cada una con
+             su alias. Las filas las pinta app.js (pintarCuentasAlta). -->
+        <label>Cuentas bancarias <span class="pista">Las que haga falta, cada una con un alias para saber cuál es. La CLABE se revisa que cuadre.</span></label>
+        <div id="pv-cuentas"></div>
+        <button type="button" class="liso" id="pv-otra-cuenta">＋ Otra cuenta</button>
         <label for="pv-direccion">Dirección</label>
         <input id="pv-direccion" placeholder="Calle, número, colonia, ciudad">
         <label for="pv-maps">Ubicación en Google Maps
@@ -151,6 +172,11 @@
           <button type="button" class="b claro" id="pv-aqui" style="flex:0 0 auto;margin-top:0">📍 Aquí</button>
         </div>
         <a id="pv-maps-ver" class="liga oculto" target="_blank" rel="noopener" href="#">Abrir en Google Maps ↗</a>
+        <label for="pv-docs" style="margin-top:8px">Documentos de respaldo
+          <span class="pista">Carátula bancaria, foto de la tarjeta a donde se deposita, constancia fiscal… Uno o varios; foto o PDF.</span>
+        </label>
+        <input id="pv-docs" type="file" multiple accept="image/*,application/pdf">
+        <ul id="pv-docs-lista" class="docs-lista"></ul>
         <p id="err-proveedor" class="aviso mal oculto"></p>
         <div class="fila" style="margin-top:12px">
           <button type="button" class="b" id="pv-guardar">Guardar el proveedor</button>

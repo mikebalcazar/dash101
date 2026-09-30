@@ -427,8 +427,12 @@ async function verPedir(orden, tipo = 'compra') {
 
 let tocado = false;  // ¿alguien editó el desglose a mano?
 
-const refrescarProveedor = () => ver('proveedor-nuevo', !$('proveedor').value);
-$('proveedor').onchange = refrescarProveedor;
+const refrescarProveedor = () => {
+  ver('proveedor-nuevo', !$('proveedor').value);
+  ver('b-ficha-proveedor', !!$('proveedor').value && $('ficha-proveedor').classList.contains('oculto'));
+  if (!$('proveedor').value) ver('ficha-proveedor', false);
+};
+$('proveedor').onchange = () => { ver('ficha-proveedor', false); refrescarProveedor(); };
 
 /* ─────────────── alta de proveedor ───────────────
  * Mike, 29-sep-2026: «poner la opción de dar de alta a un nuevo proveedor, y
@@ -439,12 +443,73 @@ $('proveedor').onchange = refrescarProveedor;
  * API revisa CLABE, RFC y correo y contesta 400 con `errores` por campo. La
  * ubicación es la liga que Google Maps comparte, o la de donde está parado
  * quien lo da de alta («📍 Aquí» → https://www.google.com/maps?q=lat,lng). */
-const PV_CAMPOS = ['nombre', 'rfc', 'correo', 'telefono', 'clabe', 'banco', 'beneficiario', 'direccion', 'maps'];
+const PV_CAMPOS = ['nombre', 'rfc', 'correo', 'telefono', 'direccion', 'maps'];
+
+/* ─────────────── las cuentas del alta ───────────────
+ * Mike, 30-sep-2026: «que se puedan registrar más de una cuenta bancaria
+ * con un ALIAS para identificarla». Cada cuenta es una fila de
+ * proveedor_cuentas en la API (contrato 0.55.0); aquí son tarjetitas con
+ * alias, CLABE, banco y beneficiario. La primera se llama «Principal» de
+ * fábrica; las vacías no se mandan. */
+let pvCreado = null;   // el proveedor ya quedó creado y falló algo después: no se vuelve a crear
+function filaCuenta(n, datos = {}) {
+  const d = document.createElement('div');
+  d.className = 'pv-cuenta';
+  d.dataset.n = String(n);
+  d.innerHTML = `
+    <button type="button" class="quitar" title="Quitar esta cuenta" aria-label="Quitar esta cuenta">×</button>
+    <div class="fila">
+      <input class="c-alias" placeholder="Alias (Principal, Nómina…)" value="${escapar(datos.alias ?? (n === 0 ? 'Principal' : ''))}">
+      <input class="c-clabe" inputmode="numeric" maxlength="24" placeholder="CLABE, 18 dígitos" value="${escapar(datos.clabe ?? '')}">
+    </div>
+    <div class="fila">
+      <input class="c-banco" placeholder="Banco" value="${escapar(datos.banco ?? '')}">
+      <input class="c-beneficiario" placeholder="Beneficiario" value="${escapar(datos.beneficiario ?? '')}">
+    </div>`;
+  d.querySelector('.quitar').onclick = () => { d.remove(); if (!$('pv-cuentas').children.length) $('pv-cuentas').appendChild(filaCuenta(0)); };
+  return d;
+}
+function pintarCuentasAlta() {
+  $('pv-cuentas').innerHTML = '';
+  $('pv-cuentas').appendChild(filaCuenta(0));
+}
+$('pv-otra-cuenta').onclick = () => {
+  const n = $('pv-cuentas').children.length;
+  $('pv-cuentas').appendChild(filaCuenta(n));
+  $('pv-cuentas').lastElementChild.querySelector('.c-alias').focus();
+};
+/** Las cuentas escritas en el alta, sin las vacías. */
+function cuentasDelAlta() {
+  return [...$('pv-cuentas').querySelectorAll('.pv-cuenta')].map((d) => ({
+    el: d,
+    alias: d.querySelector('.c-alias').value.trim(),
+    clabe: d.querySelector('.c-clabe').value.replace(/[\s-]/g, ''),
+    banco: d.querySelector('.c-banco').value.trim(),
+    beneficiario: d.querySelector('.c-beneficiario').value.trim(),
+  })).filter((c) => c.clabe || c.banco || c.beneficiario);
+}
+/* Los documentos escogidos en el alta se enseñan por nombre; se suben al
+ * guardar, colgados del proveedor (archivos, de_tabla = 'proveedores'). Las
+ * fotos se achican antes, como el ticket; un PDF va tal cual. */
+function pintarDocsAlta() {
+  const fs = [...($('pv-docs').files || [])];
+  $('pv-docs-lista').innerHTML = fs.map((f) => `<li><span>${escapar(f.name)}</span><span class="pista">${(f.size / 1024).toFixed(0)} KB</span></li>`).join('');
+}
+$('pv-docs').onchange = pintarDocsAlta;
+async function subirDocumento(proveedorId, f) {
+  const forma = new FormData();
+  forma.set('archivo', /^image\//.test(f.type) ? await achicarImagen(f) : f, f.name);
+  forma.set('de_tabla', 'proveedores');
+  forma.set('de_id', proveedorId);
+  return pedir(`/orgs/${est.org.id}/archivos`, { method: 'POST', form: forma });
+}
 function abrirAltaProveedor(abrir) {
   ver('alta-proveedor', abrir);
   ver('b-alta-proveedor', !abrir);
   $('err-proveedor').classList.add('oculto');
+  if (abrir && !$('pv-cuentas').children.length) pintarCuentasAlta();
   if (abrir) {
+    ver('ficha-proveedor', false);
     // Si ya había escrito un nombre en «Otro», se aprovecha.
     if (!$('pv-nombre').value && !$('proveedor').value) $('pv-nombre').value = $('proveedor-nuevo').value.trim();
     refrescarMapsVer();
@@ -454,6 +519,10 @@ function abrirAltaProveedor(abrir) {
 function limpiarAltaProveedor() {
   for (const c of PV_CAMPOS) $('pv-' + c).value = '';
   for (const el of document.querySelectorAll('#alta-proveedor .campo-mal')) el.classList.remove('campo-mal');
+  pintarCuentasAlta();
+  $('pv-docs').value = '';
+  pintarDocsAlta();
+  pvCreado = null;
   refrescarMapsVer();
 }
 function refrescarMapsVer() {
@@ -492,16 +561,36 @@ $('pv-guardar').onclick = async () => {
     rfc: $('pv-rfc').value.trim().toUpperCase(),
     correo: $('pv-correo').value.trim(),
     telefono: $('pv-telefono').value.trim(),
-    clabe: $('pv-clabe').value.replace(/[\s-]/g, ''),
-    banco: $('pv-banco').value.trim(),
-    beneficiario: $('pv-beneficiario').value.trim(),
     direccion: $('pv-direccion').value.trim(),
     maps_url: $('pv-maps').value.trim(),
   };
+  const cuentas = cuentasDelAlta();
+  for (const c of cuentas) {
+    if (!c.alias) { c.el.querySelector('.c-alias').classList.add('campo-mal'); return decir('err-proveedor', 'Ponle un alias a cada cuenta para saber cuál es.'); }
+    if (!c.clabe) { c.el.querySelector('.c-clabe').classList.add('campo-mal'); return decir('err-proveedor', `La cuenta «${c.alias}» no trae CLABE.`); }
+  }
   const b = $('pv-guardar'); const antes = b.textContent; b.disabled = true; b.textContent = 'Guardando…';
   try {
-    const p = await pedir(`/orgs/${est.org.id}/proveedores`, { method: 'POST', body: cuerpo });
-    est.proveedores = [...est.proveedores, p].sort((x, y) => (x.nombre_norm || x.nombre).localeCompare(y.nombre_norm || y.nombre));
+    /* Tres pasos, en orden: el proveedor, sus cuentas, sus documentos. Si el
+     * proveedor ya quedó y falló una cuenta, al reintentar no se crea otro:
+     * se recuerda en `pvCreado` y se sigue desde las cuentas. */
+    const p = pvCreado || await pedir(`/orgs/${est.org.id}/proveedores`, { method: 'POST', body: cuerpo });
+    pvCreado = p;
+    for (const c of cuentas) {
+      if (c.el.dataset.guardada) continue;
+      try {
+        await pedir(`/orgs/${est.org.id}/proveedor_cuentas`, { method: 'POST', body: { proveedor_id: p.id, alias: c.alias, clabe: c.clabe, banco: c.banco, beneficiario: c.beneficiario } });
+        c.el.dataset.guardada = '1';
+      } catch (e) {
+        const errores = (e && e.detalle && e.detalle.errores) || {};
+        for (const k of Object.keys(errores)) { const el = c.el.querySelector('.c-' + k); if (el) el.classList.add('campo-mal'); }
+        throw Object.assign(new Error(`Cuenta «${c.alias}»: ${Object.values(errores).join(' ') || 'no se pudo guardar.'}`), { dicho: true });
+      }
+    }
+    const docs = [...($('pv-docs').files || [])];
+    const noSubidos = [];
+    for (const f of docs) { try { await subirDocumento(p.id, f); } catch { noSubidos.push(f.name); } }
+    est.proveedores = [...est.proveedores.filter((q) => q.id !== p.id), p].sort((x, y) => (x.nombre_norm || x.nombre).localeCompare(y.nombre_norm || y.nombre));
     $('proveedor').innerHTML = `<option value="">Otro (lo escribo)</option>` +
       est.proveedores.map((q) => `<option value="${q.id}">${escapar(q.nombre)}</option>`).join('');
     $('proveedor').value = p.id;
@@ -509,13 +598,91 @@ $('pv-guardar').onclick = async () => {
     refrescarProveedor();
     limpiarAltaProveedor();
     abrirAltaProveedor(false);
-    decir('err-pedir', `Proveedor «${p.nombre}» dado de alta. Ya está escogido para esta compra.`, 'bien');
+    const conQue = [cuentas.length ? `${cuentas.length} cuenta${cuentas.length === 1 ? '' : 's'}` : '', docs.length - noSubidos.length ? `${docs.length - noSubidos.length} documento${docs.length - noSubidos.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' y ');
+    decir('err-pedir', `Proveedor «${p.nombre}» dado de alta${conQue ? ` con ${conQue}` : ''}. Ya está escogido para esta compra.${noSubidos.length ? ` No se pudo subir: ${noSubidos.join(', ')}; inténtalo desde su ficha.` : ''}`, noSubidos.length ? 'mal' : 'bien');
   } catch (e) {
+    if (e && e.dicho) return decir('err-proveedor', e.message);
     const errores = (e && e.detalle && e.detalle.errores) || {};
     const campos = Object.keys(errores);
     for (const k of campos) { const el = $('pv-' + (k === 'maps_url' ? 'maps' : k)); if (el) el.classList.add('campo-mal'); }
     decir('err-proveedor', campos.length ? campos.map((k) => errores[k]).join(' ') : (e && e.error === 'sin_permiso' ? 'Tu usuario no puede dar de alta proveedores.' : 'No se pudo guardar el proveedor. Intenta otra vez.'));
   } finally { b.disabled = false; b.textContent = antes; }
+};
+
+/* ─────────────── la ficha del proveedor ───────────────
+ * Un proveedor que ya existe también necesita cuentas y documentos (los de
+ * ayer nacieron con una cuenta en columnas, o sin ninguna). Al escoger uno
+ * en «A quién se le compra» aparece «Ver la ficha»: sus datos, sus cuentas
+ * (se agregan y se quitan) y sus documentos (se suben y se quitan). Vive
+ * dentro de «Pedir», como el alta, para no salir del formulario a medias. */
+const fmtClabe = (c) => String(c || '').replace(/(\d{3})(\d{3})(\d{11})(\d)/, '$1 $2 $3 $4');
+async function abrirFicha(abrir) {
+  ver('ficha-proveedor', abrir);
+  ver('b-ficha-proveedor', !abrir && !!$('proveedor').value);
+  if (!abrir) return;
+  const p = est.proveedores.find((q) => q.id === $('proveedor').value);
+  if (!p) return abrirFicha(false);
+  $('fc-nombre').textContent = p.nombre;
+  $('fc-datos').textContent = [p.rfc, p.correo, p.telefono, p.direccion].filter(Boolean).join(' · ') || 'Sin más datos.';
+  $('fc-maps').href = p.maps_url || '#';
+  ver('fc-maps', /^https:\/\//i.test(p.maps_url || ''));
+  decir('err-ficha', '');
+  for (const id of ['fc-alias', 'fc-clabe', 'fc-banco', 'fc-beneficiario']) { $(id).value = ''; $(id).classList.remove('campo-mal'); }
+  $('fc-docs').value = '';
+  await pintarFicha(p.id);
+}
+async function pintarFicha(pid) {
+  const [cuentas, docs] = await Promise.all([
+    pedir(`/orgs/${est.org.id}/proveedor_cuentas?proveedor_id=${encodeURIComponent(pid)}`).then((r) => r.filas || []).catch(() => []),
+    pedir(`/orgs/${est.org.id}/archivos?de_tabla=proveedores&de_id=${encodeURIComponent(pid)}`).then((r) => r.filas || []).catch(() => []),
+  ]);
+  $('fc-cuentas').innerHTML = cuentas.length
+    ? cuentas.map((c) => `<li data-cuenta="${escapar(c.id)}"><span><b>${escapar(c.alias)}</b>${c.banco ? ` · ${escapar(c.banco)}` : ''}<br><span class="clabe">${escapar(fmtClabe(c.clabe))}</span>${c.beneficiario ? `<br>${escapar(c.beneficiario)}` : ''}</span><button type="button" class="quitar" data-quitar-cuenta="${escapar(c.id)}" title="Quitar esta cuenta" aria-label="Quitar esta cuenta">×</button></li>`).join('')
+    : '<li><span class="pista">Sin cuentas todavía.</span></li>';
+  $('fc-docs-lista').innerHTML = docs.length
+    ? docs.map((d) => `<li data-doc="${escapar(d.id)}"><a href="/s101/orgs/${est.org.id}/archivos/${escapar(d.id)}" target="_blank" rel="noreferrer">${escapar(d.nombre)}</a><button type="button" class="quitar" data-quitar-doc="${escapar(d.id)}" title="Quitar este documento" aria-label="Quitar este documento">×</button></li>`).join('')
+    : '<li><span class="pista">Sin documentos todavía.</span></li>';
+  for (const b of $('fc-cuentas').querySelectorAll('[data-quitar-cuenta]')) b.onclick = () => quitarDeFicha('proveedor_cuentas', b.dataset.quitarCuenta, pid, '¿Quitar esta cuenta del proveedor?');
+  for (const b of $('fc-docs-lista').querySelectorAll('[data-quitar-doc]')) b.onclick = () => quitarDeFicha('archivos', b.dataset.quitarDoc, pid, '¿Quitar este documento?');
+}
+async function quitarDeFicha(tabla, id, pid, pregunta) {
+  if (!confirm(pregunta)) return;
+  try { await pedir(`/orgs/${est.org.id}/${tabla}/${encodeURIComponent(id)}`, { method: 'DELETE' }); }
+  catch { decir('err-ficha', 'No se pudo quitar. Intenta otra vez.'); }
+  await pintarFicha(pid);
+}
+$('b-ficha-proveedor').onclick = () => abrirFicha(true);
+$('fc-cerrar').onclick = () => abrirFicha(false);
+$('fc-agregar').onclick = async () => {
+  const pid = $('proveedor').value;
+  if (!pid) return;
+  for (const id of ['fc-alias', 'fc-clabe', 'fc-banco', 'fc-beneficiario']) $(id).classList.remove('campo-mal');
+  decir('err-ficha', '');
+  const alias = $('fc-alias').value.trim();
+  const clabe = $('fc-clabe').value.replace(/[\s-]/g, '');
+  if (!alias) { $('fc-alias').classList.add('campo-mal'); return decir('err-ficha', 'Ponle un alias a la cuenta.'); }
+  if (!clabe) { $('fc-clabe').classList.add('campo-mal'); return decir('err-ficha', 'Escribe la CLABE.'); }
+  const b = $('fc-agregar'); b.disabled = true;
+  try {
+    await pedir(`/orgs/${est.org.id}/proveedor_cuentas`, { method: 'POST', body: { proveedor_id: pid, alias, clabe, banco: $('fc-banco').value.trim(), beneficiario: $('fc-beneficiario').value.trim() } });
+    for (const id of ['fc-alias', 'fc-clabe', 'fc-banco', 'fc-beneficiario']) $(id).value = '';
+    await pintarFicha(pid);
+  } catch (e) {
+    const errores = (e && e.detalle && e.detalle.errores) || {};
+    for (const k of Object.keys(errores)) { const el = $('fc-' + k); if (el) el.classList.add('campo-mal'); }
+    decir('err-ficha', Object.values(errores).join(' ') || (e && e.error === 'sin_permiso' ? 'Tu usuario no puede agregar cuentas.' : 'No se pudo guardar la cuenta.'));
+  } finally { b.disabled = false; }
+};
+$('fc-docs').onchange = async () => {
+  const pid = $('proveedor').value;
+  const fs = [...($('fc-docs').files || [])];
+  if (!pid || !fs.length) return;
+  decir('err-ficha', '');
+  const noSubidos = [];
+  for (const f of fs) { try { await subirDocumento(pid, f); } catch { noSubidos.push(f.name); } }
+  $('fc-docs').value = '';
+  if (noSubidos.length) decir('err-ficha', `No se pudo subir: ${noSubidos.join(', ')}.`);
+  await pintarFicha(pid);
 };
 
 function refrescarIva() {
