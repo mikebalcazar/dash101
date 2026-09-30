@@ -158,6 +158,14 @@ export async function verOrden(id: string): Promise<{ orden: Orden; eventos: Eve
   return { ...r, orden: orden(r.orden) };
 }
 
+/** 0.56.1 · La orden que dejó ese egreso: desde el movimiento se llega a
+ *  la orden con su historia y sus papeles. 404 si el movimiento no viene de
+ *  una orden. */
+export async function getOrdenDeMovimiento(movimiento_id: string): Promise<{ orden: Orden; eventos: EventoOrden[]; archivos: ArchivoOrden[] }> {
+  const r = await pedir<{ orden: FilaOrden; eventos: EventoOrden[]; archivos: ArchivoOrden[] }>(`${base()}/de-movimiento/${encodeURIComponent(movimiento_id)}`);
+  return { ...r, orden: orden(r.orden) };
+}
+
 /** Corregir una devuelta. Vuelve al buzón con el mismo folio. */
 export async function corregirOrden(id: string, d: Partial<OrdenInput>): Promise<Orden> {
   const cuerpo: Record<string, unknown> = {};

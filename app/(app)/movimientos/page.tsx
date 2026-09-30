@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { getOrdenDeMovimiento } from "@/lib/ordenes";
 import { MarcaFiscal } from "@/components/marca-fiscal";
 import { deleteDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -23,6 +25,7 @@ import {
   IconTrash,
   IconPencil,
   IconLink,
+  IconExternalLink,
 } from "@tabler/icons-react";
 
 const TIPO_META = {
@@ -135,6 +138,20 @@ export default function MovimientosPage() {
   // El ajuste por conciliación es dinero que se movió sin que nadie lo
   // registrara: va aparte de los ingresos y gastos de verdad, no mezclado.
   const esAjuste = (m: Movimiento) => m.categoria === CATEGORIA_AJUSTE;
+  /* 0.56.1 · Un egreso que dejó una orden pagada lleva a la orden, con su
+   * historia y sus papeles (Mike, 30-sep-2026: «se pasen al movimiento con
+   * toda la info que traían»). La orden se busca por el movimiento en la
+   * API; si no viene de una orden, no pasa nada. */
+  const router = useRouter();
+  const deOrden = (m: Movimiento) => m.categoria === "orden_de_compra" || m.categoria === "reembolso";
+  const irALaOrden = async (mid: string) => {
+    try {
+      const r = await getOrdenDeMovimiento(mid);
+      router.push(`/ordenes/${r.orden.id}`);
+    } catch {
+      /* no viene de una orden, o ya no está */
+    }
+  };
 
   // Totales del mes actual
   const now = new Date();
@@ -283,6 +300,17 @@ export default function MovimientosPage() {
                       />
                     )}
                     <MarcaFiscal mov={m} />
+                    {deOrden(m) && m.id && (
+                      <button
+                        type="button"
+                        data-orden-de={m.id}
+                        onClick={() => void irALaOrden(m.id as string)}
+                        title="Ver la orden, con su historia y sus papeles"
+                        className="inline-flex items-center gap-0.5 ml-1.5 text-[11px] font-normal text-sky-900 hover:underline align-middle"
+                      >
+                        orden <IconExternalLink size={11} />
+                      </button>
+                    )}
                   </p>
                   <p className="text-[11px] text-ink-muted truncate">
                     {dateStr} · {m.cuenta_nombre}
