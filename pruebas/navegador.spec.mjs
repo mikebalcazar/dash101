@@ -512,6 +512,9 @@ test('pedir un reembolso, verlo en el inicio y en su pestaña del buzón, y paga
 
   // ── el menú dice «Compras», el circulito cuenta y el buzón está en el inicio (30-sep-2026) ──
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  /* El menú se pinta cuando la sesión ya cargó, no con la página: se espera
+   * al botón y no se cuenta a ciegas (corrida 36774222077: 0 de 1). */
+  await pag.locator('aside button[title="Compras"]').waitFor({ timeout: 20000 });
   assert.equal(await pag.locator('aside button[title="Compras"]').count(), 1, 'el menú dice «Compras» a secas');
   assert.equal(await pag.locator('aside button[title="Compras y reembolsos"]').count(), 0, 'y ya no «Compras y reembolsos»');
   const globo = pag.locator('[data-pendientes]');
