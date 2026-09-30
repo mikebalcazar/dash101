@@ -32,9 +32,9 @@ export function Topbar() {
    * un negocio nada más». Aquí había un desplegable para cambiar de negocio
    * y crear otro; ahora sólo se dice cuál es. */
   return (
-    <div className="flex justify-between items-center mb-6 gap-3">
+    <div className="flex justify-between items-center mb-4 sm:mb-6 gap-3">
       <div>
-        <h1 className="text-xl font-medium tracking-tight text-ink-dim">
+        <h1 className="text-lg sm:text-xl font-medium tracking-tight text-ink-dim">
           {getGreeting()}{firstName ? `, ${firstName}` : ""}.
         </h1>
         <p className="text-xs text-ink-muted mt-0.5 capitalize">{formatDate()}</p>
@@ -45,7 +45,7 @@ export function Topbar() {
           className="flex items-center gap-2 bg-white border border-black/10 rounded-xl px-3 py-1.5 text-sm font-medium"
         >
           <IconBuildingSkyscraper size={13} className="text-ink-muted" />
-          <span className="max-w-[180px] truncate">
+          <span className="max-w-[110px] sm:max-w-[180px] truncate">
             {loading ? "Cargando…" : activo?.nombre ?? "Sin negocio"}
           </span>
         </span>

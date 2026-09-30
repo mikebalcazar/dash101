@@ -77,7 +77,7 @@ export function Sidebar() {
     .join("");
 
   return (
-    <aside className="w-16 sm:w-52 bg-cream flex flex-col items-center sm:items-stretch py-4 px-0 sm:px-3 gap-1">
+    <aside className="w-14 sm:w-52 bg-cream flex flex-col items-center sm:items-stretch py-4 px-0 sm:px-3 gap-1">
       {/* El logotipo oficial, el mismo del escaparate
         * (`descargas/sitio/marca/dash101.svg`). En el teléfono no cabe la
         * palabra, así que va el aro con el «101», recortado del mismo
