@@ -56,13 +56,18 @@ export function Sidebar() {
    * de pantalla, que es cuando algo se pudo haber pagado; quien no ve dinero
    * no recibe el número y no ve el circulito. */
   const [porPagar, setPorPagar] = useState(0);
+  const negocioId = activo?.id ?? null;
   useEffect(() => {
+    /* Sin negocio activo no se pide nada: sin `negocio_id` la API cuenta las
+     * órdenes de TODOS los negocios de la empresa, y ése no es el número de
+     * la pantalla que se está viendo (corrida 36775033289: 22 contra 7). */
+    if (!negocioId) { setPorPagar(0); return; }
     let vivo = true;
-    getResumenOrdenes(activo?.id)
+    getResumenOrdenes(negocioId)
       .then((r) => { if (vivo) setPorPagar(r.compras.cuantas + r.reembolsos.cuantas); })
       .catch(() => { if (vivo) setPorPagar(0); });
     return () => { vivo = false; };
-  }, [activo, pathname]);
+  }, [negocioId, pathname]);
 
   const initials = (user?.displayName || user?.email || "U")
     .split(/[\s@]/)
