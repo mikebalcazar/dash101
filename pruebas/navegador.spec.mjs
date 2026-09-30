@@ -620,7 +620,7 @@ test('accionistas a 390×844: se da de alta uno, se le registra un retiro, y que
   await pag.getByRole('button', { name: 'Nuevo accionista' }).click();
   await pag.getByPlaceholder('Nombre completo').fill(nombre);
   await pag.getByLabel('Participación %').fill('25');
-  await pag.getByRole('button', { name: 'Dar de alta' }).click();
+  await pag.getByRole('button', { name: 'Dar de alta', exact: true }).click();
   const tarjeta = pag.locator(`[data-accionista="${nombre}"]`);
   await tarjeta.waitFor({ timeout: 30000 });
   assert.match(await tarjeta.innerText(), /25% de participación/, 'la tarjeta enseña la participación');

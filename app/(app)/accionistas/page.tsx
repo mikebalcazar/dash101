@@ -173,32 +173,32 @@ export default function AccionistasPage() {
         <form onSubmit={guardarAlta} className="bg-white border border-black/5 rounded-2xl p-4 mb-4 space-y-3" data-forma="alta">
           <p className="text-sm font-medium text-ink-dim">Nuevo accionista</p>
           <div>
-            <label className={ETIQUETA}>Nombre <span className="text-mauve-900">*</span></label>
-            <input required maxLength={100} value={alta.nombre} onChange={(e) => setAlta({ ...alta, nombre: e.target.value })} className={CAMPO} placeholder="Nombre completo" />
+            <label htmlFor="alta-nombre" className={ETIQUETA}>Nombre <span className="text-mauve-900">*</span></label>
+            <input id="alta-nombre" required maxLength={100} value={alta.nombre} onChange={(e) => setAlta({ ...alta, nombre: e.target.value })} className={CAMPO} placeholder="Nombre completo" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={ETIQUETA}>Participación %</label>
-              <input type="number" inputMode="decimal" min={0} max={100} step="0.01" value={alta.porcentaje} onChange={(e) => setAlta({ ...alta, porcentaje: e.target.value })} className={CAMPO} placeholder="opcional" />
+              <label htmlFor="alta-porcentaje" className={ETIQUETA}>Participación %</label>
+              <input id="alta-porcentaje" type="number" inputMode="decimal" min={0} max={100} step="0.01" value={alta.porcentaje} onChange={(e) => setAlta({ ...alta, porcentaje: e.target.value })} className={CAMPO} placeholder="opcional" />
             </div>
             <div>
-              <label className={ETIQUETA}>RFC</label>
-              <input maxLength={13} value={alta.rfc} onChange={(e) => setAlta({ ...alta, rfc: e.target.value.toUpperCase() })} className={`${CAMPO} uppercase`} placeholder="opcional" />
+              <label htmlFor="alta-rfc" className={ETIQUETA}>RFC</label>
+              <input id="alta-rfc" maxLength={13} value={alta.rfc} onChange={(e) => setAlta({ ...alta, rfc: e.target.value.toUpperCase() })} className={`${CAMPO} uppercase`} placeholder="opcional" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={ETIQUETA}>Correo</label>
-              <input type="email" value={alta.correo} onChange={(e) => setAlta({ ...alta, correo: e.target.value })} className={CAMPO} />
+              <label htmlFor="alta-correo" className={ETIQUETA}>Correo</label>
+              <input id="alta-correo" type="email" value={alta.correo} onChange={(e) => setAlta({ ...alta, correo: e.target.value })} className={CAMPO} />
             </div>
             <div>
-              <label className={ETIQUETA}>Teléfono</label>
-              <input type="tel" value={alta.telefono} onChange={(e) => setAlta({ ...alta, telefono: e.target.value })} className={CAMPO} />
+              <label htmlFor="alta-telefono" className={ETIQUETA}>Teléfono</label>
+              <input id="alta-telefono" type="tel" value={alta.telefono} onChange={(e) => setAlta({ ...alta, telefono: e.target.value })} className={CAMPO} />
             </div>
           </div>
           <div>
-            <label className={ETIQUETA}>Notas</label>
-            <input maxLength={200} value={alta.notas} onChange={(e) => setAlta({ ...alta, notas: e.target.value })} className={CAMPO} placeholder="opcional" />
+            <label htmlFor="alta-notas" className={ETIQUETA}>Notas</label>
+            <input id="alta-notas" maxLength={200} value={alta.notas} onChange={(e) => setAlta({ ...alta, notas: e.target.value })} className={CAMPO} placeholder="opcional" />
           </div>
           <div className="flex gap-2 justify-end">
             <button type="button" onClick={() => setAltaAbierta(false)} className="text-sm px-3 py-2 rounded-xl text-ink-muted hover:text-ink-dim">Cancelar</button>
@@ -248,17 +248,17 @@ export default function AccionistasPage() {
                 <form onSubmit={guardarRetiro} className="mt-3 pt-3 border-t border-black/5 space-y-3" data-forma="retiro">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className={ETIQUETA}>Monto <span className="text-mauve-900">*</span></label>
-                      <input type="number" inputMode="decimal" required min={0.01} step="0.01" value={retiro.monto} onChange={(e) => setRetiro({ ...retiro, monto: e.target.value })} className={CAMPO} placeholder="0.00" />
+                      <label htmlFor="retiro-monto" className={ETIQUETA}>Monto <span className="text-mauve-900">*</span></label>
+                      <input id="retiro-monto" type="number" inputMode="decimal" required min={0.01} step="0.01" value={retiro.monto} onChange={(e) => setRetiro({ ...retiro, monto: e.target.value })} className={CAMPO} placeholder="0.00" />
                     </div>
                     <div>
-                      <label className={ETIQUETA}>Fecha</label>
-                      <input type="date" required value={retiro.fecha} onChange={(e) => setRetiro({ ...retiro, fecha: e.target.value })} className={CAMPO} />
+                      <label htmlFor="retiro-fecha" className={ETIQUETA}>Fecha</label>
+                      <input id="retiro-fecha" type="date" required value={retiro.fecha} onChange={(e) => setRetiro({ ...retiro, fecha: e.target.value })} className={CAMPO} />
                     </div>
                   </div>
                   <div>
-                    <label className={ETIQUETA}>De qué cuenta sale <span className="text-mauve-900">*</span></label>
-                    <select required value={retiro.cuenta_id} onChange={(e) => setRetiro({ ...retiro, cuenta_id: e.target.value })} className={CAMPO}>
+                    <label htmlFor="retiro-cuenta" className={ETIQUETA}>De qué cuenta sale <span className="text-mauve-900">*</span></label>
+                    <select id="retiro-cuenta" required value={retiro.cuenta_id} onChange={(e) => setRetiro({ ...retiro, cuenta_id: e.target.value })} className={CAMPO}>
                       <option value="">Escoge una cuenta</option>
                       {cuentas.map((c) => (
                         <option key={c.id} value={c.id}>{c.nombre} · {formatMontoExact(c.saldo_actual ?? 0, c.moneda)}</option>
@@ -266,8 +266,8 @@ export default function AccionistasPage() {
                     </select>
                   </div>
                   <div>
-                    <label className={ETIQUETA}>Concepto</label>
-                    <input maxLength={200} value={retiro.descripcion} onChange={(e) => setRetiro({ ...retiro, descripcion: e.target.value })} className={CAMPO} placeholder={`Retiro de utilidades · ${a.nombre}`} />
+                    <label htmlFor="retiro-concepto" className={ETIQUETA}>Concepto</label>
+                    <input id="retiro-concepto" maxLength={200} value={retiro.descripcion} onChange={(e) => setRetiro({ ...retiro, descripcion: e.target.value })} className={CAMPO} placeholder={`Retiro de utilidades · ${a.nombre}`} />
                   </div>
                   <div className="flex gap-2 justify-end">
                     <button type="button" onClick={() => setRetiroDe(null)} className="text-sm px-3 py-2 rounded-xl text-ink-muted hover:text-ink-dim">Cancelar</button>
