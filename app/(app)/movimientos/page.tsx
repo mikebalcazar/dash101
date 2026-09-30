@@ -300,17 +300,6 @@ export default function MovimientosPage() {
                       />
                     )}
                     <MarcaFiscal mov={m} />
-                    {deOrden(m) && m.id && (
-                      <button
-                        type="button"
-                        data-orden-de={m.id}
-                        onClick={() => void irALaOrden(m.id as string)}
-                        title="Ver la orden, con su historia y sus papeles"
-                        className="inline-flex items-center gap-0.5 ml-1.5 text-[11px] font-normal text-sky-900 hover:underline align-middle"
-                      >
-                        orden <IconExternalLink size={11} />
-                      </button>
-                    )}
                   </p>
                   <p className="text-[11px] text-ink-muted truncate">
                     {dateStr} · {m.cuenta_nombre}
@@ -321,6 +310,21 @@ export default function MovimientosPage() {
                   {meta.prefix}
                   {formatMonto(m.monto, activo.moneda)}
                 </p>
+                {/* El egreso que dejó una orden pagada lleva a la orden. Va aquí,
+                    entre las acciones, y no dentro del renglón del concepto: ese
+                    renglón se recorta con `truncate` y en el teléfono el botón
+                    quedaba tapado (corrida 36776132464). */}
+                {deOrden(m) && m.id && (
+                  <button
+                    type="button"
+                    data-orden-de={m.id}
+                    onClick={() => void irALaOrden(m.id as string)}
+                    title="Ver la orden, con su historia y sus papeles"
+                    className="text-sky-900 hover:text-ink-dim p-1"
+                  >
+                    <IconExternalLink size={14} />
+                  </button>
+                )}
                 {/* Corregir, antes que borrar: es lo que casi siempre se quiere.
                     Una transferencia no se corrige —son dos movimientos
                     espejo—, así que ahí sólo queda el bote. */}
