@@ -95,6 +95,9 @@ jobs:
       - name: El «atrás» del navegador de supply101
         run: node supply101/pruebas/el-atras.mjs
 
+      - name: El letrero de versión nueva de supply101
+        run: node supply101/pruebas/la-version-nueva.mjs
+
       # ── staging ──────────────────────────────────────────────────────────
       # La empresa se decide al construir (lib/fuente.ts), así que hay que
       # construir una vez por entorno: el nombre queda dentro del paquete.
@@ -105,7 +108,10 @@ jobs:
           NEXT_PUBLIC_ORG: demo
           NEXT_PUBLIC_VERSION: ${{ github.sha }}
           EN_WORKER: '1'
-        run: npm run worker:build
+        run: |
+          # La huella pública que compara el letrero de versión nueva.
+          printf '%s\n' "${{ github.sha }}" > public/huella.txt
+          npm run worker:build
 
       # El 12-sep la primera publicación contestó 500 en todas las pantallas:
       # el paquete del servidor traía la construcción de Node de Firestore, y
@@ -134,6 +140,8 @@ jobs:
       # Vive en este repositorio porque es la otra cara del mismo módulo de
       # órdenes y usa los mismos secretos. Son cuatro archivos sin
       # empaquetador: `wrangler deploy` y ya.
+      - name: Sellar la huella de supply101 (la compara version-nueva.js)
+        run: printf '%s\n' "${{ github.sha }}" > supply101/publico/huella.txt
       - name: Publicar supply101 staging
         id: supply_staging
         working-directory: supply101
@@ -283,7 +291,10 @@ jobs:
           NEXT_PUBLIC_ORG: ${{ vars.ORG_PRODUCCION || 'forespot' }}
           NEXT_PUBLIC_VERSION: ${{ github.sha }}
           EN_WORKER: '1'
-        run: npm run worker:build
+        run: |
+          # La huella pública que compara el letrero de versión nueva.
+          printf '%s\n' "${{ github.sha }}" > public/huella.txt
+          npm run worker:build
 
       # El 12-sep la primera publicación contestó 500 en todas las pantallas:
       # el paquete del servidor traía la construcción de Node de Firestore, y
@@ -312,6 +323,8 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "producción publicada: $url (y en workers.dev, que redirige)"
 
+      - name: Sellar la huella de supply101 (la compara version-nueva.js)
+        run: printf '%s\n' "${{ github.sha }}" > supply101/publico/huella.txt
       - name: Publicar supply101 producción
         if: env.ORG_PRODUCCION != ''
         working-directory: supply101
