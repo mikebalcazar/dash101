@@ -15,8 +15,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { fuente, noEscribeTodavia, org } from "./fuente";
-import { pedir } from "./api/cliente";
+import { fuente, noEscribeTodavia } from "./fuente";
 import * as leer from "./api/leer";
 import * as escribir from "./api/escribir";
 import type { Negocio, Moneda } from "@/types/schema";
@@ -117,27 +116,4 @@ export async function listMiembrosDeNegocio(negocioId: string): Promise<string[]
   const snap = await getDoc(doc(db, "negocios", negocioId));
   if (!snap.exists()) return [];
   return (snap.data().miembros_uids as string[]) ?? [];
-}
-
-/* ─────────────── un solo negocio (contrato 0.50.0) ───────────────
- *
- * Mike, 29-sep: «borres de dash (y de todas las plataformas) la opción de
- * agregar diferentes negocios. Ya no vamos a tener esa funcionalidad (los
- * otros negocios son como TUYS y vibehome). Todo es para un negocio nada
- * más.» Y escogió fusionar lo que ya existe en uno.
- */
-export interface FusionDeNegocios {
-  queda: { id: string; nombre: string };
-  se_fueron: Array<{ id: string; nombre: string }>;
-  /** Cuántas filas cambian de negocio, por tabla. */
-  movidos: Record<string, number>;
-  productos_fusionados: number;
-  seco: boolean;
-}
-
-/** Todo lo de los demás negocios pasa al que se queda y los demás se borran.
- *  Con `seco` sólo dice qué se movería. Sólo con FUENTE=api. */
-export async function fusionarNegocios(queda_id: string, seco = false): Promise<FusionDeNegocios> {
-  if (fuente() !== 'api') throw noEscribeTodavia('fusionar negocios (sólo existe en la suite)');
-  return pedir<FusionDeNegocios>(`/orgs/${org()}/negocios/fusionar`, { method: 'POST', body: { queda_id, seco } });
 }
