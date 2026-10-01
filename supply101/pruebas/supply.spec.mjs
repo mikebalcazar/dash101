@@ -13,7 +13,7 @@
  *      «Pagada» y ENSEÑA EL COMPROBANTE, que es para lo que existe.
  *   5. Ni barrido horizontal ni errores de JavaScript.
  *
- * Escribe en la cuenta «Caja de supply101» del registro de la empresa, para no mover las
+ * Paga de una cuenta de pruebas del registro de la empresa, para no mover las
  * cifras de Taller Demo, de donde salen las capturas del escaparate.
  */
 
@@ -25,7 +25,12 @@ const URL = (process.env.URL_SUPPLY || 'http://127.0.0.1:8798').replace(/\/$/, '
 const API = process.env.API_ORIGEN || 'https://suite101-api-staging.mike-929.workers.dev';
 const ORG = 'demo';
 const CORREO = process.env.CORREO_PRUEBAS || 'prueba.admin@ejemplo.mx';
-const CUENTA = 'Caja de supply101';
+/* La cuenta de la que se paga. supply101 NO puede abrir cuentas (eso es de
+ * dash101: la API contesta 403 sin_permiso), así que se usa la que ya exista
+ * en el registro de la empresa: la propia de supply101 si está, y si no la de
+ * las pruebas de dash101, que vive en el mismo registro. Hasta que la org demo
+ * junte sus registros (API 0.63.0), «Caja de supply101» puede estar en otro. */
+const CUENTAS = ['Caja de supply101', 'Caja de pruebas'];
 const CLAVE = `supply-${process.env.GITHUB_RUN_ID || Date.now()}-nopal`;
 const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
@@ -62,6 +67,15 @@ async function api(ruta, { method = 'GET', body } = {}) {
 
 const filas = (x) => (Array.isArray(x) ? x : x?.filas ?? []);
 
+async function cuentaDePruebas() {
+  const cuentas = filas(await api(`/orgs/${ORG}/cuentas`));
+  for (const nombre of CUENTAS) {
+    const c = cuentas.find((x) => x.nombre === nombre);
+    if (c) return c;
+  }
+  assert.fail(`no hay cuenta de pruebas en el registro de la empresa: hace falta «${CUENTAS[0]}» o «${CUENTAS[1]}» (se abren desde dash101)`);
+}
+
 test('se entra con la cuenta de la suite', async () => {
   await pag.goto(`${URL}/`, { waitUntil: 'load' });
   await pag.getByPlaceholder('tu@correo.mx').fill(CORREO);
@@ -93,16 +107,11 @@ test('se entra con la cuenta de la suite', async () => {
 });
 
 test('se pide una compra desde el teléfono, con foto y con su desglose', async () => {
-  /* La cuenta de pruebas, en el registro de la empresa: el primero que
-   * devuelve la API, que es el mismo al que la API cuelga cada orden desde
-   * el contrato 0.61.0 (1-oct: ya no hay negocio que escoger). La org demo
-   * todavía tiene varios por dentro, hasta que se junten. */
-  const neg = filas(await api(`/orgs/${ORG}/negocios`))[0];
-  assert.ok(neg, 'la empresa tiene su registro');
-  let cuenta = filas(await api(`/orgs/${ORG}/cuentas?negocio_id=${neg.id}`)).find((c) => c.nombre === CUENTA);
-  if (!cuenta) {
-    cuenta = await api(`/orgs/${ORG}/cuentas`, { method: 'POST', body: { nombre: CUENTA, tipo: 'caja', saldo_inicial: 5000000, moneda: 'MXN' } });
-  }
+  /* La cuenta de pruebas tiene que existir en el registro de la empresa,
+   * que es al que la API cuelga cada orden desde el contrato 0.61.0 (1-oct:
+   * ya no hay negocio que escoger). Aquí sólo se comprueba; de ella se paga
+   * en la prueba que sigue. */
+  await cuentaDePruebas();
   await pag.getByRole('button', { name: 'Pedir una compra' }).waitFor({ timeout: 30000 });
 
   await pag.goto(`${URL}/#/pedir`, { waitUntil: 'load' });
@@ -135,7 +144,7 @@ test('se pide una compra desde el teléfono, con foto y con su desglose', async 
 
 test('cuando la pagan, la app enseña el comprobante', async () => {
   const id = await pag.evaluate(() => location.hash.replace('#/orden/', ''));
-  const cuenta = filas(await api(`/orgs/${ORG}/cuentas`)).find((c) => c.nombre === CUENTA);
+  const cuenta = await cuentaDePruebas();
 
   // El pago NO se hace desde supply101 —aquí no hay con qué—: se hace por la
   // API, como lo haría quien paga desde dash101.
