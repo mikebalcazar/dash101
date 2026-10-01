@@ -13,7 +13,7 @@
  *      «Pagada» y ENSEÑA EL COMPROBANTE, que es para lo que existe.
  *   5. Ni barrido horizontal ni errores de JavaScript.
  *
- * Escribe en un negocio propio, «Pruebas de supply101», para no mover las
+ * Escribe en la cuenta «Caja de supply101» del registro de la empresa, para no mover las
  * cifras de Taller Demo, de donde salen las capturas del escaparate.
  */
 
@@ -25,7 +25,6 @@ const URL = (process.env.URL_SUPPLY || 'http://127.0.0.1:8798').replace(/\/$/, '
 const API = process.env.API_ORIGEN || 'https://suite101-api-staging.mike-929.workers.dev';
 const ORG = 'demo';
 const CORREO = process.env.CORREO_PRUEBAS || 'prueba.admin@ejemplo.mx';
-const NEGOCIO = 'Pruebas de supply101';
 const CUENTA = 'Caja de supply101';
 const CLAVE = `supply-${process.env.GITHUB_RUN_ID || Date.now()}-nopal`;
 const PNG = Buffer.from(
@@ -94,19 +93,16 @@ test('se entra con la cuenta de la suite', async () => {
 });
 
 test('se pide una compra desde el teléfono, con foto y con su desglose', async () => {
-  // El negocio propio de esta prueba, para no mover Taller Demo.
-  let neg = filas(await api(`/orgs/${ORG}/negocios`)).find((n) => n.nombre === NEGOCIO);
-  if (!neg) neg = await api(`/orgs/${ORG}/negocios`, { method: 'POST', body: { nombre: NEGOCIO, moneda: 'MXN' } });
+  /* La cuenta de pruebas, en el registro de la empresa: el primero que
+   * devuelve la API, que es el mismo al que la API cuelga cada orden desde
+   * el contrato 0.61.0 (1-oct: ya no hay negocio que escoger). La org demo
+   * todavía tiene varios por dentro, hasta que se junten. */
+  const neg = filas(await api(`/orgs/${ORG}/negocios`))[0];
+  assert.ok(neg, 'la empresa tiene su registro');
   let cuenta = filas(await api(`/orgs/${ORG}/cuentas?negocio_id=${neg.id}`)).find((c) => c.nombre === CUENTA);
   if (!cuenta) {
-    cuenta = await api(`/orgs/${ORG}/cuentas`, { method: 'POST', body: { nombre: CUENTA, tipo: 'caja', saldo_inicial: 5000000, negocio_id: neg.id, moneda: 'MXN' } });
+    cuenta = await api(`/orgs/${ORG}/cuentas`, { method: 'POST', body: { nombre: CUENTA, tipo: 'caja', saldo_inicial: 5000000, moneda: 'MXN' } });
   }
-  /* Escoger el negocio se guarda en `localStorage`, pero la página que ya
-   * está abierta no lo relee: hay que recargarla, como haría quien lo escoge
-   * en el selector. Sin la recarga, la compra se creaba en Taller Demo y la
-   * lista —filtrada por el negocio de pruebas— salía vacía. */
-  await pag.evaluate((id) => localStorage.setItem('supply101:negocio', id), neg.id);
-  await pag.reload({ waitUntil: 'load' });
   await pag.getByRole('button', { name: 'Pedir una compra' }).waitFor({ timeout: 30000 });
 
   await pag.goto(`${URL}/#/pedir`, { waitUntil: 'load' });
