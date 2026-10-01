@@ -103,8 +103,8 @@ describe("la empresa, cuentas, clientes, proveedores", () => {
     // los movimientos y no se escribe a mano: desde que la empresa demo es
     // una sola (1-oct) las corridas del navegador también le dejan
     // movimientos a estas cuentas, y una cifra fija se quedaba vieja.
-    const sumaDe = async (c: { id: string; saldo_inicial: number }) =>
-      c.saldo_inicial + (await listMovimientosDeCuenta(c.id))
+    const sumaDe = async (c: { id?: string; saldo_inicial: number }) =>
+      c.saldo_inicial + (await listMovimientosDeCuenta(c.id ?? ""))
         .reduce((t, m) => t + (m.tipo === "ingreso" ? m.monto : -m.monto), 0);
     expect(banco.saldo_actual).toBeCloseTo(await sumaDe(banco), 2);
     // Una caja en negativo se ve, no se esconde.
