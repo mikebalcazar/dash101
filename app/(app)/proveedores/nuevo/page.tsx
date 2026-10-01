@@ -56,7 +56,7 @@ export default function NuevoProveedorPage() {
 
       <h2 className="text-lg font-medium text-ink-dim">Crear proveedor</h2>
       <p className="text-xs text-ink-muted mt-0.5 mb-6">
-        Catálogo global compartido entre todos los negocios
+        El catálogo de proveedores de la empresa
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-4">

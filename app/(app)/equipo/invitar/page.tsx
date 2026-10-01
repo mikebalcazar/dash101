@@ -42,7 +42,7 @@ export default function InvitarPage() {
         <Link href="/equipo" className="text-xs text-ink-muted hover:text-ink-dim">
           ← Volver
         </Link>
-        <p className="mt-4 text-sm text-ink-muted">Selecciona un negocio primero.</p>
+        <p className="mt-4 text-sm text-ink-muted">Cargando…</p>
       </div>
     );
   }
@@ -55,7 +55,7 @@ export default function InvitarPage() {
           ← Volver
         </Link>
         <p className="mt-4 text-sm text-mauve-900 bg-mauve-50 px-3 py-2 rounded-xl">
-          Solo el propietario del negocio puede invitar miembros.
+          Solo el propietario de la empresa puede invitar miembros.
         </p>
       </div>
     );
@@ -227,7 +227,7 @@ export default function InvitarPage() {
                   : "border-black/10 bg-white hover:border-black/20"
               }`}
             >
-              <p className="text-sm font-medium text-ink-dim">Todo el negocio</p>
+              <p className="text-sm font-medium text-ink-dim">Toda la empresa</p>
               <p className="text-[11px] text-ink-muted">Todos los proyectos, cuentas, etc.</p>
             </button>
             <button
@@ -254,7 +254,7 @@ export default function InvitarPage() {
               <p className="text-xs text-ink-muted">Cargando proyectos…</p>
             ) : proyectos.length === 0 ? (
               <div className="bg-cream/60 rounded-xl p-4 text-center text-xs text-ink-muted">
-                Este negocio no tiene proyectos aún.{" "}
+                La empresa no tiene proyectos aún.{" "}
                 <Link href="/proyectos/nuevo" className="underline">
                   Crear proyecto
                 </Link>

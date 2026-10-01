@@ -90,7 +90,7 @@ export default function BuzonPage() {
       <div className="mb-4">
         <h2 className="text-lg font-medium text-ink-dim">Por pagar</h2>
         <p className="text-xs text-ink-muted mt-0.5">
-          Lo que se pidió en {activo?.nombre ?? "este negocio"} y todavía no se paga.
+          Lo que se pidió en la empresa y todavía no se paga.
         </p>
       </div>
 

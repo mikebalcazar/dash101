@@ -41,12 +41,12 @@ export function Topbar() {
       </div>
       <div className="flex items-center gap-2">
         <span
-          data-negocio-actual={activo?.id ?? ""}
+          data-empresa={activo?.id ?? ""}
           className="flex items-center gap-2 bg-white border border-black/10 rounded-xl px-3 py-1.5 text-sm font-medium"
         >
           <IconBuildingSkyscraper size={13} className="text-ink-muted" />
           <span className="max-w-[110px] sm:max-w-[180px] truncate">
-            {loading ? "Cargando…" : activo?.nombre ?? "Sin negocio"}
+            {loading ? "Cargando…" : activo?.nombre ?? "…"}
           </span>
         </span>
         <button

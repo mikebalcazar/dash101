@@ -45,7 +45,7 @@ export default function NuevoOpexPage() {
         <Link href="/opex" className="text-xs text-ink-muted hover:text-ink-dim">
           ← Volver
         </Link>
-        <p className="mt-4 text-sm text-ink-muted">Selecciona un negocio primero.</p>
+        <p className="mt-4 text-sm text-ink-muted">Cargando…</p>
       </div>
     );
   }
@@ -102,7 +102,7 @@ export default function NuevoOpexPage() {
 
       <h2 className="text-lg font-medium text-ink-dim">Agregar gasto recurrente</h2>
       <p className="text-xs text-ink-muted mt-0.5 mb-6">
-        Se agregará a <strong>{activo.nombre}</strong>
+        Se agregará a la empresa
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-4">

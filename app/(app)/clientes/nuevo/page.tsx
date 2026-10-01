@@ -37,7 +37,7 @@ export default function NuevoClientePage() {
         <Link href="/clientes" className="text-xs text-ink-muted hover:text-ink-dim">
           ← Volver
         </Link>
-        <p className="mt-4 text-sm text-ink-muted">Selecciona o crea un negocio primero.</p>
+        <p className="mt-4 text-sm text-ink-muted">Cargando…</p>
       </div>
     );
   }
@@ -82,7 +82,7 @@ export default function NuevoClientePage() {
 
       <h2 className="text-lg font-medium text-ink-dim">Crear cliente</h2>
       <p className="text-xs text-ink-muted mt-0.5 mb-6">
-        Se agregará a <strong>{activo.nombre}</strong>
+        Se agregará a la empresa
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-4">

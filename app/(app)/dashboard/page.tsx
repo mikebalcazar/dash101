@@ -103,13 +103,6 @@ export default function DashboardPage() {
         <p className="text-xs text-ink-muted mb-5 max-w-xs mx-auto">
           Para empezar, crea tu primer negocio.
         </p>
-        <Link
-          href="/negocios/nuevo"
-          className="inline-flex items-center gap-1.5 bg-ink text-cream rounded-xl px-4 py-2 text-sm font-medium hover:bg-ink/90 transition"
-        >
-          <IconPlus size={14} />
-          Crear primer negocio
-        </Link>
       </div>
     );
   }
@@ -173,7 +166,7 @@ export default function DashboardPage() {
         <div className="flex justify-between items-start gap-4">
           <div>
             <p className="text-xs text-ink-muted mb-2 font-medium">
-              Capital líquido de {activo.nombre}
+              Capital líquido
             </p>
             <p className="text-3xl sm:text-4xl font-medium tracking-tight text-ink-dim leading-none">
               {formatMonto(liquido, activo.moneda)}

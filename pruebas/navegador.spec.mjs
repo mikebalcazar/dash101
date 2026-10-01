@@ -191,7 +191,9 @@ async function api(pag, ruta, { method = 'GET', body } = {}) {
 }
 
 /** Deja activo el negocio que se pida, como lo hace la app: por localStorage. */
-const elegirNegocio = (pag, id) => pag.evaluate(([k, v]) => localStorage.setItem(k, v), [LLAVE_NEGOCIO, id]);
+/* Ya no hay qué escoger (1-oct): dash101 toma el de la empresa solo. Se
+ * queda como no-op para no tocar cada prueba que lo llamaba. */
+const elegirNegocio = async () => {};
 
 /** `saldo_inicial + ingresos − egresos`, en centavos: la fórmula de la app. */
 function saldoCentavos(cuenta, movimientos) {
@@ -202,7 +204,11 @@ function saldoCentavos(cuenta, movimientos) {
 
 /** El negocio de pruebas con su cuenta; se crean una sola vez. */
 async function negocioDePruebas(pag) {
-  let neg = filas(await api(pag, `/orgs/${ORG}/negocios`)).find((n) => n.nombre === NEGOCIO_PRUEBAS);
+  /* El de la empresa: el PRIMERO que devuelve la API, que es el mismo que
+   * toma dash101 (1-oct: ya no hay selector ni concepto de negocio en la
+   * pantalla). La org demo todavía tiene varios por dentro, hasta que la
+   * API los junte; mientras, todo se mide contra ese primero. */
+  let neg = filas(await api(pag, `/orgs/${ORG}/negocios`))[0];
   if (!neg) neg = await api(pag, `/orgs/${ORG}/negocios`, { method: 'POST', body: { nombre: NEGOCIO_PRUEBAS, moneda: 'MXN' } });
   let cuenta = filas(await api(pag, `/orgs/${ORG}/cuentas?negocio_id=${neg.id}`)).find((c) => c.nombre === CUENTA_PRUEBAS);
   if (!cuenta) {
@@ -241,28 +247,19 @@ test('entra por el propio Worker y la sesión aguanta al cambiar de pantalla', a
   }
   assert.equal((await api(pag, '/yo')).usuario.correo, CORREO, 'la sesión aguantó seis pantallas');
 
-  /* UN SOLO NEGOCIO (Mike, 29-sep): la barra DICE el negocio, ya no lo
-   * escoge ni ofrece crear otro. Hasta hoy era un botón con desplegable. */
-  assert.equal(await pag.locator('[data-negocio-actual]').count(), 1, 'la barra dice cuál es el negocio');
-  assert.equal(await pag.getByRole('button', { name: /Taller Demo|Pruebas de / }).count(), 0, 'y ya no es un botón para cambiarlo');
-  assert.equal(await pag.getByRole('link', { name: /Crear nuevo negocio/ }).count(), 0, 'ni ofrece crear otro');
-  /* La demo tiene varios negocios a propósito (Taller Demo para las capturas
-   * y uno por cada prueba que escribe), así que la pantalla del negocio
-   * enseña la fusión: se comprueba que está, y NO se toca. */
+  /* SIN «NEGOCIO» (Mike, 1-oct): «ya no existe la opción de negocios en
+   * dash. Sólo es una empresa/negocio todo». La barra dice la empresa; no hay
+   * selector, ni pantalla de negocios, ni alta, ni fusión. Lo del 29-sep era
+   * «un solo negocio»; ahora el concepto no está en dash101. */
+  assert.equal(await pag.locator('[data-empresa]').count(), 1, 'la barra dice cuál es la empresa');
+  assert.equal(await pag.getByRole('button', { name: /Taller Demo|Pruebas de / }).count(), 0, 'y no es un botón para cambiar de nada');
+  assert.equal(await pag.getByRole('link', { name: /Crear nuevo negocio|Crear negocio/ }).count(), 0, 'ni ofrece crear otro');
   await pag.goto(`${URL}/negocios`, { waitUntil: 'load' });
-  await pag.locator('[data-fusion-de-negocios]').waitFor({ timeout: 20000 });
-  assert.ok((await pag.getByRole('radio').count()) >= 2, 'con un radio por negocio para escoger cuál se queda');
-  assert.equal(await pag.getByRole('link', { name: /Crear negocio/ }).count(), 0, 'y sin botón de crear');
-  await pag.goto(`${URL}/negocios/nuevo`, { waitUntil: 'load' });
-  await pag.locator('[data-un-solo-negocio]').waitFor({ timeout: 20000 });
-  assert.equal(await pag.locator('input[placeholder="Cafetería Sur"]').count(), 0, 'la pantalla de alta ya no da de alta: ya hay negocio');
-  /* Mike, 29-sep, con la pantalla enfrente: «ya puedes quitar ese menú y
-   * pasarlo a configuración». El menú ya no trae «Negocio»; Configuración
-   * (que apuntaba a /settings sin que /settings existiera) lo trae. */
-  assert.equal(await pag.getByRole('button', { name: /^Negocios?$/ }).count() + await pag.getByRole('link', { name: /^Negocios?$/ }).count(), 0, 'el menú ya no trae «Negocio»');
+  assert.equal(await pag.locator('[data-fusion-de-negocios]').count(), 0, 'la pantalla de negocios ya no existe');
+  assert.equal(await pag.getByRole('button', { name: /^Negocios?$/ }).count() + await pag.getByRole('link', { name: /^Negocios?$/ }).count(), 0, 'el menú no trae «Negocio»');
   await pag.goto(`${URL}/settings`, { waitUntil: 'load' });
-  await pag.locator('[data-configuracion-negocio]').waitFor({ timeout: 20000 });
-  assert.ok(/Configuración/.test(await pag.locator('body').innerText()), 'Configuración existe y trae el negocio');
+  await pag.locator('[data-configuracion-empresa]').waitFor({ timeout: 20000 });
+  assert.ok(!/[Nn]egocio/.test(await pag.locator('body').innerText()), 'Configuración habla de la empresa, no de un negocio');
   assert.deepEqual(errores, [], 'cero errores de JavaScript');
   estado = await ctx.storageState();
   await ctx.close();
@@ -274,8 +271,9 @@ test('el dinero se pinta en centavos correctos (Taller Demo, sólo lectura)', as
   const { ctx, pag, errores } = await pestana({ width: 1440, height: 900 }, true);
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
 
-  const demo = filas(await api(pag, `/orgs/${ORG}/negocios`)).find((n) => n.nombre === NEGOCIO_DEMO);
-  assert.ok(demo, `existe el negocio «${NEGOCIO_DEMO}» en ${ORG}`);
+  /* Se lee lo mismo que dash101 enseña: el primero de la API (1-oct). */
+  const demo = filas(await api(pag, `/orgs/${ORG}/negocios`))[0];
+  assert.ok(demo, `la empresa ${ORG} tiene su registro`);
   const cuentas = filas(await api(pag, `/orgs/${ORG}/cuentas?negocio_id=${demo.id}`));
   const movs = filas(await movimientosDe(pag));
   assert.ok(cuentas.length >= 1 && movs.length >= 1, 'hay cuentas y movimientos que cuadrar');
@@ -550,7 +548,7 @@ test('pedir un reembolso, verlo en el inicio y en su pestaña del buzón, y paga
   const ahora = await api(pag, `/orgs/${ORG}/ordenes/resumen?negocio_id=${neg.id}`);
   const todos = await api(pag, `/orgs/${ORG}/ordenes/resumen`);
   const cuantos = ahora.compras.cuantas + ahora.reembolsos.cuantas;
-  const enPantalla = (await texto(pag)).match(/Capital líquido de ([^\n]+)/)?.[1] ?? '?';
+  const enPantalla = (await pag.locator('[data-empresa]').innerText()).trim();
   assert.equal(await globo.innerText(), String(cuantos),
     `el circulito de Compras cuenta las órdenes sin pagar del negocio activo (pantalla: «${enPantalla}», negocio de la prueba: «${neg.nombre}»; toda la empresa: ${todos.compras.cuantas + todos.reembolsos.cuantas})`);
   const seccion = pag.locator('[data-seccion="por-pagar"]');

@@ -172,7 +172,7 @@ export default function AceptarInvitacionPage() {
                 {inv?.estado === "aceptada"
                   ? "Esta invitación ya fue aceptada."
                   : inv?.estado === "revocada"
-                  ? "El propietario del negocio revocó esta invitación."
+                  ? "El propietario de la empresa revocó esta invitación."
                   : "Esta invitación expiró."}
               </p>
               <Link href="/login" className="text-xs text-ink hover:underline">
@@ -186,7 +186,7 @@ export default function AceptarInvitacionPage() {
               </div>
               <p className="text-sm font-medium text-ink-dim mb-1">Invitación expirada</p>
               <p className="text-xs text-ink-muted mb-4">
-                Pide al propietario del negocio que te mande una nueva.
+                Pide al propietario de la empresa que te mande una nueva.
               </p>
             </div>
           ) : (
@@ -211,7 +211,7 @@ export default function AceptarInvitacionPage() {
                   <span className="text-ink-muted">Acceso</span>
                   <span className="font-medium text-ink-dim">
                     {inv!.scope === "all"
-                      ? "Todo el negocio"
+                      ? "Toda la empresa"
                       : `${inv!.proyectos_ids?.length ?? 0} proyecto${(inv!.proyectos_ids?.length ?? 0) === 1 ? "" : "s"}`}
                   </span>
                 </div>

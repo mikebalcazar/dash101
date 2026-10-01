@@ -68,36 +68,19 @@ export default function ConfiguracionPage() {
       <h2 className="text-lg font-medium text-ink-dim">Configuración</h2>
       <p className="text-xs text-ink-muted mt-0.5 mb-6">Lo de la empresa que se ajusta una vez y se queda.</p>
 
-      <section className="bg-white border border-black/5 rounded-2xl p-4" data-configuracion-negocio>
+      <section className="bg-white border border-black/5 rounded-2xl p-4" data-configuracion-empresa>
         <div className="flex items-center gap-2.5 mb-4">
           <div className="w-9 h-9 rounded-full bg-mint-50 text-mint-900 flex items-center justify-center flex-shrink-0">
             <IconBuildingStore size={16} />
           </div>
           <div>
-            <h3 className="text-sm font-medium text-ink-dim">Negocio</h3>
-            <p className="text-[11px] text-ink-muted">Uno por empresa: todo lo que se captura va en él.</p>
+            <h3 className="text-sm font-medium text-ink-dim">Empresa</h3>
+            <p className="text-[11px] text-ink-muted">Su nombre, su RFC y su moneda.</p>
           </div>
         </div>
 
-        {loading ? (
+        {loading || !negocio ? (
           <p className="text-xs text-ink-muted">Cargando…</p>
-        ) : negocios.length === 0 ? (
-          <div>
-            <p className="text-xs text-ink-muted mb-3">Todavía no hay negocio dado de alta.</p>
-            <Link href="/negocios/nuevo" className="inline-flex items-center gap-1.5 bg-ink text-cream rounded-xl px-4 py-2 text-sm font-medium hover:bg-ink/90 transition">
-              <IconPlus size={14} /> Dar de alta el negocio
-            </Link>
-          </div>
-        ) : negocios.length > 1 ? (
-          <div>
-            <p className="text-xs text-ink-dim mb-3">
-              Esta empresa tiene {negocios.length} negocios ({negocios.map((n) => n.nombre).join(", ")}) y la suite
-              trabaja con uno solo. Hay que juntarlos: escoges cuál se queda y todo lo de los demás pasa a él.
-            </p>
-            <Link href="/negocios" className="inline-flex items-center gap-1.5 bg-ink text-cream rounded-xl px-4 py-2 text-sm font-medium hover:bg-ink/90 transition">
-              <IconArrowsJoin size={14} /> Juntarlos en uno
-            </Link>
-          </div>
         ) : (
           <form onSubmit={guardar} className="space-y-4">
             <div>

@@ -1,51 +1,63 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  useCallback,
-  type ReactNode,
-} from "react";
+/* LA EMPRESA ES UNA: no hay «negocio» que escoger.
+ *
+ * Mike, 1-oct-2026: «Ya no existe la opción de negocios en dash. Sólo es una
+ * empresa/negocio todo. Elimina todas las lógicas que involucran el concepto
+ * de negocio». Por dentro la suite todavía cuelga cuentas, proyectos,
+ * movimientos y clientes de un `negocio_id` (la API lo sigue pidiendo hasta
+ * que se quite de ahí también), así que aquí se resuelve UNA vez y nadie más
+ * lo ve: el primero que la API devuelva es el de la empresa, y si no hay
+ * ninguno se crea con el nombre de la empresa. Ningún formulario lo pide,
+ * ninguna pantalla lo enseña, no se guarda en el navegador. */
+
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "./auth-context";
-import { listNegocios } from "./negocios";
+import { createNegocio, listNegocios } from "./negocios";
+import { yo } from "./api/cliente";
+import { org } from "./fuente";
 import type { Negocio } from "@/types/schema";
 
-const STORAGE_KEY = "conta-master:negocio-activo-id";
-
 type NegocioActivoContextValue = {
+  /** Lo que la API tiene; en una empresa sana es una sola. */
   negocios: Negocio[];
+  /** El de la empresa. null sólo mientras carga o si la API no contestó. */
   activo: Negocio | null;
-  setActivo: (n: Negocio | null) => void;
   loading: boolean;
   refresh: () => Promise<void>;
 };
 
 const NegocioActivoContext = createContext<NegocioActivoContextValue | undefined>(undefined);
 
+/** El nombre de la empresa, para bautizar el registro la primera vez. */
+async function nombreDeLaEmpresa(): Promise<string> {
+  try {
+    const s = await yo();
+    const mia = s?.orgs.find((o) => o.id === org());
+    return mia?.nombre?.trim() || "Mi empresa";
+  } catch {
+    return "Mi empresa";
+  }
+}
+
 export function NegocioActivoProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [negocios, setNegocios] = useState<Negocio[]>([]);
-  const [activo, setActivoState] = useState<Negocio | null>(null);
+  const [activo, setActivo] = useState<Negocio | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     if (!user) return;
     try {
-      const list = await listNegocios(user.uid);
-      setNegocios(list);
-
-      const savedId =
-        typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
-      const found = savedId ? list.find((n) => n.id === savedId) : null;
-      const next = found ?? list[0] ?? null;
-      setActivoState(next);
-      if (next && typeof window !== "undefined") {
-        localStorage.setItem(STORAGE_KEY, next.id!);
+      let list = await listNegocios(user.uid);
+      if (list.length === 0) {
+        await createNegocio(user.uid, { nombre: await nombreDeLaEmpresa(), moneda: "MXN" });
+        list = await listNegocios(user.uid);
       }
+      setNegocios(list);
+      setActivo(list[0] ?? null);
     } catch (e) {
-      console.error("Failed to load negocios:", e);
+      console.error("No se pudo leer la empresa:", e);
     } finally {
       setLoading(false);
     }
@@ -54,23 +66,15 @@ export function NegocioActivoProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) {
       setNegocios([]);
-      setActivoState(null);
+      setActivo(null);
       setLoading(false);
       return;
     }
     refresh();
   }, [user, refresh]);
 
-  const setActivo = (n: Negocio | null) => {
-    setActivoState(n);
-    if (typeof window !== "undefined") {
-      if (n?.id) localStorage.setItem(STORAGE_KEY, n.id);
-      else localStorage.removeItem(STORAGE_KEY);
-    }
-  };
-
   return (
-    <NegocioActivoContext.Provider value={{ negocios, activo, setActivo, loading, refresh }}>
+    <NegocioActivoContext.Provider value={{ negocios, activo, loading, refresh }}>
       {children}
     </NegocioActivoContext.Provider>
   );

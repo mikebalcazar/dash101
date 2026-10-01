@@ -158,7 +158,7 @@ export default function AccionistasPage() {
   }
 
   if (cargandoNegocio || (cargando && accionistas.length === 0 && !error)) return <div className="text-sm text-ink-muted">Cargando…</div>;
-  if (!activo) return <div className="text-sm text-ink-muted">Escoge un negocio para ver sus accionistas.</div>;
+  if (!activo) return <div className="text-sm text-ink-muted">Cargando…</div>;
 
   return (
     <div className="max-w-3xl" data-accionistas={activos.length} data-total-retirado={total}>
@@ -237,7 +237,7 @@ export default function AccionistasPage() {
         <div className="bg-white border border-black/5 rounded-2xl p-8 text-center mb-4">
           <div className="w-14 h-14 mx-auto rounded-full bg-cream flex items-center justify-center mb-3"><IconCoins size={22} className="text-ink-muted" /></div>
           <p className="text-sm font-medium text-ink-dim mb-1">Sin accionistas</p>
-          <p className="text-xs text-ink-muted max-w-xs mx-auto">Da de alta a quienes reparten utilidades de este negocio y registra aquí cada retiro.</p>
+          <p className="text-xs text-ink-muted max-w-xs mx-auto">Da de alta a quienes reparten utilidades de la empresa y registra aquí cada retiro.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">

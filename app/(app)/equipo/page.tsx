@@ -114,7 +114,7 @@ export default function EquipoPage() {
   };
 
   const handleRemove = async (uid: string, nombre: string) => {
-    if (!confirm(`¿Remover a ${nombre} de este negocio? Perderá acceso inmediatamente.`))
+    if (!confirm(`¿Remover a ${nombre} de la empresa? Perderá acceso inmediatamente.`))
       return;
     try {
       await removeMiembro(activo!.id!, uid);
@@ -129,7 +129,7 @@ export default function EquipoPage() {
   if (!activo) {
     return (
       <div className="bg-white border border-black/5 rounded-2xl p-10 text-center">
-        <p className="text-sm font-medium text-ink-dim mb-1">Sin negocio activo</p>
+        <p className="text-sm font-medium text-ink-dim mb-1">Cargando la empresa…</p>
       </div>
     );
   }
