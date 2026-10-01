@@ -20,9 +20,9 @@ import type {
 } from "@/types/schema";
 import { formatMonto } from "@/lib/format";
 import { crearCfdi, ligarCfdi } from "@/lib/fiscal";
-import { subirArchivo } from "@/lib/ordenes";
+import { archivosDe, subirArchivo, urlArchivo, type ArchivoOrden } from "@/lib/ordenes";
 import { aDia, delDia } from "@/lib/api/adaptar";
-import { SoltarArchivo } from "@/components/soltar-archivo";
+import { ACEPTA_COMPROBANTE, SoltarArchivo } from "@/components/soltar-archivo";
 import {
   IconArrowLeft,
   IconArrowDownLeft,
@@ -103,6 +103,8 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
   const [fechaFactura, setFechaFactura] = useState("");
   const [ivaFactura, setIvaFactura] = useState("");
   const [archivoFactura, setArchivoFactura] = useState<File | null>(null);
+  /** Lo que ya está colgado, en modo corrección. */
+  const [colgados, setColgados] = useState<ArchivoOrden[]>([]);
   const [quickCreate, setQuickCreate] = useState<QuickCreate>(null);
 
   const [submitting, setSubmitting] = useState(false);
@@ -178,6 +180,7 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
         setProductoId(m.producto_id ?? "");
         setFactura(m.facturado ? "ya" : m.requiere_factura ? "falta" : "no");
         if (m.descripcion) { setDescripcion(m.descripcion); setShowNota(true); }
+        archivosDe("movimientos", movimientoId).then((a) => { if (vivo) setColgados(a); }).catch(() => { /* sin lista, pero la pantalla sirve */ });
       } catch (e) {
         if (vivo) setBloqueado(e instanceof Error ? e.message : "No se pudo abrir el movimiento.");
       } finally {
@@ -866,16 +869,42 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
                     Arrastrar, pegar o escoger, y ver lo que se va a colgar
                     antes de guardar. Mike, 20-sep: «quiero poder arrastrar
                     los archivos para subirlos. Y que me muestre un preview
-                    del archivo abajo». */}
+                    del archivo abajo».
+
+                    Desde el 1-oct-2026 también una FOTO (Mike: «el
+                    comprobante también pueda ser una imagen»): la ficha que
+                    manda el banco por WhatsApp, la foto del recibo. En el
+                    teléfono, `image/*` en el campo abre la cámara. */}
                 <div className="mt-3">
                   <SoltarArchivo
                     id="archivo-factura"
-                    etiqueta="El comprobante (PDF o XML) — opcional"
-                    acepta=".xml,.pdf,application/xml,text/xml,application/pdf"
+                    etiqueta="El comprobante (foto, PDF o XML) — opcional"
+                    acepta={ACEPTA_COMPROBANTE}
                     archivo={archivoFactura}
                     alEscoger={setArchivoFactura}
-                    ayuda="Se cuelga del movimiento, haya factura o no."
+                    ayuda="Se cuelga del movimiento, haya factura o no. En el teléfono puedes tomarle foto."
                   />
+                  {colgados.length > 0 && (
+                    <div className="mt-2" data-colgados={colgados.length}>
+                      <p className="text-[11px] text-ink-muted mb-1">Ya colgado{colgados.length === 1 ? "" : "s"}:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {colgados.map((a) => (
+                          <a
+                            key={a.id} href={urlArchivo(a.id)} target="_blank" rel="noreferrer"
+                            className="border border-black/10 rounded-xl overflow-hidden bg-white hover:border-black/30 transition text-[11px] text-ink-dim"
+                            title={a.nombre}
+                          >
+                            {/^image\//.test(a.mime ?? "") ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={urlArchivo(a.id)} alt={a.nombre} loading="lazy" className="h-20 w-28 object-cover" />
+                            ) : (
+                              <span className="block px-2.5 py-2 max-w-[11rem] truncate">{a.nombre}</span>
+                            )}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </>

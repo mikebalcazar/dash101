@@ -322,3 +322,10 @@ export async function subirArchivo(de_tabla: string, de_id: string, archivo: Fil
 /** Para pintarlo en un `<img>` o abrirlo en otra pestaña. Va por el mismo
  *  origen, así que la cookie de sesión viaja sola. */
 export const urlArchivo = (id: string) => `${apiBase()}/orgs/${org()}/archivos/${id}`;
+
+/** Lo que ya está colgado de un renglón (un movimiento, una orden). Hasta el
+ *  1-oct-2026 un comprobante de movimiento sólo se veía desde su orden; al
+ *  corregir un movimiento no había manera de saber qué traía. */
+export async function archivosDe(de_tabla: string, de_id: string): Promise<ArchivoOrden[]> {
+  return listar<ArchivoOrden>('archivos', { de_tabla, de_id });
+}

@@ -46,6 +46,13 @@ export function aceptado(f: { name: string; type?: string }, acepta: string): bo
   );
 }
 
+/** Lo que se acepta como COMPROBANTE de un movimiento: una foto (en el
+ *  teléfono abre la cámara), un PDF o el XML de la factura. Hasta el 30-sep
+ *  eran sólo PDF y XML; Mike, 1-oct-2026: «en los movimientos de dash, el
+ *  comprobante también pueda ser una imagen». Es una constante y no un texto
+ *  en cada pantalla para que la prueba mida la misma lista que se usa. */
+export const ACEPTA_COMPROBANTE = "image/*,.pdf,.xml,application/pdf,application/xml,text/xml";
+
 export const pesa = (bytes: number) =>
   bytes < 1024 ? `${bytes} B`
     : bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB`

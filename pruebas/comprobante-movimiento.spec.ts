@@ -27,7 +27,7 @@ import { createNegocio } from "@/lib/negocios";
 import { createCliente } from "@/lib/clientes";
 import { createCuenta } from "@/lib/cuentas";
 import { createMovimiento } from "@/lib/movimientos";
-import { subirArchivo } from "@/lib/ordenes";
+import { archivosDe as colgadosDe, subirArchivo } from "@/lib/ordenes";
 
 const CORREO = process.env.CORREO_SUPERADMIN ?? "mike@forespot.com";
 const ORG = `cm-${(process.env.GITHUB_RUN_ID ?? Date.now().toString(36)).toString().toLowerCase().slice(-12)}`;
@@ -111,6 +111,24 @@ describe("el comprobante se cuelga del movimiento", () => {
     const bytes = new Uint8Array(await r.arrayBuffer());
     expect(bytes.byteLength).toBe(PDF.byteLength);
     expect(new TextDecoder().decode(bytes.slice(0, 5)), "es un PDF de verdad").toBe("%PDF-");
+  });
+
+  it("una FOTO también se cuelga, se lista con su tipo y se vuelve a bajar como imagen (Mike, 1-oct-2026)", async () => {
+    /* Un PNG de verdad, de 1×1: la firma, un IHDR y el cierre. La pantalla lo
+     * pinta en un <img>; para eso el tipo tiene que viajar y volver. */
+    const PNG = Uint8Array.from(atob(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+    ), (c) => c.charCodeAt(0));
+    const id = await cobrar("Con la foto de la ficha", { requiere_factura: false });
+    const a = await subirArchivo("movimientos", id, new File([PNG as BlobPart], "ficha-whatsapp.png", { type: "image/png" }));
+    expect(a.mime).toBe("image/png");
+    const lista = await colgadosDe("movimientos", id);
+    expect(lista.map((x) => [x.nombre, x.mime])).toEqual([["ficha-whatsapp.png", "image/png"]]);
+    const r = await bajar(`/orgs/${ORG}/archivos/${a.id}`);
+    expect(r.headers.get("content-type")).toBe("image/png");
+    const bytes = new Uint8Array(await r.arrayBuffer());
+    expect(bytes.byteLength).toBe(PNG.byteLength);
+    expect(Array.from(bytes.slice(0, 8)), "la firma PNG").toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   });
 
   it("dos comprobantes en el mismo movimiento conviven", async () => {

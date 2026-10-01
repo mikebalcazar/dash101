@@ -19,7 +19,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { aceptado, pesa } from "@/components/soltar-archivo";
+import { ACEPTA_COMPROBANTE, aceptado, pesa } from "@/components/soltar-archivo";
 
 const archivo = (name: string, type = "") => ({ name, type });
 
@@ -50,6 +50,17 @@ describe("qué archivo pasa", () => {
     expect(aceptado(archivo("recibo.heic", "image/heic"), COMPROBANTE), "la del iPhone también").toBe(true);
     expect(aceptado(archivo("recibo.pdf", "application/pdf"), COMPROBANTE)).toBe(true);
     expect(aceptado(archivo("notas.txt", "text/plain"), COMPROBANTE)).toBe(false);
+  });
+
+  it("el comprobante de un movimiento acepta foto, PDF y XML, y nada más (Mike, 1-oct-2026)", () => {
+    /* Se mide LA MISMA lista que usa la pantalla, no una copia escrita aquí. */
+    expect(aceptado(archivo("ficha.jpg", "image/jpeg"), ACEPTA_COMPROBANTE)).toBe(true);
+    expect(aceptado(archivo("ficha.png", "image/png"), ACEPTA_COMPROBANTE)).toBe(true);
+    expect(aceptado(archivo("IMG_0012.HEIC", "image/heic"), ACEPTA_COMPROBANTE), "la del iPhone").toBe(true);
+    expect(aceptado(archivo("recibo.pdf", "application/pdf"), ACEPTA_COMPROBANTE)).toBe(true);
+    expect(aceptado(archivo("Factura.xml"), ACEPTA_COMPROBANTE), "el XML sin tipo, como llega de Windows").toBe(true);
+    expect(aceptado(archivo("hoja.xlsx"), ACEPTA_COMPROBANTE)).toBe(false);
+    expect(aceptado(archivo("notas.txt", "text/plain"), ACEPTA_COMPROBANTE)).toBe(false);
   });
 
   it("sin lista de aceptados, pasa todo", () => {
