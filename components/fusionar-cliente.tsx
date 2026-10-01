@@ -19,11 +19,9 @@ import type { Cliente } from "@/types/schema";
 
 export function FusionarCliente({
   cliente,
-  negocioId,
   onFusionado,
 }: {
   cliente: Cliente;
-  negocioId: string;
   onFusionado: () => void;
 }) {
   const [otros, setOtros] = useState<Cliente[]>([]);
@@ -35,11 +33,11 @@ export function FusionarCliente({
 
   useEffect(() => {
     let vivo = true;
-    listClientes(negocioId)
+    listClientes()
       .then((cs) => { if (vivo) setOtros(cs.filter((c) => c.id !== cliente.id)); })
       .catch(() => { if (vivo) setOtros([]); });
     return () => { vivo = false; };
-  }, [negocioId, cliente.id]);
+  }, [cliente.id]);
 
   if (otros.length === 0) return null;
 

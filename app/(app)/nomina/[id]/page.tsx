@@ -35,7 +35,7 @@ export default function RayaPage() {
       const r = await getRaya(id);
       setRaya(r.raya);
       setPagos(r.pagos);
-      const cs = await listCuentas(r.raya.negocio_id);
+      const cs = await listCuentas();
       setCuentas(cs);
       if (!cuentaId && cs[0]?.id) setCuentaId(cs[0].id);
     } catch (e) {

@@ -19,7 +19,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { IconCoins, IconLock, IconPlus, IconUserOff, IconUserCheck } from "@tabler/icons-react";
 import { useAuth } from "@/lib/auth-context";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import { ErrorApi } from "@/lib/api/cliente";
 import { listCuentas } from "@/lib/cuentas";
 import {
@@ -44,7 +44,7 @@ const fechaCorta = (aaaammdd: string) =>
 
 export default function AccionistasPage() {
   const { user } = useAuth();
-  const { activo, loading: cargandoNegocio } = useNegocioActivo();
+  const { empresa, loading: cargandoEmpresa } = useEmpresa();
   const [accionistas, setAccionistas] = useState<Accionista[]>([]);
   const [retiros, setRetiros] = useState<Retiro[]>([]);
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
@@ -63,13 +63,13 @@ export default function AccionistasPage() {
   const [guardando, setGuardando] = useState(false);
   const [verBajas, setVerBajas] = useState(false);
 
-  const moneda = activo?.moneda ?? "MXN";
+  const moneda = empresa?.moneda ?? "MXN";
 
   const cargar = useCallback(async () => {
-    if (!activo?.id) return;
+    if (!empresa?.id) return;
     setCargando(true); setError(""); setSinPermiso(false);
     try {
-      const [a, r, c] = await Promise.all([listAccionistas(activo.id), listRetiros(activo.id), listCuentas(activo.id)]);
+      const [a, r, c] = await Promise.all([listAccionistas(), listRetiros(), listCuentas()]);
       setAccionistas(a); setRetiros(r); setCuentas(c);
       setRetiro((x) => ({ ...x, cuenta_id: x.cuenta_id || c[0]?.id || "" }));
     } catch (e) {
@@ -78,9 +78,9 @@ export default function AccionistasPage() {
     } finally {
       setCargando(false);
     }
-  }, [activo]);
+  }, [empresa]);
 
-  useEffect(() => { if (!cargandoNegocio) void cargar(); }, [cargandoNegocio, cargar]);
+  useEffect(() => { if (!cargandoEmpresa) void cargar(); }, [cargandoEmpresa, cargar]);
   useEffect(() => { personasDeRoster().then(setDeRoster).catch(() => setDeRoster([])); }, []);
 
   const jalarDeRoster = (id: string) => {
@@ -97,10 +97,10 @@ export default function AccionistasPage() {
 
   const guardarAlta = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activo?.id) return;
+    if (!empresa?.id) return;
     setGuardando(true); setError("");
     try {
-      await createAccionista(activo.id, {
+      await createAccionista({
         nombre: alta.nombre, rfc: alta.rfc, correo: alta.correo, telefono: alta.telefono, notas: alta.notas,
         porcentaje: alta.porcentaje.trim() === "" ? "" : Number(alta.porcentaje),
       });
@@ -117,13 +117,13 @@ export default function AccionistasPage() {
 
   const guardarRetiro = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activo?.id || !user || !retiroDe) return;
+    if (!empresa?.id || !user || !retiroDe) return;
     const cuenta = cuentas.find((c) => c.id === retiro.cuenta_id);
     if (!cuenta) { setError("Escoge de qué cuenta sale el retiro."); return; }
     setGuardando(true); setError("");
     try {
       await registrarRetiro(user.uid, {
-        negocio_id: activo.id, accionista: retiroDe, cuenta_id: cuenta.id!, cuenta_nombre: cuenta.nombre,
+        accionista: retiroDe, cuenta_id: cuenta.id!, cuenta_nombre: cuenta.nombre,
         monto: Number(retiro.monto), fecha: diaLocal(retiro.fecha), descripcion: retiro.descripcion,
       });
       setRetiroDe(null);
@@ -151,14 +151,14 @@ export default function AccionistasPage() {
           <p className="text-sm font-medium text-ink-dim mb-1.5 inline-flex items-center gap-1.5">
             <IconLock size={15} /> Esto lo ve quien ve dinero
           </p>
-          <p className="text-xs text-ink-muted">Los retiros de utilidades son dinero del negocio. Quien reparte ese permiso es el dueño de la empresa.</p>
+          <p className="text-xs text-ink-muted">Los retiros de utilidades son dinero de la empresa. Quien reparte ese permiso es el dueño de la empresa.</p>
         </div>
       </div>
     );
   }
 
-  if (cargandoNegocio || (cargando && accionistas.length === 0 && !error)) return <div className="text-sm text-ink-muted">Cargando…</div>;
-  if (!activo) return <div className="text-sm text-ink-muted">Cargando…</div>;
+  if (cargandoEmpresa || (cargando && accionistas.length === 0 && !error)) return <div className="text-sm text-ink-muted">Cargando…</div>;
+  if (!empresa) return <div className="text-sm text-ink-muted">Cargando…</div>;
 
   return (
     <div className="max-w-3xl" data-accionistas={activos.length} data-total-retirado={total}>

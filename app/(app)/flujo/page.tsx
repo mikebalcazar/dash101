@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import { listCuentas } from "@/lib/cuentas";
 import { listOpex } from "@/lib/opex";
 import { proyectarFlujo, primeraSemanaBajaUmbral } from "@/lib/proyeccion";
@@ -37,7 +37,7 @@ function formatFecha(d: Date): string {
 }
 
 export default function FlujoPage() {
-  const { activo, loading: loadingNegocio } = useNegocioActivo();
+  const { empresa, loading: loadingEmpresa } = useEmpresa();
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
   const [opexes, setOpexes] = useState<Opex[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,20 +45,20 @@ export default function FlujoPage() {
   const [semanas, setSemanas] = useState(52);
 
   useEffect(() => {
-    if (loadingNegocio) return;
-    if (!activo?.id) {
+    if (loadingEmpresa) return;
+    if (!empresa?.id) {
       setLoading(false);
       return;
     }
     setLoading(true);
-    Promise.all([listCuentas(activo.id), listOpex(activo.id)])
+    Promise.all([listCuentas(), listOpex()])
       .then(([cs, os]) => {
         setCuentas(cs);
         setOpexes(os);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Error"))
       .finally(() => setLoading(false));
-  }, [activo, loadingNegocio]);
+  }, [empresa, loadingEmpresa]);
 
   const capitalInicial = cuentas.reduce((s, c) => s + (c.saldo_actual ?? 0), 0);
   const opexActivos = useMemo(() => opexes.filter((o) => o.activo), [opexes]);
@@ -84,9 +84,9 @@ export default function FlujoPage() {
   const saldoMin = Math.min(...proyeccion.map((p) => p.saldo_final));
   const saldoMinSemana = proyeccion.find((p) => p.saldo_final === saldoMin);
 
-  if (loadingNegocio || loading) return <div className="text-sm text-ink-muted">Cargando…</div>;
+  if (loadingEmpresa || loading) return <div className="text-sm text-ink-muted">Cargando…</div>;
 
-  if (!activo) {
+  if (!empresa) {
     return (
       <div className="bg-white border border-black/5 rounded-2xl p-10 text-center">
         <p className="text-sm font-medium text-ink-dim mb-1">Cargando la empresa…</p>
@@ -100,7 +100,7 @@ export default function FlujoPage() {
         <div className="flex justify-between items-baseline mb-5">
           <div>
             <h2 className="text-lg font-medium text-ink-dim">Flujo proyectado</h2>
-            <p className="text-xs text-ink-muted mt-0.5">{activo.nombre}</p>
+            <p className="text-xs text-ink-muted mt-0.5">{empresa.nombre}</p>
           </div>
         </div>
         <div className="bg-white border border-black/5 rounded-2xl p-10 text-center">
@@ -132,7 +132,7 @@ export default function FlujoPage() {
         <div className="min-w-0">
           <h2 className="text-lg font-medium text-ink-dim">Flujo proyectado</h2>
           <p className="text-xs text-ink-muted mt-0.5">
-            {activo.nombre} · {opexActivos.length} OPEX activos · {semanas} semanas
+            {empresa.nombre} · {opexActivos.length} OPEX activos · {semanas} semanas
           </p>
         </div>
         <select
@@ -157,7 +157,7 @@ export default function FlujoPage() {
         <div className="bg-cream rounded-2xl p-4">
           <p className="text-xs text-ink-muted font-medium">Capital hoy</p>
           <p className="text-xl font-medium text-ink-dim mt-1">
-            {formatMonto(capitalInicial, activo.moneda, { short: true })}
+            {formatMonto(capitalInicial, empresa.moneda, { short: true })}
           </p>
           <p className="text-[11px] text-ink-muted mt-1">
             Suma de {cuentas.length} cuenta{cuentas.length === 1 ? "" : "s"}
@@ -192,7 +192,7 @@ export default function FlujoPage() {
                 : "text-mauve-900"
             }`}
           >
-            {formatMonto(saldoFinal, activo.moneda, { short: true })}
+            {formatMonto(saldoFinal, empresa.moneda, { short: true })}
           </p>
           <p
             className={`text-[11px] mt-1 opacity-75 ${
@@ -204,8 +204,8 @@ export default function FlujoPage() {
             }`}
           >
             {saldoFinal >= capitalInicial
-              ? `+${formatMonto(saldoFinal - capitalInicial, activo.moneda, { short: true })}`
-              : `−${formatMonto(capitalInicial - saldoFinal, activo.moneda, { short: true })}`}
+              ? `+${formatMonto(saldoFinal - capitalInicial, empresa.moneda, { short: true })}`
+              : `−${formatMonto(capitalInicial - saldoFinal, empresa.moneda, { short: true })}`}
           </p>
         </div>
         <div
@@ -225,7 +225,7 @@ export default function FlujoPage() {
               saldoMin < 0 ? "text-mauve-900" : "text-ink-dim"
             }`}
           >
-            {formatMonto(saldoMin, activo.moneda, { short: true })}
+            {formatMonto(saldoMin, empresa.moneda, { short: true })}
           </p>
           <p
             className={`text-[11px] mt-1 opacity-75 ${
@@ -247,7 +247,7 @@ export default function FlujoPage() {
             </p>
             <p className="text-xs text-mauve-label mt-0.5">
               Semana del {formatFecha(primeraNeg.fecha_inicio)}. Saldo proyectado:{" "}
-              <strong>{formatMonto(primeraNeg.saldo_final, activo.moneda)}</strong>.
+              <strong>{formatMonto(primeraNeg.saldo_final, empresa.moneda)}</strong>.
               Considera aumentar ingresos, reducir gastos, o revisar tu OPEX.
             </p>
           </div>
@@ -285,7 +285,7 @@ export default function FlujoPage() {
                   fontSize: 12,
                 }}
                 formatter={(value) => [
-                  formatMonto(Number(value), activo.moneda),
+                  formatMonto(Number(value), empresa.moneda),
                   "Saldo",
                 ]}
                 labelFormatter={(_, payload) => {
@@ -353,7 +353,7 @@ export default function FlujoPage() {
                     <td className="text-right px-4 py-2 text-xs">
                       {s.ingresos > 0 ? (
                         <span className="text-mint-900">
-                          +{formatMonto(s.ingresos, activo.moneda, { short: true })}
+                          +{formatMonto(s.ingresos, empresa.moneda, { short: true })}
                         </span>
                       ) : (
                         <span className="text-ink-muted opacity-40">—</span>
@@ -362,7 +362,7 @@ export default function FlujoPage() {
                     <td className="text-right px-4 py-2 text-xs">
                       {s.egresos > 0 ? (
                         <span className="text-mauve-900">
-                          −{formatMonto(s.egresos, activo.moneda, { short: true })}
+                          −{formatMonto(s.egresos, empresa.moneda, { short: true })}
                         </span>
                       ) : (
                         <span className="text-ink-muted opacity-40">—</span>
@@ -374,7 +374,7 @@ export default function FlujoPage() {
                           className={`font-medium ${s.neto >= 0 ? "text-mint-900" : "text-mauve-900"}`}
                         >
                           {s.neto >= 0 ? "+" : ""}
-                          {formatMonto(s.neto, activo.moneda, { short: true })}
+                          {formatMonto(s.neto, empresa.moneda, { short: true })}
                         </span>
                       ) : (
                         <span className="text-ink-muted opacity-40">—</span>
@@ -385,7 +385,7 @@ export default function FlujoPage() {
                         neg ? "text-mauve-900" : "text-ink-dim"
                       }`}
                     >
-                      {formatMonto(s.saldo_final, activo.moneda)}
+                      {formatMonto(s.saldo_final, empresa.moneda)}
                     </td>
                   </tr>
                 );

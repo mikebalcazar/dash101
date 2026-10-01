@@ -12,34 +12,16 @@
 import * as A from './adaptar';
 import { listar, listarCompleto, obtener, pedir, yo } from './cliente';
 import { org } from '../fuente';
-import type { Cliente, Cuenta, Movimiento, Negocio, Opex, Proveedor, Proyecto, Usuario } from '@/types/schema';
+import type { Cliente, Cuenta, Movimiento, Opex, Proveedor, Proyecto, Usuario } from '@/types/schema';
 
 const porId = <T extends { id: string }>(filas: T[]): Map<string, T> => new Map(filas.map((f) => [f.id, f]));
 
-/* ─────────────── negocios ─────────────── */
-
-/** EN EL ORDEN DE LA API, que es por nombre. El primero es el registro de la
- *  empresa: el mismo que la API toma sola (0.61.0, `negocioDeLaEmpresa`) y el
- *  mismo que miden las pruebas. Hasta el 1-oct-2026 aquí se reordenaba por
- *  fecha de alta, y en la org demo de staging —que todavía tiene varios— la
- *  pantalla abría uno y la API colgaba lo nuevo de otro (corrida
- *  36908695856: la cuenta de pruebas no aparecía en ningún desplegable). */
-export async function listNegocios(uid: string): Promise<Negocio[]> {
-  const filas = await listar<A.FilaNegocio>('negocios');
-  return filas.map((f) => A.negocio(f, uid));
-}
-
-export async function getNegocio(id: string, uid = ''): Promise<Negocio | null> {
-  const f = await obtener<A.FilaNegocio>('negocios', id);
-  return f ? A.negocio(f, uid) : null;
-}
-
 /* ─────────────── cuentas ─────────────── */
 
-export async function listCuentas(negocioId: string): Promise<Cuenta[]> {
+export async function listCuentas(): Promise<Cuenta[]> {
   const [cuentas, movimientos] = await Promise.all([
-    listar<A.FilaCuenta>('cuentas', { negocio_id: negocioId }),
-    listar<A.FilaMovimiento>('movimientos', { negocio_id: negocioId }),
+    listar<A.FilaCuenta>('cuentas'),
+    listar<A.FilaMovimiento>('movimientos'),
   ]);
   return cuentas.map((c) => A.cuenta(c, movimientos));
 }
@@ -53,16 +35,15 @@ export async function getCuenta(id: string): Promise<Cuenta | null> {
 
 /* ─────────────── clientes y proveedores ─────────────── */
 
-export async function listClientes(negocioId: string): Promise<Cliente[]> {
-  return (await listar<A.FilaCliente>('clientes', { negocio_id: negocioId })).map(A.cliente);
+export async function listClientes(): Promise<Cliente[]> {
+  return (await listar<A.FilaCliente>('clientes')).map(A.cliente);
 }
 
 /** «¿No te refieres a…?» — la regla la contesta la API (contrato 0.23.0), no
  *  esta pantalla: tres apps con tres ideas de qué se parece a qué son tres
  *  reglas, y la que falle va a ser la que nadie probó. */
-export async function clientesParecidos(nombre: string, negocioId?: string): Promise<Cliente[]> {
+export async function clientesParecidos(nombre: string): Promise<Cliente[]> {
   const q = new URLSearchParams({ nombre });
-  if (negocioId) q.set('negocio_id', negocioId);
   const r = await pedir<{ parecidos: A.FilaCliente[] }>(`/orgs/${org()}/clientes/parecidos?${q}`);
   return r.parecidos.map(A.cliente);
 }
@@ -88,8 +69,8 @@ export async function getProveedor(id: string): Promise<Proveedor | null> {
 
 /* ─────────────── proyectos ─────────────── */
 
-async function partesDeProyectos(negocioId: string) {
-  const [partidas, items, movimientos, clientes, negocios] = await Promise.all([
+async function partesDeProyectos() {
+  const [partidas, items, movimientos, clientes] = await Promise.all([
     listar<A.FilaPartida>('partidas'),
     /* Sólo los vivos: el adaptador tira los cancelados de todos modos, y
      * pedirlos nada más los hace ocupar lugar contra el tope de 500 de la
@@ -99,28 +80,27 @@ async function partesDeProyectos(negocioId: string) {
      * posible. Que la lista enseñe de menos un renglón de detalle se nota y
      * no rompe nada; que truene la pantalla de proyectos, sí. El detalle del
      * proyecto —el que decide qué se guarda— sí exige la lista completa. */
-    listar<A.FilaItem>('items', { negocio_id: negocioId, estado: 'vendido' }),
-    listar<A.FilaMovimiento>('movimientos', { negocio_id: negocioId }),
-    listar<A.FilaCliente>('clientes', { negocio_id: negocioId }),
-    listar<A.FilaNegocio>('negocios'),
+    listar<A.FilaItem>('items', { estado: 'vendido' }),
+    listar<A.FilaMovimiento>('movimientos'),
+    listar<A.FilaCliente>('clientes'),
   ]);
-  return { partidas, items, movimientos, clientes: porId(clientes), negocios: porId(negocios) };
+  return { partidas, items, movimientos, clientes: porId(clientes) };
 }
 
-export async function listProyectos(negocioId: string): Promise<Proyecto[]> {
-  const [filas, partes] = await Promise.all([listar<A.FilaProyecto>('proyectos', { negocio_id: negocioId }), partesDeProyectos(negocioId)]);
+export async function listProyectos(): Promise<Proyecto[]> {
+  const [filas, partes] = await Promise.all([listar<A.FilaProyecto>('proyectos'), partesDeProyectos()]);
   return filas.map((f) => A.proyecto(f, partes));
 }
 
 export async function getProyecto(id: string): Promise<Proyecto | null> {
   const f = await obtener<A.FilaProyecto>('proyectos', id);
   if (!f) return null;
-  const partes = await partesDeProyectos(f.negocio_id);
+  const partes = await partesDeProyectos();
   /* Los ítems de ESTE proyecto, vivos, y completos.
    *
    * Tres cosas que costaron, las tres del mismo tope de 500 filas:
    *
-   *   · se piden por proyecto y no de la lista del negocio entero, porque en
+   *   · se piden por proyecto y no de la lista de la empresa entera, porque en
    *     una empresa con años de trabajo los de un proyecto reciente se caen
    *     del tope y la pantalla los enseña de menos;
    *   · se piden SÓLO LOS VIVOS. Los cancelados son los más viejos y la lista
@@ -206,12 +186,12 @@ export interface ItemFuera {
 
 /* ─────────────── movimientos ─────────────── */
 
-async function nombresDe(negocioId: string) {
+async function nombresDe() {
   const [cuentas, proyectos, items, clientes] = await Promise.all([
-    listar<A.FilaCuenta>('cuentas', { negocio_id: negocioId }),
-    listar<A.FilaProyecto>('proyectos', { negocio_id: negocioId }),
-    listar<A.FilaItem>('items', { negocio_id: negocioId }),
-    listar<A.FilaCliente>('clientes', { negocio_id: negocioId }),
+    listar<A.FilaCuenta>('cuentas'),
+    listar<A.FilaProyecto>('proyectos'),
+    listar<A.FilaItem>('items'),
+    listar<A.FilaCliente>('clientes'),
   ]);
   return { cuentas: porId(cuentas), proyectos: porId(proyectos), items: porId(items), clientes: porId(clientes) };
 }
@@ -227,12 +207,12 @@ const millis = (t: unknown): number => (t && typeof (t as { toMillis?: unknown }
 export const masRecientePrimero = (a: Movimiento, b: Movimiento): number =>
   millis(b.fecha) - millis(a.fecha) || millis(b.creado_at) - millis(a.creado_at);
 
-export async function listMovimientos(negocioId: string, opts?: { max?: number }): Promise<Movimiento[]> {
+export async function listMovimientos(opts?: { max?: number }): Promise<Movimiento[]> {
   /* Hasta 5,000 y no las 500 de omisión: Mike quiere el historial, y con
-   * 500 la pantalla se quedaba ciega a lo de hoy en cuanto el negocio pasó
+   * 500 la pantalla se quedaba ciega a lo de hoy en cuanto la empresa pasó
    * de 500 movimientos (1-oct-2026). La API los manda del más reciente al
    * más viejo desde 0.60.0; aquí se vuelve a ordenar por si fuera vieja. */
-  const [filas, nombres] = await Promise.all([listar<A.FilaMovimiento>('movimientos', { negocio_id: negocioId, limite: '5000' }), nombresDe(negocioId)]);
+  const [filas, nombres] = await Promise.all([listar<A.FilaMovimiento>('movimientos', { limite: '5000' }), nombresDe()]);
   const lista = filas.map((f) => A.movimiento(f, nombres));
   lista.sort(masRecientePrimero);
   return lista.slice(0, opts?.max ?? 100);
@@ -241,7 +221,7 @@ export async function listMovimientos(negocioId: string, opts?: { max?: number }
 export async function listMovimientosByProyecto(proyectoId: string): Promise<Movimiento[]> {
   const p = await obtener<A.FilaProyecto>('proyectos', proyectoId);
   if (!p) return [];
-  const [filas, nombres] = await Promise.all([listar<A.FilaMovimiento>('movimientos', { proyecto_id: proyectoId, limite: '5000' }), nombresDe(p.negocio_id)]);
+  const [filas, nombres] = await Promise.all([listar<A.FilaMovimiento>('movimientos', { proyecto_id: proyectoId, limite: '5000' }), nombresDe()]);
   const lista = filas.map((f) => A.movimiento(f, nombres));
   lista.sort(masRecientePrimero);
   return lista;
@@ -254,7 +234,7 @@ export async function listMovimientosByProyecto(proyectoId: string): Promise<Mov
 export async function listMovimientosDeCuenta(cuentaId: string): Promise<Movimiento[]> {
   const c = await obtener<A.FilaCuenta>('cuentas', cuentaId);
   if (!c) return [];
-  const [filas, nombres] = await Promise.all([listarCompleto<A.FilaMovimiento>('movimientos', { cuenta_id: cuentaId }), nombresDe(c.negocio_id)]);
+  const [filas, nombres] = await Promise.all([listarCompleto<A.FilaMovimiento>('movimientos', { cuenta_id: cuentaId }), nombresDe()]);
   const lista = filas.map((f) => A.movimiento(f, nombres));
   lista.sort(masRecientePrimero);
   return lista;
@@ -263,20 +243,20 @@ export async function listMovimientosDeCuenta(cuentaId: string): Promise<Movimie
 export async function getMovimiento(id: string): Promise<Movimiento | null> {
   const f = await obtener<A.FilaMovimiento>('movimientos', id);
   if (!f) return null;
-  return A.movimiento(f, await nombresDe(f.negocio_id));
+  return A.movimiento(f, await nombresDe());
 }
 
 /* ─────────────── opex ─────────────── */
 
-export async function listOpex(negocioId: string): Promise<Opex[]> {
-  const [filas, cuentas] = await Promise.all([listar<A.FilaOpex>('opex', { negocio_id: negocioId }), listar<A.FilaCuenta>('cuentas', { negocio_id: negocioId })]);
+export async function listOpex(): Promise<Opex[]> {
+  const [filas, cuentas] = await Promise.all([listar<A.FilaOpex>('opex'), listar<A.FilaCuenta>('cuentas')]);
   return filas.map((f) => A.opex(f, porId(cuentas)));
 }
 
 export async function getOpex(id: string): Promise<Opex | null> {
   const f = await obtener<A.FilaOpex>('opex', id);
   if (!f) return null;
-  const cuentas = await listar<A.FilaCuenta>('cuentas', { negocio_id: f.negocio_id });
+  const cuentas = await listar<A.FilaCuenta>('cuentas');
   return A.opex(f, porId(cuentas));
 }
 
@@ -285,6 +265,5 @@ export async function getOpex(id: string): Promise<Opex | null> {
 export async function getUserDoc(): Promise<Usuario | null> {
   const sesion = await yo();
   if (!sesion) return null;
-  const negocios = await listar<A.FilaNegocio>('negocios');
-  return A.usuario(sesion, org(), negocios.map((n) => n.id));
+  return A.usuario(sesion, org());
 }

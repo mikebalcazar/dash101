@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import { listCuentas } from "@/lib/cuentas";
 import { createOpex } from "@/lib/opex";
 import type { Cuenta, FrecuenciaOpex, TipoOpex, Moneda } from "@/types/schema";
@@ -14,14 +14,14 @@ import { IconArrowLeft } from "@tabler/icons-react";
 export default function NuevoOpexPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { activo } = useNegocioActivo();
+  const { empresa } = useEmpresa();
 
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
 
   const [nombre, setNombre] = useState("");
   const [tipo, setTipo] = useState<TipoOpex>("egreso");
   const [monto, setMonto] = useState("");
-  const [moneda, setMoneda] = useState<Moneda>(activo?.moneda ?? "MXN");
+  const [moneda, setMoneda] = useState<Moneda>(empresa?.moneda ?? "MXN");
   const [frecuencia, setFrecuencia] = useState<FrecuenciaOpex>("mensual");
   const [diaSemana, setDiaSemana] = useState<number>(1); // lunes
   const [diaDelMes, setDiaDelMes] = useState<number>(1);
@@ -35,11 +35,11 @@ export default function NuevoOpexPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!activo?.id) return;
-    listCuentas(activo.id).then(setCuentas);
-  }, [activo]);
+    if (!empresa?.id) return;
+    listCuentas().then(setCuentas);
+  }, [empresa]);
 
-  if (!activo) {
+  if (!empresa) {
     return (
       <div className="max-w-lg">
         <Link href="/opex" className="text-xs text-ink-muted hover:text-ink-dim">
@@ -79,7 +79,6 @@ export default function NuevoOpexPage() {
         cuenta_nombre: cuenta?.nombre ?? null,
         categoria: categoria.trim() || undefined,
         activo: true,
-        negocio_id: activo.id!,
         descripcion: descripcion.trim() || undefined,
       });
       router.push("/opex");

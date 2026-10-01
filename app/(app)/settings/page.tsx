@@ -3,24 +3,21 @@
 /* Configuración.
  *
  * Mike, 29-sep-2026, con la pantalla enfrente: «ya puedes quitar ese menú
- * [Negocio] y pasarlo a configuración». El menú tenía «Configuración»
- * apuntando a /settings desde el principio, y /settings no existía. Ahora
- * existe y trae el negocio de la empresa: nombre, descripción, RFC y
- * moneda. Un solo negocio (contrato 0.50.0): si por lo que sea todavía hay
- * varios, de aquí se va a juntarlos; si no hay ninguno, a dar de alta el
- * primero.
+ * y pasarlo a configuración». Aquí vive lo de la empresa: nombre, RFC y
+ * moneda. La empresa es una (1-oct-2026) y la edita quien dirige.
  */
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import { updateEmpresa } from "@/lib/empresa";
+import { getUserDoc, isOwner as dirige } from "@/lib/users";
 import type { Moneda } from "@/types/schema";
 import { IconBuildingStore } from "@tabler/icons-react";
 
 export default function ConfiguracionPage() {
   const { user } = useAuth();
-  const { activo: negocio, loading, refresh } = useNegocioActivo();
+  const { empresa, loading, refresh } = useEmpresa();
 
   const [nombre, setNombre] = useState("");
   const [rfc, setRfc] = useState("");
@@ -28,19 +25,23 @@ export default function ConfiguracionPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
-    if (!negocio) return;
-    setNombre(negocio.nombre);
-    setRfc(negocio.rfc ?? "");
-    setMoneda(negocio.moneda);
-  }, [negocio]);
+    if (!empresa) return;
+    setNombre(empresa.nombre);
+    setRfc(empresa.rfc ?? "");
+    setMoneda(empresa.moneda);
+  }, [empresa]);
 
-  const isOwner = !!(user && negocio && (!negocio.owner_uid || negocio.owner_uid === user.uid));
+  useEffect(() => {
+    if (!user) return;
+    getUserDoc(user.uid).then((yo) => setIsOwner(dirige(yo))).catch(() => setIsOwner(false));
+  }, [user]);
 
   const guardar = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!negocio?.id) return;
+    if (!empresa?.id) return;
     setError(""); setNotice(""); setSaving(true);
     try {
       await updateEmpresa({ nombre: nombre.trim(), rfc: rfc.trim() || null, moneda });
@@ -70,7 +71,7 @@ export default function ConfiguracionPage() {
           </div>
         </div>
 
-        {loading || !negocio ? (
+        {loading || !empresa ? (
           <p className="text-xs text-ink-muted">Cargando…</p>
         ) : (
           <form onSubmit={guardar} className="space-y-4">

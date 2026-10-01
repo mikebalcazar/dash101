@@ -32,7 +32,6 @@ export interface Orden {
   id: string;
   folio: string;
   tipo: TipoOrden;
-  negocio_id: string;
   solicitante_usuario_id: string;
   solicitante_correo: string | null;
   solicitante_nombre: string | null;
@@ -101,16 +100,12 @@ const orden = (f: FilaOrden): Orden => ({
 
 /* ─────────────── lo que ve quien pide ─────────────── */
 
-/** Con `negocio_id`, sólo las de ese negocio. dash101 trabaja con un negocio
- *  activo a la vez y el filtro lo hace el servidor, no la pantalla: filtrar
- *  aquí dejaría los totales del buzón contando dinero de otro negocio. */
-export async function listMisOrdenes(negocio_id?: string | null): Promise<Orden[]> {
-  const r = await pedir<{ filas: FilaOrden[] }>(`${base()}${negocio_id ? `?negocio_id=${encodeURIComponent(negocio_id)}` : ''}`);
+export async function listMisOrdenes(): Promise<Orden[]> {
+  const r = await pedir<{ filas: FilaOrden[] }>(base());
   return r.filas.map(orden);
 }
 
 export interface OrdenInput {
-  negocio_id: string;
   /** Sin él, es compra. */
   tipo?: TipoOrden;
   proveedor_id?: string | null;
@@ -131,7 +126,6 @@ export interface OrdenInput {
 
 export async function crearOrden(d: OrdenInput): Promise<Orden> {
   const cuerpo: Record<string, unknown> = {
-    negocio_id: d.negocio_id,
     tipo: d.tipo ?? 'compra',
     proveedor_id: d.proveedor_id ?? null,
     proveedor_nombre: d.proveedor_nombre ?? null,
@@ -187,9 +181,8 @@ export async function corregirOrden(id: string, d: Partial<OrdenInput>): Promise
 /** Con `tipo`, una sola pestaña (compras o reembolsos) con SUS totales: la
  *  cifra de arriba tiene que ser la suma de los renglones de abajo, y en la
  *  pestaña de reembolsos esos renglones son sólo los reembolsos. */
-export async function getBuzon(negocio_id?: string | null, tipo?: TipoOrden | null): Promise<Buzon> {
+export async function getBuzon(tipo?: TipoOrden | null): Promise<Buzon> {
   const q = new URLSearchParams();
-  if (negocio_id) q.set('negocio_id', negocio_id);
   if (tipo) q.set('tipo', tipo);
   const qs = q.toString();
   const r = await pedir<{ filas: FilaOrden[]; total: number; vence_esta_semana: number; vencidas: number }>(
@@ -207,9 +200,8 @@ export async function getBuzon(negocio_id?: string | null, tipo?: TipoOrden | nu
  *  ver en la pantalla de compras un historial completo de las órdenes de
  *  compra ya pagadas». La más reciente arriba; lo lee quien paga, como el
  *  buzón. `total` en PESOS: la suma de lo que se lista. */
-export async function listOrdenesPagadas(negocio_id?: string | null, tipo?: TipoOrden | null): Promise<{ filas: Orden[]; total: number }> {
+export async function listOrdenesPagadas(tipo?: TipoOrden | null): Promise<{ filas: Orden[]; total: number }> {
   const q = new URLSearchParams();
-  if (negocio_id) q.set('negocio_id', negocio_id);
   if (tipo) q.set('tipo', tipo);
   const qs = q.toString();
   const r = await pedir<{ filas: FilaOrden[]; total: number }>(`${base()}/pagadas${qs ? `?${qs}` : ''}`);
@@ -225,8 +217,8 @@ export interface ResumenOrdenes {
   reembolsos: { total: number; cuantas: number };
 }
 
-export async function getResumenOrdenes(negocio_id?: string | null): Promise<ResumenOrdenes> {
-  const r = await pedir<ResumenOrdenes>(`${base()}/resumen${negocio_id ? `?negocio_id=${encodeURIComponent(negocio_id)}` : ''}`);
+export async function getResumenOrdenes(): Promise<ResumenOrdenes> {
+  const r = await pedir<ResumenOrdenes>(`${base()}/resumen`);
   return {
     compras: { total: aPesos(r.compras.total), cuantas: r.compras.cuantas },
     reembolsos: { total: aPesos(r.reembolsos.total), cuantas: r.reembolsos.cuantas },

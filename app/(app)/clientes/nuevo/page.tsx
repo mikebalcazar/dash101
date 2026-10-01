@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import { clientesParecidos, createCliente } from "@/lib/clientes";
 import type { Cliente } from "@/types/schema";
 import { IconArrowLeft } from "@tabler/icons-react";
@@ -12,7 +12,7 @@ import { IconArrowLeft } from "@tabler/icons-react";
 export default function NuevoClientePage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { activo } = useNegocioActivo();
+  const { empresa } = useEmpresa();
 
   const [nombre, setNombre] = useState("");
   const [rfc, setRfc] = useState("");
@@ -31,7 +31,7 @@ export default function NuevoClientePage() {
   const [parecidos, setParecidos] = useState<Cliente[]>([]);
   const [insistir, setInsistir] = useState(false);
 
-  if (!activo) {
+  if (!empresa) {
     return (
       <div className="max-w-lg">
         <Link href="/clientes" className="text-xs text-ink-muted hover:text-ink-dim">
@@ -48,7 +48,7 @@ export default function NuevoClientePage() {
     setError("");
 
     if (!insistir) {
-      const iguales = await clientesParecidos(nombre.trim(), [], activo.id!).catch(() => []);
+      const iguales = await clientesParecidos(nombre.trim(), []).catch(() => []);
       if (iguales.length > 0) { setParecidos(iguales); return; }
     }
 
@@ -60,7 +60,6 @@ export default function NuevoClientePage() {
         email: email.trim() || undefined,
         telefono: telefono.trim() || undefined,
         notas: notas.trim() || undefined,
-        negocio_id: activo.id!,
       });
       router.push("/clientes");
     } catch (err) {

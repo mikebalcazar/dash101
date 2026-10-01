@@ -27,23 +27,22 @@ export interface MembershipInfo {
 export interface Usuario {
   email: string;
   nombre: string;
-  negocios_acceso: string[]; // IDs para query fácil
-  memberships: Record<string, MembershipInfo>; // negocio_id -> detalles
+  /** Lo que puede hacer en la empresa; null si no es miembro. */
+  membership: MembershipInfo | null;
   creado_at: Timestamp | FieldValue;
 }
 
-export interface Negocio {
-  id?: string;
+/** LA EMPRESA, una sola (contrato 0.63.0). Mike, 1-oct-2026: «Sólo es una
+ *  empresa/negocio todo». Es lo que `GET /orgs/:o/empresa` contesta y lo que
+ *  cada pantalla toma de `useEmpresa()`. */
+export interface Empresa {
+  /** Siempre 'empresa'. */
+  id: string;
   nombre: string;
-  descripcion?: string;
-  rfc?: string;
+  rfc: string | null;
   moneda: Moneda;
   /** Día en que toca conciliar: 0 domingo … 6 sábado. Por omisión, lunes. */
-  dia_conciliacion?: number;
-  owner_uid: string;
-  miembros_uids: string[];
-  creado_at: Timestamp | FieldValue;
-  creado_por: string;
+  dia_conciliacion: number;
 }
 
 export interface Cuenta {
@@ -55,7 +54,6 @@ export interface Cuenta {
   moneda: Moneda;
   saldo_inicial: number;
   saldo_actual: number;
-  negocio_id: string;
   creado_at: Timestamp | FieldValue;
   creado_por: string;
 }
@@ -67,7 +65,6 @@ export interface Cliente {
   email?: string;
   telefono?: string;
   notas?: string;
-  negocio_id: string;
   /** Acceso al portal de estados de cuenta (Firebase Auth uid del cliente) */
   uid?: string | null;
   portal_email?: string | null;
@@ -89,13 +86,12 @@ export interface Proveedor {
   creado_por: string;
 }
 
-/** Un accionista del negocio (contrato 0.57.0). Mike, 30-sep-2026: «un
+/** Un accionista de la empresa (contrato 0.57.0). Mike, 30-sep-2026: «un
  *  módulo de accionistas donde se registren pagos a los accionistas como
  *  retiro de utilidades». El retiro no es una tabla: es un egreso con
  *  categoría CATEGORIA_RETIRO_UTILIDADES y contraparte `accionista`. */
 export interface Accionista {
   id: string;
-  negocio_id: string;
   nombre: string;
   rfc: string;
   correo: string;
@@ -174,8 +170,6 @@ export interface Proyecto {
   /** uid del portal del cliente, denormalizado para rules de lectura */
   cliente_uid?: string | null;
   items?: ItemProyecto[];
-  negocio_id: string;
-  negocio_nombre: string;
   precio_venta: number;
   compromiso_total: number;
   cobrado: number;
@@ -221,7 +215,6 @@ export interface Movimiento {
   producto_nombre?: string | null;
   /** uid del portal del cliente, denormalizado para rules de lectura */
   cliente_uid?: string | null;
-  negocio_id: string;
   descripcion?: string;
   categoria?: string;
   /** Lo fiscal. `facturado` dice que la factura ya llegó; `requiere_factura`,
@@ -244,7 +237,6 @@ export const CATEGORIA_GASTO_GENERAL = "gasto_general";
 /** Una conciliación: la foto de un corte. No se edita nunca. */
 export interface Conciliacion {
   id: string;
-  negocio_id: string;
   corte_at: Timestamp;
   hecha_por: string;
   cuentas: ConciliacionCuenta[];
@@ -276,8 +268,7 @@ export interface EstadisticaConciliacion {
 export interface Invitacion {
   id?: string;
   email: string; // lowercase
-  negocio_id: string;
-  negocio_nombre: string;
+  empresa_nombre: string;
   invited_by_uid: string;
   invited_by_nombre: string;
   invited_by_email: string;
@@ -307,7 +298,6 @@ export interface Opex {
   cuenta_nombre?: string | null;
   categoria?: string;
   activo: boolean;
-  negocio_id: string;
   descripcion?: string;
   creado_at: Timestamp | FieldValue;
   creado_por: string;
@@ -315,7 +305,6 @@ export interface Opex {
 
 export const COLLECTIONS = {
   USUARIOS: "usuarios",
-  NEGOCIOS: "negocios",
   CUENTAS: "cuentas",
   CLIENTES: "clientes",
   PROVEEDORES: "proveedores",

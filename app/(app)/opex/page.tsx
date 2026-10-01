@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import { listOpex, updateOpex, estimarMensual } from "@/lib/opex";
 import type { Opex } from "@/types/schema";
 import { FRECUENCIA_LABELS, DIAS_SEMANA } from "@/types/schema";
@@ -16,29 +16,29 @@ import {
 } from "@tabler/icons-react";
 
 export default function OpexPage() {
-  const { activo, loading: loadingNegocio } = useNegocioActivo();
+  const { empresa, loading: loadingEmpresa } = useEmpresa();
   const [opexes, setOpexes] = useState<Opex[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const load = () => {
-    if (!activo?.id) {
+    if (!empresa?.id) {
       setOpexes([]);
       setLoading(false);
       return;
     }
     setLoading(true);
-    listOpex(activo.id)
+    listOpex()
       .then(setOpexes)
       .catch((e) => setError(e instanceof Error ? e.message : "Error"))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
-    if (loadingNegocio) return;
+    if (loadingEmpresa) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activo, loadingNegocio]);
+  }, [empresa, loadingEmpresa]);
 
   const toggleActivo = async (o: Opex) => {
     try {
@@ -49,9 +49,9 @@ export default function OpexPage() {
     }
   };
 
-  if (loadingNegocio || loading) return <div className="text-sm text-ink-muted">Cargando…</div>;
+  if (loadingEmpresa || loading) return <div className="text-sm text-ink-muted">Cargando…</div>;
 
-  if (!activo) {
+  if (!empresa) {
     return (
       <div className="bg-white border border-black/5 rounded-2xl p-10 text-center">
         <p className="text-sm font-medium text-ink-dim mb-1">Cargando la empresa…</p>
@@ -77,7 +77,7 @@ export default function OpexPage() {
         <div>
           <h2 className="text-lg font-medium text-ink-dim">OPEX recurrentes</h2>
           <p className="text-xs text-ink-muted mt-0.5">
-            {activo.nombre} · {opexes.length} {opexes.length === 1 ? "gasto" : "gastos"}
+            {empresa.nombre} · {opexes.length} {opexes.length === 1 ? "gasto" : "gastos"}
             {activos.length !== opexes.length && ` (${activos.length} activos)`}
           </p>
         </div>
@@ -95,7 +95,7 @@ export default function OpexPage() {
           <div className="bg-mauve-50 rounded-2xl p-4">
             <p className="text-xs text-mauve-label font-medium">Egresos / mes</p>
             <p className="text-xl font-medium text-mauve-900 mt-1">
-              {formatMonto(egresoMensual, activo.moneda, { short: true })}
+              {formatMonto(egresoMensual, empresa.moneda, { short: true })}
             </p>
             <p className="text-[11px] text-mauve-label mt-1 opacity-75">
               Estimado ~4.33 sem/mes
@@ -104,7 +104,7 @@ export default function OpexPage() {
           <div className="bg-mint-50 rounded-2xl p-4">
             <p className="text-xs text-mint-label font-medium">Ingresos / mes</p>
             <p className="text-xl font-medium text-mint-900 mt-1">
-              {formatMonto(ingresoMensual, activo.moneda, { short: true })}
+              {formatMonto(ingresoMensual, empresa.moneda, { short: true })}
             </p>
             <p className="text-[11px] text-mint-label mt-1 opacity-75">
               Fijos recurrentes
@@ -122,7 +122,7 @@ export default function OpexPage() {
               }`}
             >
               {totalMensual >= 0 ? "+" : ""}
-              {formatMonto(totalMensual, activo.moneda, { short: true })}
+              {formatMonto(totalMensual, empresa.moneda, { short: true })}
             </p>
             <p className="text-[11px] text-ink-muted mt-1 opacity-75">
               {totalMensual >= 0 ? "Superávit" : "Déficit"}

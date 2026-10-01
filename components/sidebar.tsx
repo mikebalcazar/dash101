@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useEffect, useState } from "react";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import { getResumenOrdenes } from "@/lib/ordenes";
 import {
   IconHome,
@@ -55,25 +55,21 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, signOut } = useAuth();
-  const { activo } = useNegocioActivo();
+  const { empresa } = useEmpresa();
   /* El circulito de Compras (Mike, 30-sep-2026: «un circulito con la
    * cantidad de órdenes sin pagar, como de mensajes sin leer»): compras y
-   * reembolsos en el buzón, del negocio activo. Se vuelve a pedir al cambiar
+   * reembolsos en el buzón de la empresa. Se vuelve a pedir al cambiar
    * de pantalla, que es cuando algo se pudo haber pagado; quien no ve dinero
    * no recibe el número y no ve el circulito. */
   const [porPagar, setPorPagar] = useState(0);
-  const negocioId = activo?.id ?? null;
   useEffect(() => {
-    /* Sin negocio activo no se pide nada: sin `negocio_id` la API cuenta las
-     * órdenes de TODOS los negocios de la empresa, y ése no es el número de
-     * la pantalla que se está viendo (corrida 36775033289: 22 contra 7). */
-    if (!negocioId) { setPorPagar(0); return; }
+    if (!empresa) { setPorPagar(0); return; }
     let vivo = true;
-    getResumenOrdenes(negocioId)
+    getResumenOrdenes()
       .then((r) => { if (vivo) setPorPagar(r.compras.cuantas + r.reembolsos.cuantas); })
       .catch(() => { if (vivo) setPorPagar(0); });
     return () => { vivo = false; };
-  }, [negocioId, pathname]);
+  }, [empresa, pathname]);
 
   const initials = (user?.displayName || user?.email || "U")
     .split(/[\s@]/)

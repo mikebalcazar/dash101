@@ -7,7 +7,6 @@ import {
   updateDoc,
   deleteDoc,
   query,
-  where,
   orderBy,
   serverTimestamp,
 } from "firebase/firestore";
@@ -24,14 +23,12 @@ export interface CuentaInput {
   numero?: string;
   moneda: Moneda;
   saldo_inicial: number;
-  negocio_id: string;
 }
 
-export async function listCuentas(negocioId: string): Promise<Cuenta[]> {
-  if (fuente() === 'api') return leer.listCuentas(negocioId);
+export async function listCuentas(): Promise<Cuenta[]> {
+  if (fuente() === 'api') return leer.listCuentas();
   const q = query(
     collection(db, "cuentas"),
-    where("negocio_id", "==", negocioId),
     orderBy("creado_at", "desc")
   );
   const snap = await getDocs(q);
@@ -55,7 +52,6 @@ export async function createCuenta(uid: string, data: CuentaInput): Promise<stri
     moneda: data.moneda,
     saldo_inicial: data.saldo_inicial,
     saldo_actual: data.saldo_inicial,
-    negocio_id: data.negocio_id,
     creado_at: serverTimestamp(),
     creado_por: uid,
   };
@@ -65,7 +61,7 @@ export async function createCuenta(uid: string, data: CuentaInput): Promise<stri
 
 export async function updateCuenta(
   id: string,
-  data: Partial<Omit<CuentaInput, "negocio_id">>
+  data: Partial<CuentaInput>
 ): Promise<void> {
   if (fuente() === 'api') return escribir.updateCuenta(id, data);
   await updateDoc(doc(db, "cuentas", id), data);

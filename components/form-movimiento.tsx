@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { CATEGORIA_GASTO_GENERAL } from "@/types/schema";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import { listCuentas } from "@/lib/cuentas";
 import { listClientes, createCliente } from "@/lib/clientes";
 import { listProveedores, createProveedor } from "@/lib/proveedores";
@@ -16,7 +16,6 @@ import type {
   Cliente,
   Proveedor,
   Proyecto,
-  Negocio,
   TipoMovimiento,
 } from "@/types/schema";
 import { formatMonto } from "@/lib/format";
@@ -62,9 +61,8 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
-  const { negocios, activo } = useNegocioActivo();
+  const { empresa } = useEmpresa();
 
-  const [negocioId, setNegocioId] = useState<string>("");
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
@@ -74,7 +72,7 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
   const [tipo, setTipo] = useState<TipoMovimiento>(
     (searchParams?.get("tipo") as TipoMovimiento) ?? "ingreso"
   );
-  /* Gasto general del negocio (Mike, 1-oct-2026): un egreso que no va a
+  /* Gasto general de la empresa (Mike, 1-oct-2026): un egreso que no va a
    * ningún proyecto —renta, máquinas, herramienta, licencias—. Se guarda
    * con `categoria: gasto_general` y sin proyecto. `categoriaDeLaCarga`
    * recuerda lo que traía al abrir: si se le quita la marca al corregir,
@@ -138,15 +136,6 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
   const [contraparteOriginal, setContraparteOriginal] =
     useState<{ tipo: string; nombre: string } | null>(null);
 
-  const negocio = useMemo<Negocio | null>(
-    () => negocios.find((n) => n.id === negocioId) ?? null,
-    [negocios, negocioId]
-  );
-
-  useEffect(() => {
-    if (!negocioId && activo?.id) setNegocioId(activo.id);
-  }, [activo, negocioId]);
-
   /* Corregir: se trae lo que hay y se prellena. Las dos cerraduras se
    * revisan aquí para poder EXPLICARLAS, y otra vez en la escritura, que es
    * donde de verdad cuentan: una pantalla vieja en un teléfono que no se ha
@@ -169,7 +158,6 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
         }
         // Las llaves, antes de escribir: dicen a los efectos de limpieza que
         // ese valor lo puso la carga y que no hay nada que tirar.
-        negocioDeLaCarga.current = m.negocio_id;
         tipoDeLaCarga.current = m.tipo;
         proyectoDeLaCarga.current = m.proyecto_id ?? "";
 
@@ -178,7 +166,6 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
         setMonto(String(m.monto));
         setMontoOriginal(String(m.monto));
         setFecha(aDiaLocal(m.fecha));
-        setNegocioId(m.negocio_id);
         setCuentaId(m.cuenta_id);
         setProyectoId(m.proyecto_id ?? "");
         setContraparteId(m.contraparte_id ?? "");
@@ -201,14 +188,14 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [movimientoId]);
 
-  const loadCatalogos = async (nid: string) => {
+  const loadCatalogos = async () => {
     setLoadingCat(true);
     try {
       const [cs, cls, pvs, prs] = await Promise.all([
-        listCuentas(nid),
-        listClientes(nid),
+        listCuentas(),
+        listClientes(),
         listProveedores(),
-        listProyectos(nid),
+        listProyectos(),
       ]);
       setCuentas(cs);
       setClientes(cls);
@@ -221,34 +208,16 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
     }
   };
 
-  /* Al cambiar de negocio se limpia lo que dependía del anterior —cuenta,
-   * proyecto, contraparte—, porque son de ese negocio y no del nuevo.
-   *
-   * PERO NO CUANDO EL CAMBIO LO HIZO LA CARGA DE UN MOVIMIENTO. Si el
-   * movimiento que se corrige es de OTRO negocio que el activo, cargarlo
-   * cambia el negocio, este efecto corre después y borraba la cuenta y el
-   * cliente recién prellenados: el botón de guardar se quedaba apagado y no
-   * pasaba nada al picarle.
-   *
-   * No se resuelve con una marca de «primera vuelta»: cuál vuelta es la
-   * primera depende del orden en que corren los efectos, y ese orden cambia
-   * según si el negocio del movimiento es el activo o no. La llave sí: dice
-   * «este valor lo puso la carga», y eso es cierto venga cuando venga. */
-  const negocioDeLaCarga = useRef<string | null>(null);
+  /* Los catálogos son los de la empresa, que es una: se cargan en cuanto se
+   * sabe de ella. Lo que la carga de un movimiento prellenó —cuenta,
+   * proyecto, contraparte— no se toca aquí: no hay nada de otro lado que
+   * limpiar. */
   useEffect(() => {
-    if (!negocioId) return;
-    const vieneDeLaCarga = negocioDeLaCarga.current === negocioId;
-    negocioDeLaCarga.current = null;
-    if (!vieneDeLaCarga) {
-      setCuentaId("");
-      setProyectoId("");
-      setContraparteId("");
-      setProductoId("");
-    }
+    if (!empresa) return;
     setQuickCreate(null);
-    loadCatalogos(negocioId);
+    loadCatalogos();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [negocioId]);
+  }, [empresa]);
 
   const proyectoSel = proyectos.find((p) => p.id === proyectoId);
   const itemsDelProyecto = proyectoSel?.items ?? [];
@@ -319,11 +288,11 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
     );
   }
 
-  if (!activo) return <div className="text-sm text-ink-muted">Cargando…</div>;
+  if (!empresa) return <div className="text-sm text-ink-muted">Cargando…</div>;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !negocio) return;
+    if (!user || !empresa) return;
     setError("");
 
     const montoNum = parseFloat(monto);
@@ -350,7 +319,7 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
     if (!contraparteObj && !sinContraparte) {
       setError(
         contraparteId
-          ? `Ese ${contraparteLabel.toLowerCase()} ya no está en la lista de este negocio. Escoge otro.`
+          ? `Ese ${contraparteLabel.toLowerCase()} ya no está en la lista de la empresa. Escoge otro.`
           : `Selecciona un ${contraparteLabel.toLowerCase()}`,
       );
       return;
@@ -378,7 +347,6 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
         contraparte_nombre: contraparteObj ? contraparteObj.nombre : (contraparteOriginal?.nombre ?? ""),
         producto_id: tipo === "ingreso" && productoSel ? productoSel.id : null,
         producto_nombre: tipo === "ingreso" && productoSel ? productoSel.nombre : null,
-        negocio_id: negocio.id!,
         /* SIN `|| undefined`. En el guardado, `undefined` quiere decir «no
          * toques este campo», así que vaciar la nota no la borraba: se
          * mandaba `undefined` y la API conservaba la de antes. Agregar sí
@@ -404,7 +372,7 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
       if (factura === "ya" && uuid.trim()) {
         const ivaNum = Number(ivaFactura) || 0;
         const c = await crearCfdi({
-          negocio_id: negocio.id!, uuid: uuid.trim(), tipo,
+          uuid: uuid.trim(), tipo,
           rfc: rfcFactura.trim().toUpperCase() || null,
           subtotal: montoNum - ivaNum, iva: ivaNum, retenciones: 0,
           total: montoNum, fecha: fechaFactura || fecha,
@@ -455,7 +423,7 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
           <div className="flex items-baseline gap-2">
             <span className={`text-3xl font-medium ${accentTxt}`}>{symbol}</span>
             <span className={`text-xs font-medium ${accentLabel} mb-1`}>
-              {negocio?.moneda ?? "MXN"}
+              {empresa?.moneda ?? "MXN"}
             </span>
             <input
               type="number"
@@ -524,7 +492,7 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
                 className="mt-0.5"
               />
               <span>
-                Gasto general del negocio
+                Gasto general de la empresa
                 <span className="block text-xs text-ink-muted font-normal">
                   Renta, máquinas, herramienta, licencias: no va a ningún proyecto.
                 </span>
@@ -543,8 +511,6 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
               className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
             />
           </div>
-
-          {/* El negocio ya no se escoge (Mike, 1-oct-2026): es el de la empresa, y lo pone el contexto. */}
 
           {loadingCat ? (
             <p className="text-xs text-ink-muted text-center py-3">Cargando catálogo…</p>
@@ -585,16 +551,15 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
               {quickCreate === "proyecto" && (
                 <QuickCreateProyecto
                   clientes={clientes}
-                  moneda={negocio?.moneda ?? "MXN"}
+                  moneda={empresa?.moneda ?? "MXN"}
                   onCancel={() => setQuickCreate(null)}
                   onCreated={async (newId) => {
-                    await loadCatalogos(negocioId);
+                    await loadCatalogos();
                     setProyectoId(newId);
                     setQuickCreate(null);
                   }}
                   onNeedCliente={() => setQuickCreate("cliente")}
                   uid={user!.uid}
-                  negocio={negocio!}
                 />
               )}
 
@@ -682,19 +647,18 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
                 <QuickCreateCliente
                   onCancel={() => setQuickCreate(null)}
                   onCreated={async (newId) => {
-                    await loadCatalogos(negocioId);
+                    await loadCatalogos();
                     if (tipo === "ingreso") setContraparteId(newId);
                     setQuickCreate(null);
                   }}
                   uid={user!.uid}
-                  negocioId={negocioId}
                 />
               )}
               {quickCreate === "proveedor" && (
                 <QuickCreateProveedor
                   onCancel={() => setQuickCreate(null)}
                   onCreated={async (newId) => {
-                    await loadCatalogos(negocioId);
+                    await loadCatalogos();
                     if (tipo === "egreso") setContraparteId(newId);
                     setQuickCreate(null);
                   }}
@@ -861,7 +825,7 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
                     </div>
 
                     <p className="text-[11px] text-ink-muted">
-                      El total de la factura es el del movimiento: {formatMonto(parseFloat(monto) || 0, negocio?.moneda ?? "MXN")}.
+                      El total de la factura es el del movimiento: {formatMonto(parseFloat(monto) || 0, empresa?.moneda ?? "MXN")}.
                       El subtotal sale de restarle el IVA, así que siempre cuadran al centavo.
                       {!uuid.trim() && " Sin folio fiscal se guarda como «falta facturar»."}
                     </p>
@@ -1018,7 +982,6 @@ function QuickCreateProyecto({
   onCreated,
   onNeedCliente,
   uid,
-  negocio,
 }: {
   clientes: Cliente[];
   moneda: string;
@@ -1026,7 +989,6 @@ function QuickCreateProyecto({
   onCreated: (id: string) => void | Promise<void>;
   onNeedCliente: () => void;
   uid: string;
-  negocio: Negocio;
 }) {
   const [nombre, setNombre] = useState("");
   const [clienteId, setClienteId] = useState("");
@@ -1045,8 +1007,6 @@ function QuickCreateProyecto({
         nombre: nombre.trim(),
         cliente_id: cliente.id!,
         cliente_nombre: cliente.nombre,
-        negocio_id: negocio.id!,
-        negocio_nombre: negocio.nombre,
         precio_venta: parseFloat(precio) || 0,
         partidas: [],
         estado: "activo",
@@ -1131,12 +1091,10 @@ function QuickCreateCliente({
   onCancel,
   onCreated,
   uid,
-  negocioId,
 }: {
   onCancel: () => void;
   onCreated: (id: string) => void | Promise<void>;
   uid: string;
-  negocioId: string;
 }) {
   const [nombre, setNombre] = useState("");
   const [rfc, setRfc] = useState("");
@@ -1151,7 +1109,6 @@ function QuickCreateCliente({
       const id = await createCliente(uid, {
         nombre: nombre.trim(),
         rfc: rfc.trim() || undefined,
-        negocio_id: negocioId,
       });
       await onCreated(id);
     } catch (e) {

@@ -455,7 +455,7 @@ export default function ProyectoDetallePage() {
 
           {/* ¿Está repetido? Juntar dos proyectos que son el mismo
               (contrato 0.52.0). Mike, 29-sep: «quiero fusionar proyectos». */}
-          <FusionarProyecto proyecto={p} negocioId={p.negocio_id} onFusionado={() => { void loadProyecto(); }} />
+          <FusionarProyecto proyecto={p} onFusionado={() => { void loadProyecto(); }} />
 
           {/* Zona peligrosa */}
           <div className="mt-8 pt-6 border-t border-mauve-50">

@@ -4,20 +4,23 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import { createInvitacion } from "@/lib/invitaciones";
 import { listProyectos } from "@/lib/proyectos";
-import type { Proyecto, RolMiembro, ScopeMiembro } from "@/types/schema";
+import { getUserDoc, isOwner } from "@/lib/users";
+import type { Proyecto, RolMiembro, ScopeMiembro, Usuario } from "@/types/schema";
 import { ROL_LABELS, ROL_DESCRIPCION } from "@/types/schema";
 import { IconArrowLeft, IconCopy, IconCheck } from "@tabler/icons-react";
 
 export default function InvitarPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { activo } = useNegocioActivo();
+  const { empresa } = useEmpresa();
 
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
   const [loadingProy, setLoadingProy] = useState(true);
+  /** Quien invita, con su rol en la empresa; undefined mientras se lee. */
+  const [yo, setYo] = useState<Usuario | null | undefined>(undefined);
 
   const [email, setEmail] = useState("");
   const [rol, setRol] = useState<RolMiembro>("socio");
@@ -30,13 +33,18 @@ export default function InvitarPage() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (!activo?.id) return;
-    listProyectos(activo.id)
+    if (!empresa?.id) return;
+    listProyectos()
       .then(setProyectos)
       .finally(() => setLoadingProy(false));
-  }, [activo]);
+  }, [empresa]);
 
-  if (!activo) {
+  useEffect(() => {
+    if (!user) return;
+    getUserDoc(user.uid).then(setYo).catch(() => setYo(null));
+  }, [user]);
+
+  if (!empresa || yo === undefined) {
     return (
       <div>
         <Link href="/equipo" className="text-xs text-ink-muted hover:text-ink-dim">
@@ -47,7 +55,7 @@ export default function InvitarPage() {
     );
   }
 
-  const esOwner = user && activo.owner_uid === user.uid;
+  const esOwner = !!user && isOwner(yo);
   if (!esOwner) {
     return (
       <div>
@@ -95,8 +103,7 @@ export default function InvitarPage() {
     try {
       const id = await createInvitacion({
         email: emailLc,
-        negocio_id: activo.id!,
-        negocio_nombre: activo.nombre,
+        empresa_nombre: empresa.nombre,
         invited_by_uid: user.uid,
         invited_by_nombre: user.displayName ?? user.email ?? "",
         invited_by_email: user.email ?? "",
@@ -167,7 +174,7 @@ export default function InvitarPage() {
 
       <h2 className="text-lg font-medium text-ink-dim">Invitar a alguien</h2>
       <p className="text-xs text-ink-muted mt-0.5 mb-6">
-        Al aceptar, tendrá acceso a <strong>{activo.nombre}</strong>
+        Al aceptar, tendrá acceso a <strong>{empresa.nombre}</strong>
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-4">

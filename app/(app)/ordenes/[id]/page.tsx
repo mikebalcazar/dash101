@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import { listCuentas } from "@/lib/cuentas";
 import { ErrorApi } from "@/lib/api/cliente";
 import {
@@ -41,7 +41,7 @@ export default function OrdenPage() {
   const router = useRouter();
   const params = useSearchParams();
   const { user } = useAuth();
-  const { activo } = useNegocioActivo();
+  const { empresa } = useEmpresa();
 
   const [orden, setOrden] = useState<Orden | null>(null);
   const [eventos, setEventos] = useState<EventoOrden[]>([]);
@@ -88,11 +88,11 @@ export default function OrdenPage() {
   useEffect(() => { void cargar(); }, [cargar]);
 
   useEffect(() => {
-    if (!puedoPagar || !activo?.id) return;
+    if (!puedoPagar || !empresa?.id) return;
     void (async () => {
-      try { setCuentas(await listCuentas(activo.id!)); } catch { setCuentas([]); }
+      try { setCuentas(await listCuentas()); } catch { setCuentas([]); }
     })();
-  }, [puedoPagar, activo]);
+  }, [puedoPagar, empresa]);
 
   const mia = !!orden && !!user && orden.solicitante_usuario_id === user.uid;
   const enBuzon = orden?.estado === "en_buzon";

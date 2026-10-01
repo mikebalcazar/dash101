@@ -6,7 +6,7 @@
  * siempre. Abajo, lo que se ha escapado por semana y por cuenta. */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import { useAuth } from "@/lib/auth-context";
 import {
   DIAS,
@@ -28,7 +28,7 @@ const caja =
   "w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm text-right tabular-nums focus:outline-none focus:border-ink/40 transition";
 
 export default function ConciliacionPage() {
-  const { activo, loading: cargandoNegocio, refresh } = useNegocioActivo();
+  const { empresa, loading: cargandoEmpresa, refresh } = useEmpresa();
   const { user } = useAuth();
   const [cuentas, setCuentas] = useState<CuentaPorConciliar[]>([]);
   const [reales, setReales] = useState<Record<string, string>>({});
@@ -40,7 +40,7 @@ export default function ConciliacionPage() {
   const [aviso, setAviso] = useState("");
 
   const cargar = useCallback(async () => {
-    if (!activo?.id) {
+    if (!empresa?.id) {
       setCargando(false);
       return;
     }
@@ -48,9 +48,9 @@ export default function ConciliacionPage() {
     setError("");
     try {
       const [c, l, e] = await Promise.all([
-        cuentasPorConciliar(activo.id),
-        listConciliaciones(activo.id),
-        estadisticaConciliacion(activo.id),
+        cuentasPorConciliar(),
+        listConciliaciones(),
+        estadisticaConciliacion(),
       ]);
       setCuentas(c);
       setCortes(l);
@@ -61,15 +61,15 @@ export default function ConciliacionPage() {
     } finally {
       setCargando(false);
     }
-  }, [activo]);
+  }, [empresa]);
 
   useEffect(() => {
-    if (cargandoNegocio) return;
+    if (cargandoEmpresa) return;
     void cargar();
-  }, [cargandoNegocio, cargar]);
+  }, [cargandoEmpresa, cargar]);
 
-  const dia = activo?.dia_conciliacion ?? DIA_POR_OMISION;
-  const pendiente = useMemo(() => tocaConciliar(activo, cortes[0] ?? null), [activo, cortes]);
+  const dia = empresa?.dia_conciliacion ?? DIA_POR_OMISION;
+  const pendiente = useMemo(() => tocaConciliar(empresa, cortes[0] ?? null), [empresa, cortes]);
 
   /** La diferencia en vivo: lo registrado menos lo que se capturó. */
   const diferencia = (c: CuentaPorConciliar): number | null => {
@@ -84,7 +84,7 @@ export default function ConciliacionPage() {
   const totalVivo = cuentas.reduce((t, c) => t + (diferencia(c) ?? 0), 0);
 
   const guardar = async () => {
-    if (!activo?.id) return;
+    if (!empresa?.id) return;
     setError("");
     setAviso("");
     setGuardando(true);
@@ -93,12 +93,12 @@ export default function ConciliacionPage() {
         cuenta_id: c.cuenta.id!,
         saldo_real: Number((reales[c.cuenta.id!] ?? "0").replace(/[\s$,]/g, "")),
       }));
-      const hecha = await conciliar(activo.id, saldos);
+      const hecha = await conciliar(saldos);
       const ajustadas = hecha.cuentas.filter((c) => c.movimiento_id).length;
       setAviso(
         ajustadas === 0
           ? "Todo cuadró: no hizo falta ningún ajuste."
-          : `Listo. ${ajustadas} ${ajustadas === 1 ? "cuenta quedó ajustada" : "cuentas quedaron ajustadas"} a la realidad; se escaparon ${formatMontoExact(hecha.diferencia_total, activo.moneda)}.`,
+          : `Listo. ${ajustadas} ${ajustadas === 1 ? "cuenta quedó ajustada" : "cuentas quedaron ajustadas"} a la realidad; se escaparon ${formatMontoExact(hecha.diferencia_total, empresa.moneda)}.`,
       );
       await cargar();
     } catch (err) {
@@ -109,7 +109,7 @@ export default function ConciliacionPage() {
   };
 
   const cambiarDia = async (nuevo: number) => {
-    if (!activo?.id) return;
+    if (!empresa?.id) return;
     try {
       await updateEmpresa({ dia_conciliacion: nuevo });
       await refresh();
@@ -118,9 +118,9 @@ export default function ConciliacionPage() {
     }
   };
 
-  if (cargandoNegocio || cargando) return <div className="text-sm text-ink-muted">Cargando…</div>;
+  if (cargandoEmpresa || cargando) return <div className="text-sm text-ink-muted">Cargando…</div>;
 
-  if (!activo) {
+  if (!empresa) {
     return (
       <div className="bg-white border border-black/5 rounded-2xl p-10 text-center">
         <p className="text-sm font-medium text-ink-dim mb-1">Cargando la empresa…</p>
@@ -137,7 +137,7 @@ export default function ConciliacionPage() {
             Conciliación
           </h2>
           <p className="text-xs text-ink-muted mt-0.5">
-            {activo.nombre} · cada {DIAS[dia]}
+            {empresa.nombre} · cada {DIAS[dia]}
             {stats && stats.acumulado.cortes > 0 && (
               <>
                 {" · "}
@@ -223,7 +223,7 @@ export default function ConciliacionPage() {
               <>
                 En total se escaparon{" "}
                 <b className={totalVivo === 0 ? "text-mint-900" : "text-mauve-900"}>
-                  {formatMontoExact(totalVivo, activo.moneda)}
+                  {formatMontoExact(totalVivo, empresa.moneda)}
                 </b>
                 . Al guardar, cada cuenta queda igual a lo que capturaste.
               </>
@@ -262,7 +262,7 @@ export default function ConciliacionPage() {
               <div key={k.que} className="bg-white border border-black/5 rounded-2xl p-4">
                 <p className="text-[10px] uppercase tracking-wide text-ink-muted font-medium">{k.que}</p>
                 <p className={`text-lg font-medium tabular-nums mt-1 ${k.color}`}>
-                  {formatMontoExact(k.monto, activo.moneda)}
+                  {formatMontoExact(k.monto, empresa.moneda)}
                 </p>
               </div>
             ))}
@@ -286,7 +286,7 @@ export default function ConciliacionPage() {
                       c.diferencia_total === 0 ? "text-mint-900" : "text-mauve-900"
                     }`}
                   >
-                    {c.diferencia_total === 0 ? "cuadró" : formatMontoExact(c.diferencia_total, activo.moneda)}
+                    {c.diferencia_total === 0 ? "cuadró" : formatMontoExact(c.diferencia_total, empresa.moneda)}
                   </p>
                 </div>
               ))}
@@ -309,7 +309,7 @@ export default function ConciliacionPage() {
                       c.diferencia_total === 0 ? "text-mint-900" : "text-mauve-900"
                     }`}
                   >
-                    {formatMontoExact(c.diferencia_total, activo.moneda)}
+                    {formatMontoExact(c.diferencia_total, empresa.moneda)}
                   </p>
                 </div>
               ))}

@@ -9,7 +9,7 @@
  *
  * Quién ve qué lo decide el servidor, no esta pantalla:
  *
- *   · quien PAGA ve el buzón entero del negocio (todas las pendientes, lo
+ *   · quien PAGA ve el buzón entero de la empresa (todas las pendientes, lo
  *     que vence primero arriba) y el historial de todo lo pagado; abajo,
  *     si hay, lo suyo que fue devuelto o rechazado;
  *   · quien sólo PIDE ve lo suyo, con el mismo orden: por pagar, pagadas,
@@ -24,7 +24,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { getBuzon, listMisOrdenes, listOrdenesPagadas, type Buzon, type Orden } from "@/lib/ordenes";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import { ErrorApi } from "@/lib/api/cliente";
 import { formatMontoExact } from "@/lib/format";
 import { AQuien, Dinero, Estado, FilasBuzon, Tipo, Vence } from "@/components/ordenes-ui";
@@ -87,28 +87,28 @@ function Seccion({ id, titulo, cuantas, total, moneda, vacio, children }: {
 }
 
 export default function OrdenesPage() {
-  const { activo, loading: cargandoNegocio } = useNegocioActivo();
+  const { empresa, loading: cargandoEmpresa } = useEmpresa();
   const [mias, setMias] = useState<Orden[]>([]);
   const [puedoPagar, setPuedoPagar] = useState(false);
   const [buzon, setBuzon] = useState<Buzon | null>(null);
   const [pagadas, setPagadas] = useState<{ filas: Orden[]; total: number }>({ filas: [], total: 0 });
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
-  const moneda = activo?.moneda ?? "MXN";
+  const moneda = empresa?.moneda ?? "MXN";
 
   const cargar = useCallback(async () => {
     setCargando(true);
     setError("");
     try {
-      setMias(await listMisOrdenes(activo?.id));
+      setMias(await listMisOrdenes());
       // Si el buzón contesta, esta persona paga. No hay una ruta «¿soy
       // contador?»: la respuesta del buzón ES la respuesta, y trae todo lo
-      // pendiente del negocio; el historial de lo pagado es la otra mitad.
+      // pendiente de la empresa; el historial de lo pagado es la otra mitad.
       try {
-        const b = await getBuzon(activo?.id);
+        const b = await getBuzon();
         setPuedoPagar(true);
         setBuzon(b);
-        setPagadas(await listOrdenesPagadas(activo?.id));
+        setPagadas(await listOrdenesPagadas());
       } catch (e) {
         if (!(e instanceof ErrorApi && e.error === "sin_permiso")) throw e;
         setPuedoPagar(false);
@@ -119,12 +119,12 @@ export default function OrdenesPage() {
     } finally {
       setCargando(false);
     }
-  }, [activo]);
+  }, [empresa]);
 
   useEffect(() => {
-    if (cargandoNegocio) return;
+    if (cargandoEmpresa) return;
     void cargar();
-  }, [cargandoNegocio, cargar]);
+  }, [cargandoEmpresa, cargar]);
 
   const ordenadas = [...mias].sort(masNueva);
   const miasPorPagar = ordenadas.filter((o) => o.estado === "devuelta" || o.estado === "en_buzon");

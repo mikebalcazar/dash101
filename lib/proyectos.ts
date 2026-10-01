@@ -30,8 +30,6 @@ export interface ProyectoInput {
   descripcion?: string;
   cliente_id: string;
   cliente_nombre: string;
-  negocio_id: string;
-  negocio_nombre: string;
   precio_venta: number;
   partidas: PartidaProyectoInput[];
   items?: ItemProyectoInput[];
@@ -106,11 +104,10 @@ function desdeFirestore(id: string, data: Record<string, unknown>): Proyecto {
   return { id, ...resto, items: productos ?? [] } as Proyecto;
 }
 
-export async function listProyectos(negocioId: string): Promise<Proyecto[]> {
-  if (fuente() === 'api') return leer.listProyectos(negocioId);
+export async function listProyectos(): Promise<Proyecto[]> {
+  if (fuente() === 'api') return leer.listProyectos();
   const q = query(
     collection(db, "proyectos"),
-    where("negocio_id", "==", negocioId),
     orderBy("creado_at", "desc")
   );
   const snap = await getDocs(q);
@@ -152,8 +149,6 @@ export async function createProyecto(uid: string, data: ProyectoInput): Promise<
     cliente_nombre: data.cliente_nombre,
     cliente_uid,
     productos: armarItems(data.items ?? []), // campo de Firestore, ver desdeFirestore()
-    negocio_id: data.negocio_id,
-    negocio_nombre: data.negocio_nombre,
     precio_venta: data.precio_venta,
     compromiso_total: compromiso,
     cobrado: 0,
@@ -258,7 +253,6 @@ export async function updateProyecto(
 export async function propagarClienteUid(
   clienteId: string,
   clienteUid: string | null,
-  negocioId: string
 ): Promise<{ proyectos: number; movimientos: number }> {
   // Con la API no hay nada que propagar: el portal lee por `clientes.usuario_id`.
   if (fuente() === 'api') return { proyectos: 0, movimientos: 0 };
@@ -272,7 +266,6 @@ export async function propagarClienteUid(
     proySnap = await getDocs(
       query(
         collection(db, "proyectos"),
-        where("negocio_id", "==", negocioId),
         where("cliente_id", "==", clienteId)
       )
     );
@@ -293,7 +286,6 @@ export async function propagarClienteUid(
       movSnap = await getDocs(
         query(
           collection(db, "movimientos"),
-          where("negocio_id", "==", negocioId),
           where("proyecto_id", "==", p.id)
         )
       );

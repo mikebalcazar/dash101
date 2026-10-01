@@ -7,7 +7,6 @@ import {
   updateDoc,
   deleteDoc,
   query,
-  where,
   orderBy,
   Timestamp,
   serverTimestamp,
@@ -32,15 +31,13 @@ export interface OpexInput {
   cuenta_nombre?: string | null;
   categoria?: string;
   activo: boolean;
-  negocio_id: string;
   descripcion?: string;
 }
 
-export async function listOpex(negocioId: string): Promise<Opex[]> {
-  if (fuente() === 'api') return leer.listOpex(negocioId);
+export async function listOpex(): Promise<Opex[]> {
+  if (fuente() === 'api') return leer.listOpex();
   const q = query(
     collection(db, "opex"),
-    where("negocio_id", "==", negocioId),
     orderBy("creado_at", "desc")
   );
   const snap = await getDocs(q);
@@ -70,7 +67,6 @@ export async function createOpex(uid: string, data: OpexInput): Promise<string> 
     cuenta_nombre: data.cuenta_nombre ?? null,
     categoria: data.categoria ?? "",
     activo: data.activo,
-    negocio_id: data.negocio_id,
     descripcion: data.descripcion ?? "",
     creado_at: serverTimestamp(),
     creado_por: uid,
@@ -81,7 +77,7 @@ export async function createOpex(uid: string, data: OpexInput): Promise<string> 
 
 export async function updateOpex(
   id: string,
-  data: Partial<Omit<OpexInput, "negocio_id">>
+  data: Partial<OpexInput>
 ): Promise<void> {
   if (fuente() === 'api') return escribir.updateOpex(id, data);
   const patch: Record<string, unknown> = {};

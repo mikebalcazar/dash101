@@ -168,7 +168,7 @@ export interface Yo {
   entro_con?: 'codigo' | 'pin' | 'clave' | 'google';
   usuario: { id: string; correo: string; nombre: string | null; creado_at: string };
   superadmin: boolean;
-  orgs: Array<{ id: string; nombre: string; rol: 'owner' | 'admin' | 'socio' | 'staff'; apps: string[]; negocios: string[] }>;
+  orgs: Array<{ id: string; nombre: string; rol: 'owner' | 'admin' | 'socio' | 'staff'; apps: string[] }>;
   acceso: { org_id: string; tipo: 'cliente' | 'personal'; ref_id: string } | null;
 }
 

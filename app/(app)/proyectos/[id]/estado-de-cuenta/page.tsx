@@ -111,8 +111,8 @@ export default function EstadoDelProyectoPage() {
             </p>
           </div>
           <div className="text-right text-xs text-ink-muted">
-            {d.negocio && <p className="text-ink-dim">{d.negocio.nombre}</p>}
-            {d.negocio?.rfc && <p>{d.negocio.rfc}</p>}
+            {d.empresa && <p className="text-ink-dim">{d.empresa.nombre}</p>}
+            {d.empresa?.rfc && <p>{d.empresa.rfc}</p>}
             <p className="mt-1">Generado el {enPalabras(d.generado_at)}</p>
           </div>
         </header>

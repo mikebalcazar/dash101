@@ -8,7 +8,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import {
   cancelarCfdi, crearCfdi, listCfdi, mesDeHoy, nombreDelMes,
   type Cfdi, type EstadoCfdi, type TipoCfdi,
@@ -19,7 +19,7 @@ import { BOTON, CAJA, CAJA_NUM, ETIQUETA } from "@/components/ordenes-ui";
 import { IconDownload, IconPlus } from "@tabler/icons-react";
 
 export default function CfdiPage() {
-  const { activo } = useNegocioActivo();
+  const { empresa } = useEmpresa();
   const [mes, setMes] = useState(mesDeHoy());
   const [tipo, setTipo] = useState<"" | TipoCfdi>("");
   const [estado, setEstado] = useState<"" | EstadoCfdi>("");
@@ -33,13 +33,13 @@ export default function CfdiPage() {
     setCargando(true);
     setError("");
     try {
-      setFilas(await listCfdi({ mes }, { tipo: tipo || undefined, estado: estado || undefined, negocio_id: activo?.id }));
+      setFilas(await listCfdi({ mes }, { tipo: tipo || undefined, estado: estado || undefined }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error");
     } finally {
       setCargando(false);
     }
-  }, [mes, tipo, estado, activo]);
+  }, [mes, tipo, estado, empresa]);
 
   useEffect(() => { void cargar(); }, [cargar]);
 
@@ -60,7 +60,7 @@ export default function CfdiPage() {
         <div>
           <h2 className="text-lg font-medium text-ink-dim">Facturas</h2>
           <p className="text-xs text-ink-muted mt-0.5">
-            {activo?.nombre ? `${activo.nombre} · ` : ""}{nombreDelMes(mes)}
+            {empresa?.nombre ? `${empresa.nombre} · ` : ""}{nombreDelMes(mes)}
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
@@ -93,7 +93,6 @@ export default function CfdiPage() {
 
       {capturando && (
         <NuevaFactura
-          negocioId={activo?.id ?? ""}
           alTerminar={async (m) => { setCapturando(false); setAviso(m); await cargar(); }}
         />
       )}
@@ -163,8 +162,8 @@ export default function CfdiPage() {
 }
 
 function NuevaFactura({
-  negocioId, alTerminar,
-}: { negocioId: string; alTerminar: (aviso: string) => Promise<void> }) {
+  alTerminar,
+}: { alTerminar: (aviso: string) => Promise<void> }) {
   const [tipo, setTipo] = useState<TipoCfdi>("egreso");
   const [uuid, setUuid] = useState("");
   const [rfc, setRfc] = useState("");
@@ -184,7 +183,7 @@ function NuevaFactura({
     setGuardando(true);
     try {
       await crearCfdi({
-        negocio_id: negocioId, uuid, tipo, rfc: rfc || null, razon_social: razon || null,
+        uuid, tipo, rfc: rfc || null, razon_social: razon || null,
         subtotal, iva, retenciones: retenciones || 0, total, fecha,
       });
       await alTerminar("Factura capturada.");
@@ -242,7 +241,7 @@ function NuevaFactura({
       </div>
       <p className="text-sm text-ink-dim tabular-nums">Total: {formatMontoExact(total)}</p>
       {error && <p className="text-[11px] text-mauve-900">{error}</p>}
-      <button className={`${BOTON} w-full`} disabled={!uuid.trim() || !negocioId || guardando} onClick={() => void guardar()}>
+      <button className={`${BOTON} w-full`} disabled={!uuid.trim() || guardando} onClick={() => void guardar()}>
         {guardando ? "Guardando…" : "Guardar la factura"}
       </button>
     </div>

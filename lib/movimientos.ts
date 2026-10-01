@@ -35,7 +35,6 @@ export interface MovimientoInput {
   /** Ingreso de cliente asignado a un producto del proyecto */
   producto_id?: string | null;
   producto_nombre?: string | null;
-  negocio_id: string;
   descripcion?: string;
   categoria?: string;
   /** Si es parte de una transferencia, ambos movs (egreso+ingreso) comparten este id */
@@ -48,13 +47,11 @@ export interface MovimientoInput {
 }
 
 export async function listMovimientos(
-  negocioId: string,
   opts?: { max?: number }
 ): Promise<Movimiento[]> {
-  if (fuente() === 'api') return leer.listMovimientos(negocioId, opts);
+  if (fuente() === 'api') return leer.listMovimientos(opts);
   const q = query(
     collection(db, "movimientos"),
-    where("negocio_id", "==", negocioId),
     orderBy("fecha", "desc"),
     limit(opts?.max ?? 100)
   );
@@ -111,7 +108,6 @@ export async function createMovimiento(uid: string, data: MovimientoInput): Prom
     producto_id: data.producto_id ?? null,
     producto_nombre: data.producto_nombre ?? null,
     cliente_uid,
-    negocio_id: data.negocio_id,
     descripcion: data.descripcion ?? "",
     categoria: data.categoria ?? "",
     creado_at: serverTimestamp(),
@@ -148,7 +144,6 @@ export async function createTransferencia(
     fecha: Date;
     cuenta_origen: { id: string; nombre: string };
     cuenta_destino: { id: string; nombre: string };
-    negocio_id: string;
     descripcion?: string;
   }
 ): Promise<{ id_egreso: string; id_ingreso: string; transfer_id: string }> {
@@ -167,7 +162,6 @@ export async function createTransferencia(
       contraparte_id: args.cuenta_destino.id,
       contraparte_tipo: "cuenta",
       contraparte_nombre: args.cuenta_destino.nombre,
-      negocio_id: args.negocio_id,
       descripcion:
         `Transferencia → ${args.cuenta_destino.nombre}` +
         (args.descripcion ? ` · ${args.descripcion}` : ""),
@@ -182,7 +176,6 @@ export async function createTransferencia(
       contraparte_id: args.cuenta_origen.id,
       contraparte_tipo: "cuenta",
       contraparte_nombre: args.cuenta_origen.nombre,
-      negocio_id: args.negocio_id,
       descripcion:
         `Transferencia ← ${args.cuenta_origen.nombre}` +
         (args.descripcion ? ` · ${args.descripcion}` : ""),

@@ -19,7 +19,7 @@
  * igual que un acierto. */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import { crearCfdi, ligarCfdi, listPendientes, type PendienteDeFactura } from "@/lib/fiscal";
 import { desglosar } from "@/lib/ordenes";
 import { formatMontoExact } from "@/lib/format";
@@ -28,7 +28,7 @@ import { CAJA, CAJA_NUM, BOTON, ETIQUETA } from "@/components/ordenes-ui";
 import { IconDownload, IconCheck } from "@tabler/icons-react";
 
 export default function PendientesPage() {
-  const { activo } = useNegocioActivo();
+  const { empresa } = useEmpresa();
   const [filas, setFilas] = useState<PendienteDeFactura[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
@@ -39,13 +39,13 @@ export default function PendientesPage() {
     setCargando(true);
     setError("");
     try {
-      setFilas(await listPendientes(activo?.id));
+      setFilas(await listPendientes());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error");
     } finally {
       setCargando(false);
     }
-  }, [activo]);
+  }, [empresa]);
 
   useEffect(() => { void cargar(); }, [cargar]);
 
@@ -136,7 +136,6 @@ export default function PendientesPage() {
                       {abierta === f.id && (
                         <CapturaDeFactura
                           pago={f}
-                          negocioId={activo?.id ?? ""}
                           alTerminar={async (m) => { setAbierta(""); setAviso(m); await cargar(); }}
                         />
                       )}
@@ -158,10 +157,9 @@ export default function PendientesPage() {
  *  propone el desglose al 16 % desde el total del pago: casi siempre es eso,
  *  y si no, se corrige antes de guardar. */
 function CapturaDeFactura({
-  pago, negocioId, alTerminar,
+  pago, alTerminar,
 }: {
   pago: PendienteDeFactura;
-  negocioId: string;
   alTerminar: (aviso: string) => Promise<void>;
 }) {
   const propuesto = useMemo(() => desglosar(pago.monto), [pago.monto]);
@@ -187,7 +185,7 @@ function CapturaDeFactura({
        * se entera al SAT. Quedó fijo mientras esta lista sólo podía traer
        * pagos; desde que trae cobros, tiene que seguir al movimiento. */
       const c = await crearCfdi({
-        negocio_id: negocioId, uuid, tipo: pago.tipo, rfc: rfc || null,
+        uuid, tipo: pago.tipo, rfc: rfc || null,
         subtotal, iva, retenciones: retenciones || 0, total: pago.monto, fecha,
       });
       await ligarCfdi(c.id, pago.id);
@@ -241,7 +239,7 @@ function CapturaDeFactura({
         El total de la factura se toma del {pago.tipo === "ingreso" ? "cobro" : "pago"}: {formatMontoExact(pago.monto)}.
       </p>
       {error && <p className="text-[11px] text-mauve-900">{error}</p>}
-      <button className={`${BOTON} w-full`} disabled={!uuid.trim() || !negocioId || guardando} onClick={() => void guardar()}>
+      <button className={`${BOTON} w-full`} disabled={!uuid.trim() || guardando} onClick={() => void guardar()}>
         {guardando ? "Guardando…" : `Guardar y colgarla del ${pago.tipo === "ingreso" ? "cobro" : "pago"}`}
       </button>
     </div>

@@ -22,7 +22,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { getBuzon, vencida, type Buzon, type TipoOrden } from "@/lib/ordenes";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import { ErrorApi } from "@/lib/api/cliente";
 import { formatMontoExact } from "@/lib/format";
 import { FilasBuzon } from "@/components/ordenes-ui";
@@ -34,7 +34,7 @@ const PESTANAS: Array<{ tipo: TipoOrden; titulo: string; una: string; varias: st
 ];
 
 export default function BuzonPage() {
-  const { activo, loading: cargandoNegocio } = useNegocioActivo();
+  const { empresa, loading: cargandoEmpresa } = useEmpresa();
   const params = useSearchParams();
   // `?tipo=reembolso` abre en esa pestaña: es la liga del inicio.
   const [pestana, setPestana] = useState<TipoOrden>(params.get("tipo") === "reembolso" ? "reembolso" : "compra");
@@ -49,7 +49,7 @@ export default function BuzonPage() {
     try {
       // Las dos pestañas de una vez: el conteo de la otra se ve en su
       // solapa sin tener que abrirla, y cambiar de pestaña no espera red.
-      const [compra, reembolso] = await Promise.all([getBuzon(activo?.id, "compra"), getBuzon(activo?.id, "reembolso")]);
+      const [compra, reembolso] = await Promise.all([getBuzon("compra"), getBuzon("reembolso")]);
       setBuzones({ compra, reembolso });
       setSinPermiso(false);
     } catch (e) {
@@ -58,15 +58,15 @@ export default function BuzonPage() {
     } finally {
       setCargando(false);
     }
-  }, [activo]);
+  }, [empresa]);
 
   const buzon = buzones?.[pestana] ?? null;
   const p = PESTANAS.find((x) => x.tipo === pestana)!;
 
   useEffect(() => {
-    if (cargandoNegocio) return;
+    if (cargandoEmpresa) return;
     void cargar();
-  }, [cargandoNegocio, cargar]);
+  }, [cargandoEmpresa, cargar]);
 
   if (cargando) return <div className="text-sm text-ink-muted">Cargando…</div>;
 

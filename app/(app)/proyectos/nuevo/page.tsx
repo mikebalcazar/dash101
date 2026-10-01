@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import { clientesParecidos, createCliente, listClientes } from "@/lib/clientes";
 import { listProveedores } from "@/lib/proveedores";
 import { createProyecto } from "@/lib/proyectos";
@@ -25,7 +25,7 @@ interface Partida {
 export default function NuevoProyectoPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { activo } = useNegocioActivo();
+  const { empresa } = useEmpresa();
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
@@ -61,13 +61,13 @@ export default function NuevoProyectoPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!activo?.id) {
+    if (!empresa?.id) {
       setLoadingCatalog(false);
       return;
     }
     /* Las obras se piden con `catch`: una empresa que no usa quell101 no
      * tiene por qué ver un error aquí, nada más no ve el bloque. */
-    Promise.all([listClientes(activo.id), listProveedores(), listObras(true).catch(() => [] as Obra[])])
+    Promise.all([listClientes(), listProveedores(), listObras(true).catch(() => [] as Obra[])])
       .then(([cs, ps, os]) => {
         setClientes(cs);
         setProveedores(ps);
@@ -75,9 +75,9 @@ export default function NuevoProyectoPage() {
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Error cargando catálogo"))
       .finally(() => setLoadingCatalog(false));
-  }, [activo]);
+  }, [empresa]);
 
-  if (!activo) {
+  if (!empresa) {
     return (
       <div className="max-w-lg">
         <Link href="/proyectos" className="text-xs text-ink-muted hover:text-ink-dim">
@@ -136,9 +136,9 @@ export default function NuevoProyectoPage() {
     setErrorCliente("");
     const nombre = nc.nombre.trim();
     if (!nombre) { setErrorCliente("Escribe el nombre del cliente."); return; }
-    if (!activo?.id || !user) return;
+    if (!empresa?.id || !user) return;
 
-    const iguales = await clientesParecidos(nombre, clientes, activo.id);
+    const iguales = await clientesParecidos(nombre, clientes);
     if (iguales.length > 0 && !insistir) { setParecidos(iguales); return; }
 
     setGuardandoCliente(true);
@@ -147,9 +147,8 @@ export default function NuevoProyectoPage() {
         nombre,
         email: nc.email.trim() || undefined,
         telefono: nc.telefono.trim() || undefined,
-        negocio_id: activo.id,
       });
-      const lista = await listClientes(activo.id);
+      const lista = await listClientes();
       setClientes(lista);
       setClienteId(id);
       setNuevoCliente(false);
@@ -194,8 +193,6 @@ export default function NuevoProyectoPage() {
         descripcion: descripcion.trim() || undefined,
         cliente_id: cliente.id!,
         cliente_nombre: cliente.nombre,
-        negocio_id: activo.id!,
-        negocio_nombre: activo.nombre,
         precio_venta: precioNum,
         partidas: partidasValidas.map((p) => ({
           proveedor_id: p.proveedor_id,
@@ -461,7 +458,7 @@ export default function NuevoProyectoPage() {
           </div>
           <div>
             <label className="text-xs font-medium text-ink-dim block mb-1.5">
-              Precio de venta ({activo.moneda})
+              Precio de venta ({empresa.moneda})
             </label>
             <input
               type="number"
@@ -546,16 +543,16 @@ export default function NuevoProyectoPage() {
             <div className="mt-3 bg-cream rounded-xl p-3 grid grid-cols-3 gap-3 text-xs">
               <div>
                 <p className="text-ink-muted">Compromiso total</p>
-                <p className="font-medium text-mauve-900">{formatMonto(compromiso, activo.moneda)}</p>
+                <p className="font-medium text-mauve-900">{formatMonto(compromiso, empresa.moneda)}</p>
               </div>
               <div>
                 <p className="text-ink-muted">Precio venta</p>
-                <p className="font-medium text-ink-dim">{formatMonto(precioNum, activo.moneda)}</p>
+                <p className="font-medium text-ink-dim">{formatMonto(precioNum, empresa.moneda)}</p>
               </div>
               <div>
                 <p className="text-ink-muted">Margen proyectado</p>
                 <p className={`font-medium ${margen >= 0 ? "text-mint-900" : "text-mauve-900"}`}>
-                  {formatMonto(margen, activo.moneda)}
+                  {formatMonto(margen, empresa.moneda)}
                 </p>
               </div>
             </div>

@@ -12,11 +12,11 @@ import { useCallback, useEffect, useState } from "react";
 import { getCuadre, getIva, mesDeHoy, nombreDelMes, type Cuadre, type IvaDelMes } from "@/lib/fiscal";
 import { formatMontoExact } from "@/lib/format";
 import { AvisoFiscal, SelectorDeMes, TabsFiscal, bajarCsv } from "@/components/fiscal-ui";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import { IconDownload } from "@tabler/icons-react";
 
 export default function FiscalPage() {
-  const { activo, loading: cargandoNegocio } = useNegocioActivo();
+  const { empresa, loading: cargandoEmpresa } = useEmpresa();
   const [mes, setMes] = useState(mesDeHoy());
   const [iva, setIva] = useState<IvaDelMes | null>(null);
   const [cuadre, setCuadre] = useState<Cuadre | null>(null);
@@ -27,7 +27,7 @@ export default function FiscalPage() {
     setCargando(true);
     setError("");
     try {
-      const [i, c] = await Promise.all([getIva({ mes }, activo?.id), getCuadre({ mes }, activo?.id)]);
+      const [i, c] = await Promise.all([getIva({ mes }), getCuadre({ mes })]);
       setIva(i);
       setCuadre(c);
     } catch (e) {
@@ -35,17 +35,17 @@ export default function FiscalPage() {
     } finally {
       setCargando(false);
     }
-  }, [mes, activo]);
+  }, [mes, empresa]);
 
   useEffect(() => {
-    if (cargandoNegocio) return;
+    if (cargandoEmpresa) return;
     void cargar();
-  }, [cargandoNegocio, cargar]);
+  }, [cargandoEmpresa, cargar]);
 
   const exportar = () => {
     if (!iva || !cuadre) return;
     bajarCsv(`fiscal-${mes}.csv`, [
-      ["Reporte fiscal", activo?.nombre ?? "", nombreDelMes(mes)],
+      ["Reporte fiscal", empresa?.nombre ?? "", nombreDelMes(mes)],
       [],
       ["IVA"],
       ["IVA que cobraste (trasladado)", iva.trasladado],
@@ -73,7 +73,7 @@ export default function FiscalPage() {
         <div>
           <h2 className="text-lg font-medium text-ink-dim">Fiscal</h2>
           <p className="text-xs text-ink-muted mt-0.5">
-            {activo?.nombre ? `${activo.nombre} · ` : ""}{nombreDelMes(mes)}
+            {empresa?.nombre ? `${empresa.nombre} · ` : ""}{nombreDelMes(mes)}
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
