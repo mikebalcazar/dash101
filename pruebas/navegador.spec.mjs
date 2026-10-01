@@ -546,7 +546,7 @@ test('pedir un reembolso, verlo en el inicio y en su pestaña del buzón, y paga
   const ahora = await api(pag, `/orgs/${ORG}/ordenes/resumen?negocio_id=${neg.id}`);
   const todos = await api(pag, `/orgs/${ORG}/ordenes/resumen`);
   const cuantos = ahora.compras.cuantas + ahora.reembolsos.cuantas;
-  const enPantalla = (await texto(pag)).match(/Capital total de ([^\n]+)/)?.[1] ?? '?';
+  const enPantalla = (await texto(pag)).match(/Capital líquido de ([^\n]+)/)?.[1] ?? '?';
   assert.equal(await globo.innerText(), String(cuantos),
     `el circulito de Compras cuenta las órdenes sin pagar del negocio activo (pantalla: «${enPantalla}», negocio de la prueba: «${neg.nombre}»; toda la empresa: ${todos.compras.cuantas + todos.reembolsos.cuantas})`);
   const seccion = pag.locator('[data-seccion="por-pagar"]');

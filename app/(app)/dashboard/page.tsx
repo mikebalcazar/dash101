@@ -162,18 +162,24 @@ export default function DashboardPage() {
       {/* En el teléfono: lo mismo, más grande y con menos letra. Las cifras
           en dos columnas, las explicaciones sólo en pantalla ancha, y el
           balance por proyecto en tarjetas apiladas en vez de tabla (Mike,
-          30-sep-2026). */}
-      <section className="bg-cream rounded-3xl p-4 sm:p-6">
+          30-sep-2026).
+
+          EL NÚMERO GRANDE ES EL LÍQUIDO (Mike, 1-oct-2026): «el capital
+          líquido (real) que hay en el negocio como el principal número, y
+          el capital total que toma en cuenta cuentas por cobrar y pagar en
+          donde ahorita está el capital líquido». Lo que hay hoy en las
+          cuentas es lo que se puede gastar; el total es una proyección. */}
+      <section className="bg-cream rounded-3xl p-4 sm:p-6" data-capital="liquido">
         <div className="flex justify-between items-start gap-4">
           <div>
             <p className="text-xs text-ink-muted mb-2 font-medium">
-              Capital total de {activo.nombre}
+              Capital líquido de {activo.nombre}
             </p>
             <p className="text-3xl sm:text-4xl font-medium tracking-tight text-ink-dim leading-none">
-              {formatMonto(capitalTotal, activo.moneda)}
+              {formatMonto(liquido, activo.moneda)}
             </p>
             <p className="text-xs text-ink-muted mt-2">
-              Líquido + por cobrar − por pagar − reembolsos pendientes
+              Lo que hay hoy en {cuentas.length} {cuentas.length === 1 ? "cuenta" : "cuentas"}
             </p>
           </div>
           <div className="w-20 h-20 rounded-full bg-sky-50 flex items-center justify-center shrink-0">
@@ -184,13 +190,15 @@ export default function DashboardPage() {
       </section>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
-        <div className="bg-white border border-black/5 rounded-2xl p-3 sm:p-4">
-          <p className="text-xs text-ink-muted font-medium">Capital líquido</p>
+        <div className="bg-white border border-black/5 rounded-2xl p-3 sm:p-4" data-capital="total">
+          <p className="text-xs text-ink-muted font-medium">Capital total</p>
           <p className="text-lg sm:text-xl font-medium text-ink-dim mt-1 tabular-nums">
-            {formatMonto(liquido, activo.moneda)}
+            {formatMonto(capitalTotal, activo.moneda)}
           </p>
-          <p className="hidden sm:block text-[11px] text-ink-muted mt-1">
-            Lo que hay hoy en {cuentas.length} {cuentas.length === 1 ? "cuenta" : "cuentas"}
+          {/* Siempre visible, también en el teléfono: es la fórmula, y sin
+              ella el total es un número que no se sabe de dónde salió. */}
+          <p className="text-[11px] text-ink-muted mt-1">
+            Líquido + por cobrar − por pagar − reembolsos pendientes
           </p>
         </div>
         <div className="bg-mint-50 rounded-2xl p-3 sm:p-4">
