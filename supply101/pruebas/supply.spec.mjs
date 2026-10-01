@@ -68,7 +68,7 @@ test('se entra con la cuenta de la suite', async () => {
   await pag.getByPlaceholder('tu@correo.mx').fill(CORREO);
   await pag.getByRole('button', { name: 'Continuar' }).click();
   await pag.getByPlaceholder('contraseña', { exact: true }).waitFor({ timeout: 15000 });
-  await pag.getByRole('button', { name: 'Olvidé mi contraseña' }).click();
+  await pag.getByRole('button', { name: 'No tengo contraseña o la olvidé' }).click();
   const llego = await pag.getByText('Ambiente de pruebas: el código se rellenó solo')
     .waitFor({ timeout: 15000 }).then(() => true, () => false);
   if (!llego) {

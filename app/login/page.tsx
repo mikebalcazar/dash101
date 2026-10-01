@@ -97,7 +97,7 @@ function LoginApi() {
             {loading ? "Entrando…" : "Entrar"}
           </button>
           <button type="button" disabled={loading} onClick={mandarCodigo} className={botonSuave}>
-            Olvidé mi contraseña
+            No tengo contraseña o la olvidé
           </button>
           <p className="text-xs text-ink-muted">Si es tu primera vez y todavía no tienes una, pícale ahí mismo: te mandamos un código al correo y la pones.</p>
           <button type="button" onClick={volverAlCorreo} className={botonSuave}>Usar otro correo</button>
