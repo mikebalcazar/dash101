@@ -1428,6 +1428,10 @@ test('1-oct: el líquido es el saldo que suma la API; la cuenta abre con su hist
     .sort((a, b) => (b.fecha > a.fecha ? 1 : b.fecha < a.fecha ? -1 : b.creado_at > a.creado_at ? 1 : -1));
   assert.equal(porApi[0].id, gasto.id, 'y es el mismo que la API dice que es el más reciente');
   assert.ok((await historial.innerText()).includes('Renta del taller (navegador)'), 'con su concepto');
+  assert.equal(await pag.locator('[data-seccion="editar"]').count(), 0, 'el formulario de la cuenta NO está a la vista al entrar');
+  await pag.locator('[data-editar]').click();
+  await pag.locator('[data-seccion="editar"] #saldo-inicial').waitFor({ timeout: 10000 });
+  assert.equal(await pag.locator('#saldo-inicial').inputValue(), String(cuenta.saldo_inicial / 100), 'y al pedirlo, trae el saldo inicial');
 
   // ── en la lista general, con su marca, y el filtro «Gastos generales» lo aísla ──
   await pag.goto(`${URL}/movimientos`, { waitUntil: 'load' });
