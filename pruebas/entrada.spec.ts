@@ -23,7 +23,7 @@ describe('la pantalla de entrada, después de la homologación', () => {
   it('entra con correo y contraseña, y con el código sólo para recuperar', () => {
     expect(pagina).toMatch(/entrarConClave\(correo, clave\)/);
     expect(pagina).toMatch(/entrarConCodigo\(correo, codigo\)/);
-    expect(pagina).toContain('Olvidé mi contraseña');
+    expect(pagina).toContain('No tengo contraseña o la olvidé');
     expect(pagina).toContain('Entrar con Google');
     expect(pagina).toMatch(/type="password" name="password" autoComplete="current-password"/);
     expect(pagina).toMatch(/name="new-password" autoComplete="new-password"/);

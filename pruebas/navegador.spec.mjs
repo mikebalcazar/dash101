@@ -135,7 +135,7 @@ async function pedirCodigoConPaciencia(pag, correo) {
   await pag.getByRole('button', { name: 'Continuar' }).click();
   await pag.getByPlaceholder('contraseña').waitFor({ timeout: 15000 });
   for (let intento = 1; intento <= 2; intento++) {
-    await pag.getByRole('button', { name: 'Olvidé mi contraseña' }).click();
+    await pag.getByRole('button', { name: 'No tengo contraseña o la olvidé' }).click();
     const llego = await pag.getByText('Ambiente de pruebas: el código se rellenó solo')
       .waitFor({ timeout: 15000 }).then(() => true).catch(() => false);
     if (llego) return;
