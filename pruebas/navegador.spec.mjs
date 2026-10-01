@@ -862,7 +862,10 @@ test('el estado de cuenta del proyecto: la lista suma el subtotal y el IVA se de
       nombre: 'Puerta del estado', monto: 30_000_00, cantidad: 2, estado: 'vendido', tipo: 'mueble',
     },
   });
-  const cuenta = filas(await api(pag, `/orgs/${ORG}/cuentas`))[0];
+  // En la cuenta de pruebas, no en la primera de la lista: desde que la
+  // empresa demo es una sola (1-oct), la primera es «Banco Demo», la de la
+  // siembra, y cada corrida le dejaba movimientos.
+  const { cuenta } = await cuentaDePruebas(pag);
   await api(pag, `/orgs/${ORG}/movimientos`, {
     method: 'POST',
     body: {
@@ -931,7 +934,10 @@ test('un cobro se captura «falta facturar» y aparece en la lista de pendientes
   const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
 
-  const cuenta = filas(await api(pag, `/orgs/${ORG}/cuentas`))[0];
+  // En la cuenta de pruebas, no en la primera de la lista: desde que la
+  // empresa demo es una sola (1-oct), la primera es «Banco Demo», la de la
+  // siembra, y cada corrida le dejaba movimientos.
+  const { cuenta } = await cuentaDePruebas(pag);
   assert.ok(cuenta, 'la demo tiene al menos una cuenta');
 
   let cliente = filas(await api(pag, `/orgs/${ORG}/clientes`))
@@ -993,7 +999,10 @@ test('corregir un movimiento: se cambia el monto y el saldo se recalcula', async
   const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
 
-  const cuenta = filas(await api(pag, `/orgs/${ORG}/cuentas`))[0];
+  // En la cuenta de pruebas, no en la primera de la lista: desde que la
+  // empresa demo es una sola (1-oct), la primera es «Banco Demo», la de la
+  // siembra, y cada corrida le dejaba movimientos.
+  const { cuenta } = await cuentaDePruebas(pag);
   let cliente = filas(await api(pag, `/orgs/${ORG}/clientes`))
     .find((c) => c.nombre === CLIENTE_PRUEBAS);
   if (!cliente) {
@@ -1054,7 +1063,10 @@ test('corregir un movimiento SIN contraparte: el botón no se queda apagado', as
   const { ctx, pag, errores } = await pestana({ width: 390, height: 844 }, true);
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
 
-  const cuenta = filas(await api(pag, `/orgs/${ORG}/cuentas`))[0];
+  // En la cuenta de pruebas, no en la primera de la lista: desde que la
+  // empresa demo es una sola (1-oct), la primera es «Banco Demo», la de la
+  // siembra, y cada corrida le dejaba movimientos.
+  const { cuenta } = await cuentaDePruebas(pag);
   const mov = await api(pag, `/orgs/${ORG}/movimientos`, {
     method: 'POST',
     body: {
