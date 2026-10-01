@@ -19,7 +19,7 @@ import { listCuentas } from "@/lib/cuentas";
 import { listClientes, getClienteUid } from "@/lib/clientes";
 import { listProveedores } from "@/lib/proveedores";
 import { listProyectos, getProyecto } from "@/lib/proyectos";
-import { listMovimientos, listMovimientosByProyecto } from "@/lib/movimientos";
+import { listMovimientos, listMovimientosByProyecto, listMovimientosDeCuenta } from "@/lib/movimientos";
 import { listOpex, estimarMensual } from "@/lib/opex";
 import { getUserDoc, canWrite, isOwner } from "@/lib/users";
 import { aCentavos, aPesos, aTimestamp } from "@/lib/api/adaptar";
@@ -98,12 +98,18 @@ describe("la empresa, cuentas, clientes, proveedores", () => {
     const banco = cuentas.find((c) => c.nombre === "Banco Demo")!;
     const caja = cuentas.find((c) => c.nombre === "Caja chica")!;
     expect(banco.saldo_inicial).toBe(250000);
-    // 250,000 + 120,000 + 20,000 − 25,000, y desde el 20-sep menos las dos
-    // compras que la siembra paga por este banco: −3,480 y −1,160.
-    expect(banco.saldo_actual).toBe(360360);
-    // 5,000 − 8,500: una caja en negativo se ve, no se esconde
-    expect(caja.saldo_actual).toBe(-3500);
     expect(banco.tipo).toBe("banco");
+    // El saldo es lo inicial más lo que suman sus movimientos. Se calcula de
+    // los movimientos y no se escribe a mano: desde que la empresa demo es
+    // una sola (1-oct) las corridas del navegador también le dejan
+    // movimientos a estas cuentas, y una cifra fija se quedaba vieja.
+    const sumaDe = async (c: { id: string; saldo_inicial: number }) =>
+      c.saldo_inicial + (await listMovimientosDeCuenta(c.id))
+        .reduce((t, m) => t + (m.tipo === "ingreso" ? m.monto : -m.monto), 0);
+    expect(banco.saldo_actual).toBeCloseTo(await sumaDe(banco), 2);
+    // Una caja en negativo se ve, no se esconde.
+    expect(caja.saldo_actual).toBeCloseTo(await sumaDe(caja), 2);
+    expect(caja.saldo_actual).toBeLessThan(0);
   });
 
   it("la familia y sus datos de portal", async () => {
