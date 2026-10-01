@@ -23,7 +23,7 @@
  *                              Se mide mandando una basura a propósito: si la
  *                              respuesta sigue siendo buena, es que el Worker
  *                              la sobrescribió.
- *   las cifras de la demo      cuántos negocios y cuántas cuentas contesta la
+ *   las cifras de la demo      que la empresa y cuántas cuentas contesta la
  *                              API a través del Worker. No es una prueba de
  *                              cuadre —eso lo hacen las pruebas de vitest—,
  *                              es la señal de que el camino entero jala.
@@ -228,18 +228,17 @@ async function staging() {
 
   // El Worker pone X-App: dash101. Se le manda una basura a propósito: si la
   // pusiera el navegador, la API contestaría 400 app_desconocida.
-  const conBasura = await traer(STAGING, `/s101/orgs/${ORG_STAGING}/negocios`, { galleta, cabeceras: { 'X-App': 'basura-a-proposito' } });
+  const conBasura = await traer(STAGING, `/s101/orgs/${ORG_STAGING}/empresa`, { galleta, cabeceras: { 'X-App': 'basura-a-proposito' } });
   rev(
     conBasura.estado === 200,
     'el Worker sobrescribe X-App: dash101 (se mandó basura y contestó bien)',
     `${conBasura.estado} ${conBasura.cuerpo?.error ?? ''}`,
   );
 
-  const negocios = await traer(STAGING, `/s101/orgs/${ORG_STAGING}/negocios`, { galleta });
+  const empresa = await traer(STAGING, `/s101/orgs/${ORG_STAGING}/empresa`, { galleta });
   const cuentas = await traer(STAGING, `/s101/orgs/${ORG_STAGING}/cuentas`, { galleta });
-  const n = negocios.cuerpo?.filas?.length ?? negocios.cuerpo?.length;
   const c = cuentas.cuerpo?.filas?.length ?? cuentas.cuerpo?.length;
-  rev(typeof n === 'number' && n > 0, `la org ${ORG_STAGING} contesta negocios por el Worker`, `${n} negocios`);
+  rev(empresa.cuerpo?.id === 'empresa', `la org ${ORG_STAGING} contesta su empresa por el Worker`, `${empresa.cuerpo?.nombre ?? empresa.estado}`);
   rev(typeof c === 'number' && c > 0, `la org ${ORG_STAGING} contesta cuentas por el Worker`, `${c} cuentas`);
 }
 

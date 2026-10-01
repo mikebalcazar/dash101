@@ -18,7 +18,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { fuente } from "@/lib/fuente";
 import { entrarDePrueba, pedir, ErrorApi } from "@/lib/api/cliente";
-import { createNegocio } from "@/lib/negocios";
 import { createCuenta, listCuentas } from "@/lib/cuentas";
 import { createCliente } from "@/lib/clientes";
 import { createProveedor } from "@/lib/proveedores";
@@ -43,7 +42,7 @@ const dia = (n: number) => {
 };
 
 let uid = "";
-const ids = { negocio: "", banco: "", cliente: "", proveedor: "", proyecto: "", orden: "", movimiento: "", cfdi: "" };
+const ids = { banco: "", cliente: "", proveedor: "", proyecto: "", orden: "", movimiento: "", cfdi: "" };
 
 beforeAll(async () => {
   expect(fuente()).toBe("api");
@@ -57,14 +56,12 @@ beforeAll(async () => {
   const alta = await pedir<{ org_db_version: number }>("/admin/orgs", { method: "POST", body: { id: ORG, nombre: "Prueba de órdenes" } });
   // 0008 (órdenes) y 0009 (fiscal) tienen que estar: son de este encargo.
   expect(alta.org_db_version).toBeGreaterThanOrEqual(9);
-
-  ids.negocio = await createNegocio(uid, { nombre: "Taller de compras", moneda: "MXN" });
-  ids.banco = await createCuenta(uid, { nombre: "Banco", tipo: "banco", moneda: "MXN", saldo_inicial: 50000, negocio_id: ids.negocio });
-  ids.cliente = await createCliente(uid, { nombre: "Cliente Uno", negocio_id: ids.negocio });
+  ids.banco = await createCuenta(uid, { nombre: "Banco", tipo: "banco", moneda: "MXN", saldo_inicial: 50000});
+  ids.cliente = await createCliente(uid, { nombre: "Cliente Uno"});
   ids.proveedor = await createProveedor(uid, { nombre: "Maderas de Prueba" });
   ids.proyecto = await createProyecto(uid, {
     nombre: "Casa Uno", cliente_id: ids.cliente, cliente_nombre: "Cliente Uno",
-    negocio_id: ids.negocio, negocio_nombre: "Taller de compras",
+   
     precio_venta: 20000, estado: "activo", fecha_inicio: new Date(2026, 8, 1),
     partidas: [{ proveedor_id: ids.proveedor, proveedor_nombre: "Maderas de Prueba", concepto: "Madera", monto_acordado: 5000 }],
   });
@@ -102,7 +99,7 @@ describe("el desglose, antes de tocar la red", () => {
 describe("pedir una compra", () => {
   it("nace en el buzón y la suite separa el total en pesos", async () => {
     const o = await crearOrden({
-      negocio_id: ids.negocio, proveedor_id: ids.proveedor, proveedor_nombre: "Maderas de Prueba",
+      proveedor_id: ids.proveedor, proveedor_nombre: "Maderas de Prueba",
       concepto: "Triplay", monto: 1160, con_factura: true, fecha_maxima_pago: dia(5),
     });
     ids.orden = o.id;
@@ -151,11 +148,11 @@ describe("quién puede pagar", () => {
 
 describe("pagar", () => {
   it("hace UN egreso por el monto exacto y baja el saldo de la cuenta", async () => {
-    const antes = (await listCuentas(ids.negocio)).find((c) => c.id === ids.banco)!.saldo_actual;
+    const antes = (await listCuentas()).find((c) => c.id === ids.banco)!.saldo_actual;
     const r = await pagarOrden(ids.orden, { cuenta_id: ids.banco });
     ids.movimiento = r.movimiento.id;
     expect(r.orden.estado).toBe("pagada");
-    const despues = (await listCuentas(ids.negocio)).find((c) => c.id === ids.banco)!.saldo_actual;
+    const despues = (await listCuentas()).find((c) => c.id === ids.banco)!.saldo_actual;
     expect(antes - despues).toBe(1160);
   });
 
@@ -168,13 +165,11 @@ describe("pagar", () => {
   });
 
   it("el historial de lo pagado la trae, en pesos, y suma lo que lista (Mike, 1-oct-2026)", async () => {
-    const h = await listOrdenesPagadas(ids.negocio);
+    const h = await listOrdenesPagadas();
     expect(h.filas.map((o) => o.id)).toContain(ids.orden);
     expect(h.filas.every((o) => o.estado === "pagada")).toBe(true);
     expect(h.filas.find((o) => o.id === ids.orden)!.monto, "en pesos, no en centavos").toBe(1160);
     expect(h.total).toBeCloseTo(h.filas.reduce((s, o) => s + o.monto, 0), 2);
-    const otro = await listOrdenesPagadas("negocio-que-no-existe");
-    expect(otro.filas).toEqual([]);
   });
 
   it("la misma orden no se paga dos veces: nada de dobles egresos", async () => {
@@ -185,7 +180,7 @@ describe("pagar", () => {
         expect((e as ErrorApi).estado).toBe(409);
       },
     );
-    const saldo = (await listCuentas(ids.negocio)).find((c) => c.id === ids.banco)!.saldo_actual;
+    const saldo = (await listCuentas()).find((c) => c.id === ids.banco)!.saldo_actual;
     expect(saldo).toBe(50000 - 1160);
   });
 });
@@ -193,7 +188,7 @@ describe("pagar", () => {
 describe("devolver y corregir", () => {
   it("vuelve con el motivo, se corrige y conserva el mismo folio", async () => {
     const o = await crearOrden({
-      negocio_id: ids.negocio, proveedor_nombre: "Tornillos SA", concepto: "Tornillos",
+      proveedor_nombre: "Tornillos SA", concepto: "Tornillos",
       monto: 500, con_factura: false, fecha_maxima_pago: dia(3),
     });
     const folio = o.folio;
@@ -222,24 +217,24 @@ describe("reembolsos", () => {
   let re = "";
 
   it("se pide como reembolso y sale con folio RE-, en pesos", async () => {
-    const o = await crearOrden({ negocio_id: ids.negocio, tipo: "reembolso", concepto: "Gasolina", monto: 850, con_factura: false });
+    const o = await crearOrden({ tipo: "reembolso", concepto: "Gasolina", monto: 850, con_factura: false });
     re = o.id;
     expect(o.tipo).toBe("reembolso");
     expect(o.folio).toMatch(/^RE-/);
     expect(o.monto).toBe(850);
-    expect((await listMisOrdenes(ids.negocio)).some((x) => x.id === re && x.tipo === "reembolso")).toBe(true);
+    expect((await listMisOrdenes()).some((x) => x.id === re && x.tipo === "reembolso")).toBe(true);
     const p = await getPermisosOrdenes();
     expect(p.puede_comprar, "esta cuenta sí compra").toBe(true);
   });
 
   it("la pestaña de reembolsos suma sólo reembolsos, y el resumen del inicio cuadra con ella", async () => {
-    const pestana = await getBuzon(ids.negocio, "reembolso");
+    const pestana = await getBuzon("reembolso");
     expect(pestana.filas.every((x) => x.tipo === "reembolso")).toBe(true);
     expect(pestana.filas.some((x) => x.id === re)).toBe(true);
     expect(pestana.total).toBe(850);
-    const compras = await getBuzon(ids.negocio, "compra");
+    const compras = await getBuzon("compra");
     expect(compras.filas.some((x) => x.id === re), "y no sale en la de compras").toBe(false);
-    const resumen = await getResumenOrdenes(ids.negocio);
+    const resumen = await getResumenOrdenes();
     expect(resumen.reembolsos.total, "en PESOS, y es lo que resta del capital").toBe(850);
     expect(resumen.reembolsos.cuantas).toBe(1);
     expect(resumen.compras.total).toBe(compras.total);
@@ -252,36 +247,8 @@ describe("reembolsos", () => {
     const mov = (r as unknown as { movimiento: { categoria: string; contraparte_nombre: string | null; tipo: string } }).movimiento;
     expect(mov.categoria).toBe("reembolso");
     expect(mov.tipo, "es una salida de dinero, como una compra").toBe("egreso");
-    const resumen = await getResumenOrdenes(ids.negocio);
+    const resumen = await getResumenOrdenes();
     expect(resumen.reembolsos.total).toBe(0);
-  });
-});
-
-describe("un negocio a la vez", () => {
-  it("el buzón, mis órdenes y lo fiscal se piden del negocio activo", async () => {
-    /* dash101 trabaja con un negocio activo a la vez. Sin este filtro el
-     * buzón mezcla negocios y su «hay por pagar» suma dinero de otro lado;
-     * en lo fiscal es peor, porque el RFC vive en el negocio y ese número
-     * es con el que se entera al SAT. */
-    const otro = await createNegocio(uid, { nombre: "Otro negocio", moneda: "MXN" });
-    await crearOrden({
-      negocio_id: otro, proveedor_nombre: "Ajena", concepto: "De otro negocio",
-      monto: 700, con_factura: false,
-    });
-
-    const mias = await listMisOrdenes(ids.negocio);
-    expect(mias.every((o) => o.negocio_id === ids.negocio)).toBe(true);
-    expect((await listMisOrdenes(otro)).length).toBe(1);
-
-    const suyo = await getBuzon(otro);
-    expect(suyo.filas.length).toBe(1);
-    expect(suyo.total, "y el total es el de esa sola, en pesos").toBe(700);
-    expect((await getBuzon()).total, "sin filtro suma los dos negocios").toBeGreaterThan(700);
-
-    const fiscalOtro = await getCuadre({ mes: mesDeHoy() }, otro);
-    expect(fiscalOtro.egresos.total, "ese negocio no ha pagado nada").toBe(0);
-    expect((await getCuadre({ mes: mesDeHoy() }, ids.negocio)).egresos.total).toBeGreaterThan(0);
-    expect((await listPendientes(otro)).length).toBe(0);
   });
 });
 
@@ -298,7 +265,7 @@ describe("la factura que llega después", () => {
     const hoy = new Date().toISOString().slice(0, 10);
     const uuid = `PRUEBA-${Date.now()}`;
     const c = await crearCfdi({
-      negocio_id: ids.negocio, uuid, tipo: "egreso", rfc: "XAXX010101000",
+      uuid, tipo: "egreso", rfc: "XAXX010101000",
       subtotal: 1000, iva: 160, total: 1160, fecha: hoy,
     });
     ids.cfdi = c.id;
@@ -316,8 +283,8 @@ describe("la factura que llega después", () => {
   it("el mismo UUID capturado dos veces se rechaza", async () => {
     const hoy = new Date().toISOString().slice(0, 10);
     const uuid = `REPE-${Date.now()}`;
-    await crearCfdi({ negocio_id: ids.negocio, uuid, tipo: "egreso", subtotal: 100, iva: 16, total: 116, fecha: hoy });
-    await crearCfdi({ negocio_id: ids.negocio, uuid, tipo: "egreso", subtotal: 1, iva: 0, total: 1, fecha: hoy }).then(
+    await crearCfdi({ uuid, tipo: "egreso", subtotal: 100, iva: 16, total: 116, fecha: hoy });
+    await crearCfdi({ uuid, tipo: "egreso", subtotal: 1, iva: 0, total: 1, fecha: hoy }).then(
       () => { throw new Error("se capturó dos veces"); },
       (e) => expect((e as ErrorApi).estado).toBe(409),
     );

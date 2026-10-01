@@ -14,7 +14,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { fuente } from "@/lib/fuente";
 import { entrarDePrueba, pedir, pedirCrudo } from "@/lib/api/cliente";
-import { createNegocio } from "@/lib/negocios";
 import { createCliente } from "@/lib/clientes";
 import { createProyecto } from "@/lib/proyectos";
 import { desligarObra, ligarObra, listObras, obraDeProyecto, urlObra } from "@/lib/obras";
@@ -24,7 +23,7 @@ const ORG = `ob-${(process.env.GITHUB_RUN_ID ?? Date.now().toString(36)).toStrin
 const ORG_ANTES = process.env.NEXT_PUBLIC_ORG;
 
 let uid = "";
-const ids = { negocio: "", cliente: "", casaUno: "", casaDos: "", obraUno: "", obraDos: "" };
+const ids = { cliente: "", casaUno: "", casaDos: "", obraUno: "", obraDos: "" };
 
 beforeAll(async () => {
   expect(fuente()).toBe("api");
@@ -34,12 +33,10 @@ beforeAll(async () => {
   process.env.NEXT_PUBLIC_ORG = ORG;
   try { await pedir(`/admin/orgs/${ORG}`, { method: "DELETE" }); } catch { /* no existía */ }
   await pedir("/admin/orgs", { method: "POST", body: { id: ORG, nombre: "Prueba de obras", apps: { dash: true, quell: true } } });
-
-  ids.negocio = await createNegocio(uid, { nombre: "Taller", moneda: "MXN" });
-  ids.cliente = await createCliente(uid, { nombre: "Familia Uno", negocio_id: ids.negocio });
+  ids.cliente = await createCliente(uid, { nombre: "Familia Uno"});
   const proyecto = (nombre: string) => createProyecto(uid, {
     nombre, cliente_id: ids.cliente, cliente_nombre: "Familia Uno",
-    negocio_id: ids.negocio, negocio_nombre: "Taller",
+   
     precio_venta: 0, estado: "activo", fecha_inicio: new Date(2026, 8, 1), partidas: [], items: [],
   });
   ids.casaUno = await proyecto("Casa Uno");

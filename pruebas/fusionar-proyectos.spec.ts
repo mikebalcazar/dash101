@@ -14,7 +14,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { fuente } from "@/lib/fuente";
 import { entrarDePrueba, pedir } from "@/lib/api/cliente";
-import { createNegocio } from "@/lib/negocios";
 import { createCuenta } from "@/lib/cuentas";
 import { createCliente } from "@/lib/clientes";
 import { createProyecto, getProyecto, listProyectos, fusionarProyectos } from "@/lib/proyectos";
@@ -25,7 +24,7 @@ const ORG = `fp-${(process.env.GITHUB_RUN_ID ?? Date.now().toString(36)).toStrin
 const ORG_ANTES = process.env.NEXT_PUBLIC_ORG;
 
 let uid = "";
-const ids = { negocio: "", cuenta: "", cliente: "", queda: "", seVa: "" };
+const ids = { cuenta: "", cliente: "", queda: "", seVa: "" };
 
 beforeAll(async () => {
   expect(fuente()).toBe("api");
@@ -36,14 +35,12 @@ beforeAll(async () => {
   process.env.NEXT_PUBLIC_ORG = ORG;
   const alta = await pedir<{ org_db_version: number }>("/admin/orgs", { method: "POST", body: { id: ORG, nombre: "Prueba de fusión de proyectos" } });
   expect(alta.org_db_version).toBeGreaterThanOrEqual(3);
-
-  ids.negocio = await createNegocio(uid, { nombre: "Taller", moneda: "MXN" });
-  ids.cuenta = await createCuenta(uid, { nombre: "Banco", tipo: "banco", moneda: "MXN", saldo_inicial: 0, negocio_id: ids.negocio });
-  ids.cliente = await createCliente(uid, { nombre: "Sanje", negocio_id: ids.negocio });
-  const base = { cliente_id: ids.cliente, cliente_nombre: "Sanje", negocio_id: ids.negocio, negocio_nombre: "Taller", partidas: [], estado: "activo" as const, fecha_inicio: new Date("2026-09-01T12:00:00") };
+  ids.cuenta = await createCuenta(uid, { nombre: "Banco", tipo: "banco", moneda: "MXN", saldo_inicial: 0});
+  ids.cliente = await createCliente(uid, { nombre: "Sanje"});
+  const base = { cliente_id: ids.cliente, cliente_nombre: "Sanje", partidas: [], estado: "activo" as const, fecha_inicio: new Date("2026-09-01T12:00:00") };
   ids.queda = await createProyecto(uid, { ...base, nombre: "Sanje CC37", precio_venta: 20000, items: [{ nombre: "Barra", monto: 20000 }] });
   ids.seVa = await createProyecto(uid, { ...base, nombre: "Sanje CC37 NEW", precio_venta: 30000, items: [{ nombre: "Cocina", monto: 10000, partida: "Planta baja" }, { nombre: "Clóset", monto: 20000, partida: "Planta baja" }] });
-  await createMovimiento(uid, { tipo: "ingreso", monto: 15000, fecha: new Date("2026-09-10T12:00:00"), cuenta_id: ids.cuenta, cuenta_nombre: "Banco", proyecto_id: ids.seVa, proyecto_nombre: "Sanje CC37 NEW", contraparte_id: ids.cliente, contraparte_tipo: "cliente", contraparte_nombre: "Sanje", negocio_id: ids.negocio, descripcion: "Anticipo" });
+  await createMovimiento(uid, { tipo: "ingreso", monto: 15000, fecha: new Date("2026-09-10T12:00:00"), cuenta_id: ids.cuenta, cuenta_nombre: "Banco", proyecto_id: ids.seVa, proyecto_nombre: "Sanje CC37 NEW", contraparte_id: ids.cliente, contraparte_tipo: "cliente", contraparte_nombre: "Sanje", descripcion: "Anticipo" });
 }, 60000);
 
 afterAll(async () => {
@@ -66,7 +63,7 @@ describe("juntar dos proyectos", () => {
     expect(r.obra_suelta).toBe(false);
 
     expect(await getProyecto(ids.seVa)).toBeNull();
-    const lista = await listProyectos(ids.negocio);
+    const lista = await listProyectos();
     expect(lista.map((p) => p.nombre)).toEqual(["Sanje CC37"]);
 
     const p = (await getProyecto(ids.queda))!;

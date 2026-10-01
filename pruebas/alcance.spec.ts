@@ -23,7 +23,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { fuente } from "@/lib/fuente";
 import { entrarDePrueba, pedir } from "@/lib/api/cliente";
 import { fueraDeAlcance } from "@/lib/api/leer";
-import { createNegocio } from "@/lib/negocios";
 import { createCliente } from "@/lib/clientes";
 import { createProyecto, getProyecto } from "@/lib/proyectos";
 import { aprobarItem, cancelarItem } from "@/lib/items-grupo";
@@ -33,13 +32,13 @@ const ORG = `al-${(process.env.GITHUB_RUN_ID ?? Date.now().toString(36)).toStrin
 const ORG_ANTES = process.env.NEXT_PUBLIC_ORG;
 
 let uid = "";
-const ids = { negocio: "", cliente: "", proyecto: "" };
+const ids = { cliente: "", proyecto: "" };
 
 const nuevoItem = async (nombre: string, pesos: number, estado: "vendido" | "cotizado") =>
   (await pedir<{ id: string }>(`/orgs/${ORG}/items`, {
     method: "POST",
     body: {
-      negocio_id: ids.negocio, cliente_id: ids.cliente, proyecto_id: ids.proyecto,
+      cliente_id: ids.cliente, proyecto_id: ids.proyecto,
       nombre, monto: Math.round(pesos * 100), cantidad: 1, estado,
     },
   })).id;
@@ -54,11 +53,9 @@ beforeAll(async () => {
   process.env.NEXT_PUBLIC_ORG = ORG;
   try { await pedir(`/admin/orgs/${ORG}`, { method: "DELETE" }); } catch { /* no existía */ }
   await pedir("/admin/orgs", { method: "POST", body: { id: ORG, nombre: "Alcance", apps: { dash: true } } });
-
-  ids.negocio = await createNegocio(uid, { nombre: "Taller", moneda: "MXN" });
-  ids.cliente = await createCliente(uid, { nombre: "Familia", negocio_id: ids.negocio });
+  ids.cliente = await createCliente(uid, { nombre: "Familia"});
   ids.proyecto = await createProyecto(uid, {
-    negocio_id: ids.negocio, negocio_nombre: "Taller",
+   
     cliente_id: ids.cliente, cliente_nombre: "Familia",
     nombre: "Casa", estado: "activo", precio_venta: 50_000,
     partidas: [], fecha_inicio: new Date(2026, 2, 1),

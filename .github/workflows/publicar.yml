@@ -231,7 +231,7 @@ jobs:
       # navegador (Firebase inicializado sin llave: «auth/invalid-api-key»).
       # Esto entra por el propio Worker como admin de `demo`, cambia de
       # pantalla, comprueba los centavos, concilia de punta a punta en un
-      # negocio de pruebas aparte y revisa el celular. Si algo de eso falla,
+      # cuenta de pruebas aparte y revisa el celular. Si algo de eso falla,
       # producción no se construye.
       - name: Traer el navegador
         run: npx playwright install chromium --with-deps

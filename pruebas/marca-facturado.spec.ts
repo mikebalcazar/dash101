@@ -15,7 +15,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { fuente } from "@/lib/fuente";
 import { entrarDePrueba, pedir } from "@/lib/api/cliente";
-import { createNegocio } from "@/lib/negocios";
 import { createCliente } from "@/lib/clientes";
 import { createCuenta } from "@/lib/cuentas";
 import { createMovimiento, listMovimientos } from "@/lib/movimientos";
@@ -27,14 +26,13 @@ const ORG = `mf-${(process.env.GITHUB_RUN_ID ?? Date.now().toString(36)).toStrin
 const ORG_ANTES = process.env.NEXT_PUBLIC_ORG;
 
 let uid = "";
-const ids = { negocio: "", cuenta: "", cliente: "", conFactura: "", sinFactura: "" };
+const ids = { cuenta: "", cliente: "", conFactura: "", sinFactura: "" };
 
 const cobrar = (monto: number) =>
   createMovimiento(uid, {
     tipo: "ingreso", monto, fecha: new Date(2026, 2, 22),
     cuenta_id: ids.cuenta, cuenta_nombre: "Banco",
     contraparte_id: ids.cliente, contraparte_tipo: "cliente", contraparte_nombre: "HOLCIM",
-    negocio_id: ids.negocio,
   });
 
 beforeAll(async () => {
@@ -45,16 +43,14 @@ beforeAll(async () => {
   process.env.NEXT_PUBLIC_ORG = ORG;
   try { await pedir(`/admin/orgs/${ORG}`, { method: "DELETE" }); } catch { /* no existía */ }
   await pedir("/admin/orgs", { method: "POST", body: { id: ORG, nombre: "Marca de facturado" } });
-
-  ids.negocio = await createNegocio(uid, { nombre: "Taller", moneda: "MXN" });
-  ids.cuenta = await createCuenta(uid, { nombre: "Banco", tipo: "banco", saldo_inicial: 0, negocio_id: ids.negocio, moneda: "MXN" });
-  ids.cliente = await createCliente(uid, { nombre: "HOLCIM", negocio_id: ids.negocio });
+  ids.cuenta = await createCuenta(uid, { nombre: "Banco", tipo: "banco", saldo_inicial: 0, moneda: "MXN" });
+  ids.cliente = await createCliente(uid, { nombre: "HOLCIM"});
 
   ids.conFactura = await cobrar(116_000);
   ids.sinFactura = await cobrar(40_000);
 
   const c = await crearCfdi({
-    negocio_id: ids.negocio, uuid: `${Date.now()}-9999-8888-7777-666666666666`.slice(0, 36),
+    uuid: `${Date.now()}-9999-8888-7777-666666666666`.slice(0, 36),
     tipo: "ingreso", rfc: "XAXX010101000",
     subtotal: 100_000, iva: 16_000, retenciones: 0, total: 116_000, fecha: "2026-03-22",
   });
@@ -68,7 +64,7 @@ afterAll(async () => {
 
 describe("la marca de fiscalizado", () => {
   it("la LISTA de movimientos trae `facturado`: sin eso el icono no saldría nunca", async () => {
-    const lista = await listMovimientos(ids.negocio);
+    const lista = await listMovimientos();
     const conF = lista.find((m) => m.id === ids.conFactura);
     const sinF = lista.find((m) => m.id === ids.sinFactura);
 
@@ -84,7 +80,7 @@ describe("la marca de fiscalizado", () => {
     await pedir(`/orgs/${ORG}/fiscal/movimientos/${ids.conFactura}/facturado`, {
       method: "POST", body: { facturado: false },
     });
-    const lista = await listMovimientos(ids.negocio);
+    const lista = await listMovimientos();
     expect(lista.find((m) => m.id === ids.conFactura)!.facturado).toBe(false);
   });
 
@@ -100,7 +96,7 @@ describe("la marca de fiscalizado", () => {
     const total = 58_000, iva = 8_000;
     const id = await cobrar(total);
     const c = await crearCfdi({
-      negocio_id: ids.negocio, uuid: `${Date.now()}-5555-4444-3333-222222222222`.slice(0, 36),
+      uuid: `${Date.now()}-5555-4444-3333-222222222222`.slice(0, 36),
       tipo: "ingreso", rfc: "XAXX010101000",
       subtotal: total - iva, iva, retenciones: 0, total, fecha: "2026-03-22",
     });
@@ -110,7 +106,7 @@ describe("la marca de fiscalizado", () => {
     const subido = await subirArchivo("movimientos", id, archivo);
     expect(subido.nombre).toBe("factura.xml");
 
-    const lista = await listMovimientos(ids.negocio);
+    const lista = await listMovimientos();
     const mio = lista.find((m) => m.id === id)!;
     expect(mio.facturado, "queda marcado desde el primer guardado").toBe(true);
     expect(mio.monto, "y el movimiento vale lo mismo que su factura").toBe(total);
@@ -126,12 +122,11 @@ describe("la marca de fiscalizado", () => {
       tipo: "egreso", monto: 23_200, fecha: new Date(2026, 2, 23),
       cuenta_id: ids.cuenta, cuenta_nombre: "Banco",
       contraparte_id: null, contraparte_tipo: "otro", contraparte_nombre: "Maderas",
-      negocio_id: ids.negocio,
     });
     await pedir(`/orgs/${ORG}/fiscal/movimientos/${egreso}/facturado`, {
       method: "POST", body: { facturado: true, tasa_iva: 1600 },
     });
-    const lista = await listMovimientos(ids.negocio);
+    const lista = await listMovimientos();
     expect(lista.find((m) => m.id === egreso)!.facturado, "los dos lados se marcan igual").toBe(true);
   });
 });

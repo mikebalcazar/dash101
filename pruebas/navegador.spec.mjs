@@ -26,9 +26,8 @@
  * Las capturas del escaparate salen de «Taller Demo» y sus cifras tienen que
  * cuadrar entre pantallas. Así que aquí NADA se escribe en Taller Demo: el
  * dinero se comprueba leyendo, y la conciliación —que sí escribe ajustes— se
- * hace en un negocio aparte, «Pruebas de navegador», con su propia cuenta,
- * que se crea una sola vez si no existe. Lo que esta prueba ensucia, lo
- * ensucia en su propio patio.
+ * hace en una cuenta aparte, «Caja de pruebas», que se crea una sola vez si
+ * no existe. Lo que esta prueba ensucia, lo ensucia en su propio patio.
  *
  * LAS CIFRAS ESPERADAS NO ESTÁN ESCRITAS AQUÍ
  *
@@ -79,10 +78,7 @@ import { chromium } from 'playwright';
 const URL = (process.env.URL_DASH || 'http://127.0.0.1:8797').replace(/\/$/, '');
 const ORG = 'demo';
 const CORREO = process.env.CORREO_PRUEBAS || 'prueba.admin@ejemplo.mx';
-const NEGOCIO_DEMO = 'Taller Demo';
-const NEGOCIO_PRUEBAS = 'Pruebas de navegador';
 const CUENTA_PRUEBAS = 'Caja de pruebas';
-const LLAVE_NEGOCIO = 'conta-master:negocio-activo-id';
 const AJUSTE = 'ajuste_conciliacion';
 
 const texto = (pag) => pag.evaluate(() => document.body.innerText);
@@ -190,11 +186,6 @@ async function api(pag, ruta, { method = 'GET', body } = {}) {
   return cuerpo.data;
 }
 
-/** Deja activo el negocio que se pida, como lo hace la app: por localStorage. */
-/* Ya no hay qué escoger (1-oct): dash101 toma el de la empresa solo. Se
- * queda como no-op para no tocar cada prueba que lo llamaba. */
-const elegirNegocio = async () => {};
-
 /** `saldo_inicial + ingresos − egresos`, en centavos: la fórmula de la app. */
 function saldoCentavos(cuenta, movimientos) {
   let delta = 0;
@@ -202,21 +193,29 @@ function saldoCentavos(cuenta, movimientos) {
   return cuenta.saldo_inicial + delta;
 }
 
-/** El negocio de pruebas con su cuenta; se crean una sola vez. */
-async function negocioDePruebas(pag) {
-  /* El de la empresa: el PRIMERO que devuelve la API, que es el mismo que
-   * toma dash101 (1-oct: ya no hay selector ni concepto de negocio en la
-   * pantalla). La org demo todavía tiene varios por dentro, hasta que la
-   * API los junte; mientras, todo se mide contra ese primero. */
-  let neg = filas(await api(pag, `/orgs/${ORG}/negocios`))[0];
-  if (!neg) neg = await api(pag, `/orgs/${ORG}/negocios`, { method: 'POST', body: { nombre: NEGOCIO_PRUEBAS, moneda: 'MXN' } });
-  let cuenta = filas(await api(pag, `/orgs/${ORG}/cuentas?negocio_id=${neg.id}`)).find((c) => c.nombre === CUENTA_PRUEBAS);
+/** La cuenta de pruebas de la empresa demo; se crea una sola vez. La empresa
+ *  es una (contrato 0.63.0): la cuenta cuelga de ella sola. */
+async function cuentaDePruebas(pag) {
+  let cuenta = filas(await api(pag, `/orgs/${ORG}/cuentas`)).find((c) => c.nombre === CUENTA_PRUEBAS);
   if (!cuenta) {
     cuenta = await api(pag, `/orgs/${ORG}/cuentas`, {
-      method: 'POST', body: { nombre: CUENTA_PRUEBAS, tipo: 'caja', saldo_inicial: 1000000, negocio_id: neg.id, moneda: 'MXN' },
+      method: 'POST', body: { nombre: CUENTA_PRUEBAS, tipo: 'caja', saldo_inicial: 1000000, moneda: 'MXN' },
     });
   }
-  return { neg, cuenta };
+  return { cuenta };
+}
+
+/** La conciliación pide TODAS las cuentas de la empresa, y la empresa demo
+ *  es una (contrato 0.63.0): trae las de la siembra y las de otras pruebas.
+ *  A las que no son de esta prueba se les pone lo registrado, para que
+ *  cuadren y no dejen ajuste. */
+async function cuadrarLasDemas(pag) {
+  const escapar = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  for (const c of filas(await api(pag, `/orgs/${ORG}/cuentas`))) {
+    if (c.nombre === CUENTA_PRUEBAS) continue;
+    const fila = pag.getByRole('row', { name: new RegExp(escapar(c.nombre)) }).first();
+    await fila.getByPlaceholder('cuánto hay').fill((Number(c.saldo ?? c.saldo_inicial) / 100).toFixed(2));
+  }
 }
 
 /* ═══════════════ 1 · entrar, y que la sesión aguante ═══════════════ */
@@ -231,15 +230,13 @@ test('entra por el propio Worker y la sesión aguanta al cambiar de pantalla', a
 
   for (const ruta of ['/dashboard', '/movimientos', '/cuentas', '/conciliacion', '/flujo', '/equipo']) {
     await pag.goto(`${URL}${ruta}`, { waitUntil: 'load' });
-    // El marco de la app cargó cuando la barra de arriba ya dice qué negocio
-    // está activo: eso sólo pasa con sesión y con la API contestando.
-    /* La lista de negocios de la demo crece: cada prueba que escribe se hace
-     * su propio negocio para no mover Taller Demo, y el que sale activo en un
-     * perfil nuevo es el primero que devuelva la API. Por eso se acepta
-     * cualquier «Pruebas de …» en vez de nombrarlos uno por uno: el 20-sep
-     * esto dejó el flujo en rojo cuando supply101 creó el suyo. */
+    // El marco de la app cargó cuando la barra de arriba ya dice cuál es la
+    // empresa: eso sólo pasa con sesión y con la API contestando.
     await pag.waitForFunction(
-      () => /Taller Demo|Pruebas de |Sin negocio/.test(document.body.innerText),
+      () => {
+        const t = (document.querySelector('[data-empresa]')?.textContent ?? '').trim();
+        return t.length > 1 && !/Cargando/.test(t);
+      },
       null, { timeout: 20000 },
     );
     assert.ok(!pag.url().includes('/login'), `${ruta} no devolvió al login`);
@@ -247,10 +244,9 @@ test('entra por el propio Worker y la sesión aguanta al cambiar de pantalla', a
   }
   assert.equal((await api(pag, '/yo')).usuario.correo, CORREO, 'la sesión aguantó seis pantallas');
 
-  /* SIN «NEGOCIO» (Mike, 1-oct): «ya no existe la opción de negocios en
-   * dash. Sólo es una empresa/negocio todo». La barra dice la empresa; no hay
-   * selector, ni pantalla de negocios, ni alta, ni fusión. Lo del 29-sep era
-   * «un solo negocio»; ahora el concepto no está en dash101. */
+  /* LA EMPRESA ES UNA (Mike, 1-oct): la barra dice cuál es; no hay selector,
+   * ni pantalla aparte, ni alta, ni fusión, y la palabra de antes no aparece
+   * en ninguna pantalla. */
   assert.equal(await pag.locator('[data-empresa]').count(), 1, 'la barra dice cuál es la empresa');
   assert.equal(await pag.getByRole('button', { name: /Taller Demo|Pruebas de / }).count(), 0, 'y no es un botón para cambiar de nada');
   assert.equal(await pag.getByRole('link', { name: /Crear nuevo negocio|Crear negocio/ }).count(), 0, 'ni ofrece crear otro');
@@ -271,10 +267,10 @@ test('el dinero se pinta en centavos correctos (Taller Demo, sólo lectura)', as
   const { ctx, pag, errores } = await pestana({ width: 1440, height: 900 }, true);
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
 
-  /* Se lee lo mismo que dash101 enseña: el primero de la API (1-oct). */
-  const demo = filas(await api(pag, `/orgs/${ORG}/negocios`))[0];
-  assert.ok(demo, `la empresa ${ORG} tiene su registro`);
-  const cuentas = filas(await api(pag, `/orgs/${ORG}/cuentas?negocio_id=${demo.id}`));
+  /* Se lee lo mismo que dash101 enseña: la empresa, por su ruta. */
+  const empresa = await api(pag, `/orgs/${ORG}/empresa`);
+  assert.equal(empresa?.id, 'empresa', `la empresa ${ORG} tiene su registro`);
+  const cuentas = filas(await api(pag, `/orgs/${ORG}/cuentas`));
   const movs = filas(await movimientosDe(pag));
   assert.ok(cuentas.length >= 1 && movs.length >= 1, 'hay cuentas y movimientos que cuadrar');
 
@@ -285,7 +281,6 @@ test('el dinero se pinta en centavos correctos (Taller Demo, sólo lectura)', as
   const capital = pesos0(cuentas.reduce((s, c) => s + saldoCentavos(c, movs), 0));
   console.log(`    ${banco.nombre}: ${centavos} centavos → debe verse «${bien}» y nunca «${mal}»; capital «${capital}»`);
 
-  await elegirNegocio(pag, demo.id);
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
   await pag.waitForFunction((b) => document.body.innerText.includes(b), bien, { timeout: 30000 });
   const t = await texto(pag);
@@ -308,8 +303,7 @@ test('el dinero se pinta en centavos correctos (Taller Demo, sólo lectura)', as
 test('conciliar: la que cuadra no deja ajuste, la que no cuadra sí, y el saldo termina igual al real', async () => {
   const { ctx, pag, errores } = await pestana({ width: 1440, height: 900 }, true);
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
-  const { neg, cuenta } = await negocioDePruebas(pag);
-  await elegirNegocio(pag, neg.id);
+  const { cuenta } = await cuentaDePruebas(pag);
 
   const ajustesDe = async () =>
     filas(await movimientosDe(pag, `cuenta_id=${cuenta.id}`)).filter((m) => m.categoria === AJUSTE);
@@ -328,6 +322,7 @@ test('conciliar: la que cuadra no deja ajuste, la que no cuadra sí, y el saldo 
   await filaDe(CUENTA_PRUEBAS).waitFor({ timeout: 30000 });
   assert.ok((await filaDe(CUENTA_PRUEBAS).innerText()).includes(pesos2(registrado)), `la fila enseña lo registrado: ${pesos2(registrado)}`);
   await filaDe(CUENTA_PRUEBAS).getByPlaceholder('cuánto hay').fill((registrado / 100).toFixed(2));
+  await cuadrarLasDemas(pag);
   await esperarEnFila(CUENTA_PRUEBAS, 'cuadra');
   await pag.getByRole('button', { name: 'Conciliar' }).click();
   await pag.getByText('Todo cuadró: no hizo falta ningún ajuste.').waitFor({ timeout: 30000 });
@@ -340,6 +335,7 @@ test('conciliar: la que cuadra no deja ajuste, la que no cuadra sí, y el saldo 
   await pag.goto(`${URL}/conciliacion`, { waitUntil: 'load' });
   await filaDe(CUENTA_PRUEBAS).waitFor({ timeout: 30000 });
   await filaDe(CUENTA_PRUEBAS).getByPlaceholder('cuánto hay').fill((real / 100).toFixed(2));
+  await cuadrarLasDemas(pag);
   await esperarEnFila(CUENTA_PRUEBAS, pesos2(80000));
   await pag.getByRole('button', { name: 'Conciliar' }).click();
   await pag.getByText(/1 cuenta quedó ajustada a la realidad; se escaparon \$800\.00/).waitFor({ timeout: 30000 });
@@ -407,8 +403,7 @@ test('pedir una compra desde el celular, pagarla, y que el que la pidió lo vea'
   // Primero la página: `api()` habla por `/s101`, que es una ruta relativa, y
   // sin una página abierta no hay contra qué resolverla.
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
-  const { neg, cuenta } = await negocioDePruebas(pag);
-  await elegirNegocio(pag, neg.id);
+  const { cuenta } = await cuentaDePruebas(pag);
 
   // Quien paga es una etiqueta, y la reparte el dueño: esta cuenta es admin
   // de `demo`, no dueña, así que NO puede ponérsela sola —eso lo revisa el
@@ -484,8 +479,7 @@ test('pedir una compra desde el celular, pagarla, y que el que la pidió lo vea'
 test('pedir un reembolso, verlo en el inicio y en su pestaña del buzón, y pagarlo', async () => {
   const { ctx, pag, errores } = await pestana({ width: 390, height: 844 }, true);
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
-  const { neg, cuenta } = await negocioDePruebas(pag);
-  await elegirNegocio(pag, neg.id);
+  const { cuenta } = await cuentaDePruebas(pag);
 
   // ── pedirlo, desde la liga del botón «Pedir un reembolso» ──
   await pag.goto(`${URL}/ordenes/nueva?tipo=reembolso`, { waitUntil: 'load' });
@@ -505,12 +499,12 @@ test('pedir un reembolso, verlo en el inicio y en su pestaña del buzón, y paga
   const id = pag.url().replace(/[?#].*$/, '').split('/').pop();
 
   // ── el inicio lo cuenta y lo resta ──
-  // La cifra se compara contra lo que dice la API para ESTE negocio, no
+  // La cifra se compara contra lo que dice la API, no
   // contra $850 a secas: una corrida anterior que se haya caído a la mitad
   // deja su reembolso en el buzón, y la tarjeta los suma todos (que es lo
   // correcto). Los enteros de pesos, que es como se pinta el inicio.
   const enteros = (t) => t.replace(/[^\d]/g, '');
-  const resumen = await api(pag, `/orgs/${ORG}/ordenes/resumen?negocio_id=${neg.id}`);
+  const resumen = await api(pag, `/orgs/${ORG}/ordenes/resumen`);
   assert.ok(resumen.reembolsos.total >= 85000, 'la API ya cuenta el reembolso');
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
   const tarjeta = pag.locator('[data-tarjeta="reembolsos-pendientes"]');
@@ -541,19 +535,22 @@ test('pedir un reembolso, verlo en el inicio y en su pestaña del buzón, y paga
   assert.equal(await pag.locator('aside button[title="Compras y reembolsos"]').count(), 0, 'y ya no «Compras y reembolsos»');
   const globo = pag.locator('[data-pendientes]');
   await globo.waitFor({ timeout: 20000 });
-  /* Se compara contra la API en ESTE momento y para ESTE negocio: el
-   * circulito es del negocio activo, y lo que otras corridas dejen en el
-   * buzón cuenta igual. Si no cuadra, el mensaje dice qué negocio tiene la
-   * pantalla y cuánto hay en toda la empresa, para no adivinar. */
-  const ahora = await api(pag, `/orgs/${ORG}/ordenes/resumen?negocio_id=${neg.id}`);
-  const todos = await api(pag, `/orgs/${ORG}/ordenes/resumen`);
+  /* Se compara contra la API en ESTE momento: lo que otras corridas dejen
+   * en el buzón cuenta igual. Si no cuadra, el mensaje dice qué empresa tiene
+   * la pantalla, para no adivinar. */
+  const ahora = await api(pag, `/orgs/${ORG}/ordenes/resumen`);
   const cuantos = ahora.compras.cuantas + ahora.reembolsos.cuantas;
   const enPantalla = (await pag.locator('[data-empresa]').innerText()).trim();
   assert.equal(await globo.innerText(), String(cuantos),
-    `el circulito de Compras cuenta las órdenes sin pagar del negocio activo (pantalla: «${enPantalla}», negocio de la prueba: «${neg.nombre}»; toda la empresa: ${todos.compras.cuantas + todos.reembolsos.cuantas})`);
+    `el circulito de Compras cuenta las órdenes sin pagar de la empresa (pantalla: «${enPantalla}»)`);
   const seccion = pag.locator('[data-seccion="por-pagar"]');
   await seccion.waitFor({ timeout: 20000 });
-  assert.ok((await seccion.innerText()).includes(folio), 'el buzón del inicio trae el reembolso por pagar');
+  /* El inicio enseña las 8 que vencen primero. La empresa demo es una
+   * (0.63.0) y carga con las compras de la siembra y lo que otras corridas
+   * dejan, así que el reembolso nuevo puede quedar en el «y N más». */
+  const enInicio = await seccion.innerText();
+  assert.ok(enInicio.includes(folio) || /Y \d+ más en el buzón/.test(enInicio),
+    'el buzón del inicio trae el reembolso por pagar, o dice que hay más en el buzón');
 
   // ── pagarlo, con los mismos botones ──
   await pag.goto(`${URL}/ordenes/${id}`, { waitUntil: 'load' });
@@ -583,11 +580,11 @@ test('pedir un reembolso, verlo en el inicio y en su pestaña del buzón, y paga
   await pag.getByText(/Pagada/).first().waitFor({ timeout: 20000 });
   assert.match(await texto(pag), /Pagada/, 'desde el movimiento se llega a la orden, ya pagada, con su historia');
 
-  const despues = await api(pag, `/orgs/${ORG}/ordenes/resumen?negocio_id=${neg.id}`);
+  const despues = await api(pag, `/orgs/${ORG}/ordenes/resumen`);
   assert.equal(resumen.reembolsos.total - despues.reembolsos.total, 85000, 'pagado, ya no está pendiente');
-  // Lo que otras corridas hayan dejado en el buzón de este negocio se paga
+  // Lo que otras corridas hayan dejado en el buzón se paga
   // aquí, para que el siguiente recorrido arranque limpio.
-  const sobrantes = filas(await api(pag, `/orgs/${ORG}/ordenes/buzon?negocio_id=${neg.id}&tipo=reembolso`));
+  const sobrantes = filas(await api(pag, `/orgs/${ORG}/ordenes/buzon?tipo=reembolso`));
   for (const o of sobrantes) await api(pag, `/orgs/${ORG}/ordenes/${o.id}/pagar`, { method: 'POST', body: { cuenta_id: cuenta.id } });
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
   await tarjeta.waitFor({ timeout: 20000 });
@@ -613,8 +610,7 @@ const CLIENTE_PRUEBAS = 'Cliente de navegador';
 test('accionistas a 390×844: se da de alta uno, se le registra un retiro, y queda como egreso con su categoría', async () => {
   const { ctx, pag, errores } = await pestana({ width: 390, height: 844 }, true);
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
-  const { neg, cuenta } = await negocioDePruebas(pag);
-  await elegirNegocio(pag, neg.id);
+  const { cuenta } = await cuentaDePruebas(pag);
 
   const nombre = `Socio del navegador ${Date.now().toString(36)}`;
   await pag.goto(`${URL}/accionistas`, { waitUntil: 'load' });
@@ -670,8 +666,6 @@ test('se da de alta un cliente desde «nuevo proyecto», y avisa del parecido', 
   // Primero la página: `api()` habla por `/s101`, que es relativo, y sin una
   // página abierta no hay contra qué resolverlo.
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
-  const { neg } = await negocioDePruebas(pag);
-  await elegirNegocio(pag, neg.id);
 
   await pag.goto(`${URL}/proyectos/nuevo`, { waitUntil: 'load' });
   await pag.getByLabel('Cliente').waitFor({ timeout: 20000 });
@@ -690,7 +684,9 @@ test('se da de alta un cliente desde «nuevo proyecto», y avisa del parecido', 
   if (yaEsta) {
     // Ya existía: tiene que preguntar antes de crear otro igual.
     await pag.getByText(/¿No te refieres a/).waitFor({ timeout: 15000 });
-    await pag.getByRole('button', { name: new RegExp(`Usar ${CLIENTE_PRUEBAS}`) }).click();
+    // `.first()`: la empresa demo junta lo de antes (0.63.0) y puede traer
+    // dos clientes con este nombre; con uno basta para medir el aviso.
+    await pag.getByRole('button', { name: new RegExp(`Usar ${CLIENTE_PRUEBAS}`) }).first().click();
   }
 
   await pag.waitForTimeout(2000);
@@ -723,26 +719,24 @@ test('se da de alta un cliente desde «nuevo proyecto», y avisa del parecido', 
 test('editar los ítems del proyecto: se borra uno, se guarda, y NO vuelve', async () => {
   const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
-  const { neg } = await negocioDePruebas(pag);
-  await elegirNegocio(pag, neg.id);
 
   // Un proyecto propio de esta prueba, con su cliente, para no tocar nada de
   // los demás recorridos.
-  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes?negocio_id=${neg.id}`))
+  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes`))
     .find((c) => c.nombre === CLIENTE_PRUEBAS);
   if (!cliente) {
     cliente = await api(pag, `/orgs/${ORG}/clientes`, {
-      method: 'POST', body: { nombre: CLIENTE_PRUEBAS, negocio_id: neg.id },
+      method: 'POST', body: { nombre: CLIENTE_PRUEBAS },
     });
   }
   const proyecto = await api(pag, `/orgs/${ORG}/proyectos`, {
     method: 'POST',
-    body: { nombre: `Ítems ${Date.now().toString(36).slice(-5)}`, cliente_id: cliente.id, negocio_id: neg.id, estado: 'activo' },
+    body: { nombre: `Ítems ${Date.now().toString(36).slice(-5)}`, cliente_id: cliente.id, estado: 'activo' },
   });
   for (const [nombre, monto] of [['Cocina', 100_00], ['Clóset', 200_00], ['Isla', 50_00]]) {
     await api(pag, `/orgs/${ORG}/items`, {
       method: 'POST',
-      body: { nombre, monto, cantidad: 1, estado: 'vendido', proyecto_id: proyecto.id, cliente_id: cliente.id, negocio_id: neg.id },
+      body: { nombre, monto, cantidad: 1, estado: 'vendido', proyecto_id: proyecto.id, cliente_id: cliente.id },
     });
   }
 
@@ -801,17 +795,15 @@ test('editar los ítems del proyecto: se borra uno, se guarda, y NO vuelve', asy
 test('la cantidad: 20 puertas a $1,500 son $30,000 de línea, no $600,000', async () => {
   const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
-  const { neg } = await negocioDePruebas(pag);
-  await elegirNegocio(pag, neg.id);
 
-  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes?negocio_id=${neg.id}`))
+  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes`))
     .find((c) => c.nombre === CLIENTE_PRUEBAS);
   if (!cliente) {
-    cliente = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS, negocio_id: neg.id } });
+    cliente = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS } });
   }
   const proyecto = await api(pag, `/orgs/${ORG}/proyectos`, {
     method: 'POST',
-    body: { nombre: `Cantidad ${Date.now().toString(36).slice(-5)}`, cliente_id: cliente.id, negocio_id: neg.id, estado: 'activo' },
+    body: { nombre: `Cantidad ${Date.now().toString(36).slice(-5)}`, cliente_id: cliente.id, estado: 'activo' },
   });
 
   await pag.goto(`${URL}/proyectos/${proyecto.id}`, { waitUntil: 'load' });
@@ -853,30 +845,28 @@ test('el estado de cuenta del proyecto: la lista suma el subtotal y el IVA se de
    * descubre quien lo recibe. */
   const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
-  const { neg } = await negocioDePruebas(pag);
-  await elegirNegocio(pag, neg.id);
 
-  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes?negocio_id=${neg.id}`))
+  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes`))
     .find((c) => c.nombre === CLIENTE_PRUEBAS);
   if (!cliente) {
-    cliente = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS, negocio_id: neg.id } });
+    cliente = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS } });
   }
   const proyecto = await api(pag, `/orgs/${ORG}/proyectos`, {
     method: 'POST',
-    body: { nombre: `Estado ${Date.now().toString(36).slice(-5)}`, cliente_id: cliente.id, negocio_id: neg.id, estado: 'activo' },
+    body: { nombre: `Estado ${Date.now().toString(36).slice(-5)}`, cliente_id: cliente.id, estado: 'activo' },
   });
   await api(pag, `/orgs/${ORG}/items`, {
     method: 'POST',
     body: {
-      negocio_id: neg.id, cliente_id: cliente.id, proyecto_id: proyecto.id,
+      cliente_id: cliente.id, proyecto_id: proyecto.id,
       nombre: 'Puerta del estado', monto: 30_000_00, cantidad: 2, estado: 'vendido', tipo: 'mueble',
     },
   });
-  const cuenta = filas(await api(pag, `/orgs/${ORG}/cuentas?negocio_id=${neg.id}`))[0];
+  const cuenta = filas(await api(pag, `/orgs/${ORG}/cuentas`))[0];
   await api(pag, `/orgs/${ORG}/movimientos`, {
     method: 'POST',
     body: {
-      negocio_id: neg.id, tipo: 'ingreso', monto: 10_000_00, fecha: '2026-03-01',
+      tipo: 'ingreso', monto: 10_000_00, fecha: '2026-03-01',
       cuenta_id: cuenta.id, proyecto_id: proyecto.id,
       contraparte_tipo: 'cliente', contraparte_id: cliente.id, descripcion: 'Anticipo del estado',
     },
@@ -940,20 +930,18 @@ test('un cobro se captura «falta facturar» y aparece en la lista de pendientes
    * con getByLabel tumbó el despliegue de las 05:56. */
   const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
-  const { neg } = await negocioDePruebas(pag);
-  await elegirNegocio(pag, neg.id);
 
-  const cuenta = filas(await api(pag, `/orgs/${ORG}/cuentas?negocio_id=${neg.id}`))[0];
+  const cuenta = filas(await api(pag, `/orgs/${ORG}/cuentas`))[0];
   assert.ok(cuenta, 'la demo tiene al menos una cuenta');
 
-  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes?negocio_id=${neg.id}`))
+  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes`))
     .find((c) => c.nombre === CLIENTE_PRUEBAS);
   if (!cliente) {
-    cliente = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS, negocio_id: neg.id } });
+    cliente = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS } });
   }
   const proyecto = await api(pag, `/orgs/${ORG}/proyectos`, {
     method: 'POST',
-    body: { nombre: `Cobro ${Date.now().toString(36).slice(-5)}`, cliente_id: cliente.id, negocio_id: neg.id, estado: 'activo' },
+    body: { nombre: `Cobro ${Date.now().toString(36).slice(-5)}`, cliente_id: cliente.id, estado: 'activo' },
   });
 
   await pag.goto(`${URL}/movimientos/nuevo`, { waitUntil: 'load' });
@@ -986,7 +974,7 @@ test('un cobro se captura «falta facturar» y aparece en la lista de pendientes
   await pag.getByRole('button', { name: /^Registrar ingreso$/ }).click();
   await pag.waitForURL(/\/movimientos(\?|$)/, { timeout: 30000 });
 
-  const pend = filas(await api(pag, `/orgs/${ORG}/fiscal/pendientes?negocio_id=${neg.id}&tipo=ingreso`));
+  const pend = filas(await api(pag, `/orgs/${ORG}/fiscal/pendientes?tipo=ingreso`));
   const mio = pend.find((m) => m.monto === 12_345_00);
   assert.ok(mio, 'el cobro quedó esperando factura');
   assert.equal(mio.tipo, 'ingreso');
@@ -1004,21 +992,19 @@ test('corregir un movimiento: se cambia el monto y el saldo se recalcula', async
    * corregir un movimiento». Antes había que borrarlo y recapturarlo. */
   const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
-  const { neg } = await negocioDePruebas(pag);
-  await elegirNegocio(pag, neg.id);
 
-  const cuenta = filas(await api(pag, `/orgs/${ORG}/cuentas?negocio_id=${neg.id}`))[0];
-  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes?negocio_id=${neg.id}`))
+  const cuenta = filas(await api(pag, `/orgs/${ORG}/cuentas`))[0];
+  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes`))
     .find((c) => c.nombre === CLIENTE_PRUEBAS);
   if (!cliente) {
-    cliente = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS, negocio_id: neg.id } });
+    cliente = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS } });
   }
 
   // Un cobro capturado con un cero de más, que es el error de verdad.
   const mov = await api(pag, `/orgs/${ORG}/movimientos`, {
     method: 'POST',
     body: {
-      negocio_id: neg.id, tipo: 'ingreso', monto: 90_000_00, fecha: '2026-03-18',
+      tipo: 'ingreso', monto: 90_000_00, fecha: '2026-03-18',
       cuenta_id: cuenta.id, contraparte_tipo: 'cliente', contraparte_id: cliente.id,
       contraparte_nombre: cliente.nombre, descripcion: 'Con un cero de mas',
     },
@@ -1067,14 +1053,12 @@ test('corregir un movimiento SIN contraparte: el botón no se queda apagado', as
    * estorbaba era la pantalla, y la pantalla sólo se ve con un navegador. */
   const { ctx, pag, errores } = await pestana({ width: 390, height: 844 }, true);
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
-  const { neg } = await negocioDePruebas(pag);
-  await elegirNegocio(pag, neg.id);
 
-  const cuenta = filas(await api(pag, `/orgs/${ORG}/cuentas?negocio_id=${neg.id}`))[0];
+  const cuenta = filas(await api(pag, `/orgs/${ORG}/cuentas`))[0];
   const mov = await api(pag, `/orgs/${ORG}/movimientos`, {
     method: 'POST',
     body: {
-      negocio_id: neg.id, tipo: 'egreso', monto: 4_500_00, fecha: '2026-03-24',
+      tipo: 'egreso', monto: 4_500_00, fecha: '2026-03-24',
       cuenta_id: cuenta.id, contraparte_tipo: 'otro', contraparte_id: null,
       contraparte_nombre: 'Caseta', descripcion: 'Sin proveedor',
     },
@@ -1084,8 +1068,8 @@ test('corregir un movimiento SIN contraparte: el botón no se queda apagado', as
   const campoMonto = pag.locator('input[type="number"]').first();
   await campoMonto.waitFor({ timeout: 25000 });
 
-  /* El botón SÍ se apaga un instante: mientras cargan los catálogos de ese
-   * negocio. Eso está bien y es corto. Lo que no puede pasar —el defecto de
+  /* El botón SÍ se apaga un instante: mientras cargan los catálogos de la
+   * empresa. Eso está bien y es corto. Lo que no puede pasar —el defecto de
    * Mike— es que se quede apagado para siempre porque falta un dato.
    *
    * Así que no se mira una vez: se espera a que encienda, y si no enciende
@@ -1142,18 +1126,17 @@ test('agrupar dos renglones en un producto: NO se borra ninguno y se pueden move
   const { ctx, pag, errores } = await pestana();
   await entrar(pag, CORREO);
 
-  const neg = (await api(pag, `/orgs/${ORG}/negocios`)).filas[0];
   const cliente = filas(await api(pag, `/orgs/${ORG}/clientes`)).find((c) => c.nombre === CLIENTE_PRUEBAS)
-    ?? await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS, negocio_id: neg.id } });
+    ?? await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS } });
   const proyecto = await api(pag, `/orgs/${ORG}/proyectos`, {
     method: 'POST',
-    body: { nombre: `Agrupar ${Date.now().toString(36).slice(-5)}`, cliente_id: cliente.id, negocio_id: neg.id, estado: 'activo' },
+    body: { nombre: `Agrupar ${Date.now().toString(36).slice(-5)}`, cliente_id: cliente.id, estado: 'activo' },
   });
   for (let i = 0; i < 2; i++) {
     await api(pag, `/orgs/${ORG}/items`, {
       method: 'POST',
       body: { nombre: 'Puerta igualita', monto: 3_000_00, cantidad: 1, estado: 'vendido',
-              proyecto_id: proyecto.id, cliente_id: cliente.id, negocio_id: neg.id },
+              proyecto_id: proyecto.id, cliente_id: cliente.id },
     });
   }
   const antes = (await api(pag, `/orgs/${ORG}/proyectos/${proyecto.id}`)).precio_venta;
@@ -1249,13 +1232,12 @@ test('el archivo de la factura: se escoge y se ve antes de guardar', async () =>
   const { ctx, pag, errores } = await pestana();
   await entrar(pag, CORREO);
 
-  const neg = (await api(pag, `/orgs/${ORG}/negocios`)).filas[0];
-  const cta = filas(await api(pag, `/orgs/${ORG}/cuentas?negocio_id=${neg.id}`))
+  const cta = filas(await api(pag, `/orgs/${ORG}/cuentas`))
     .find((c) => c.nombre === CUENTA_PRUEBAS)
-    ?? await api(pag, `/orgs/${ORG}/cuentas`, { method: 'POST', body: { negocio_id: neg.id, nombre: CUENTA_PRUEBAS, tipo: 'banco' } });
+    ?? await api(pag, `/orgs/${ORG}/cuentas`, { method: 'POST', body: { nombre: CUENTA_PRUEBAS, tipo: 'banco' } });
   const mov = await api(pag, `/orgs/${ORG}/movimientos`, {
     method: 'POST',
-    body: { negocio_id: neg.id, tipo: 'egreso', monto: 1_160_00, fecha: '2026-09-16',
+    body: { tipo: 'egreso', monto: 1_160_00, fecha: '2026-09-16',
             cuenta_id: cta.id, descripcion: 'Con factura por colgar' },
   });
 
@@ -1304,19 +1286,17 @@ test('el archivo de la factura: se escoge y se ve antes de guardar', async () =>
 test('las partidas son pestañas: se crea una con «+», se mueve un ítem, se renombra y se captura en ella', async () => {
   const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
-  const { neg } = await negocioDePruebas(pag);
-  await elegirNegocio(pag, neg.id);
-  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes?negocio_id=${neg.id}`)).find((c) => c.nombre === CLIENTE_PRUEBAS);
-  if (!cliente) cliente = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS, negocio_id: neg.id } });
+  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes`)).find((c) => c.nombre === CLIENTE_PRUEBAS);
+  if (!cliente) cliente = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS } });
   const proyecto = await api(pag, `/orgs/${ORG}/proyectos`, {
     method: 'POST',
-    body: { nombre: `Partidas ${Date.now().toString(36).slice(-5)}`, cliente_id: cliente.id, negocio_id: neg.id, estado: 'activo' },
+    body: { nombre: `Partidas ${Date.now().toString(36).slice(-5)}`, cliente_id: cliente.id, estado: 'activo' },
   });
   const ids = {};
   for (const [nombre, monto] of [['Cocina', 100_00], ['Clóset', 200_00], ['Isla', 50_00]]) {
     const it = await api(pag, `/orgs/${ORG}/items`, {
       method: 'POST',
-      body: { nombre, monto, cantidad: 1, estado: 'vendido', proyecto_id: proyecto.id, cliente_id: cliente.id, negocio_id: neg.id },
+      body: { nombre, monto, cantidad: 1, estado: 'vendido', proyecto_id: proyecto.id, cliente_id: cliente.id },
     });
     ids[nombre] = it.id;
   }
@@ -1390,22 +1370,21 @@ test('1-oct: el líquido es el saldo que suma la API; la cuenta abre con su hist
    * haber un concepto de gastos generales en el tipo de egreso». */
   const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
-  const { neg, cuenta } = await negocioDePruebas(pag);
-  await elegirNegocio(pag, neg.id);
+  const { cuenta } = await cuentaDePruebas(pag);
 
   // ── un gasto general, de hoy, por la API: sin proyecto y con su categoría ──
   const hoy = new Date().toISOString().slice(0, 10);
   const gasto = await api(pag, `/orgs/${ORG}/movimientos`, {
     method: 'POST',
     body: {
-      negocio_id: neg.id, tipo: 'egreso', monto: 7_000_00, fecha: hoy, cuenta_id: cuenta.id,
+      tipo: 'egreso', monto: 7_000_00, fecha: hoy, cuenta_id: cuenta.id,
       contraparte_tipo: 'otro', categoria: 'gasto_general', descripcion: 'Renta del taller (navegador)',
     },
   });
   assert.equal(gasto.proyecto_id ?? null, null, 'sin proyecto');
 
   // ── el líquido del inicio es la suma de `saldo` que manda la API (0.60.0), no una lista con tope ──
-  const cuentas = filas(await api(pag, `/orgs/${ORG}/cuentas?negocio_id=${neg.id}`));
+  const cuentas = filas(await api(pag, `/orgs/${ORG}/cuentas`));
   const mia = cuentas.find((c) => c.id === cuenta.id);
   assert.equal(typeof mia.saldo, 'number', 'la API manda el saldo de la cuenta (contrato 0.60.0)');
   const liquido = cuentas.reduce((t, c) => t + c.saldo, 0);
@@ -1467,10 +1446,8 @@ test('1-oct: la pantalla del cliente abre con su estado de cuenta, con PDF, Exce
    * general y por proyecto». */
   const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
-  const { neg } = await negocioDePruebas(pag);
-  await elegirNegocio(pag, neg.id);
-  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes?negocio_id=${neg.id}`)).find((c) => c.nombre === CLIENTE_PRUEBAS);
-  if (!cliente) cliente = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS, negocio_id: neg.id } });
+  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes`)).find((c) => c.nombre === CLIENTE_PRUEBAS);
+  if (!cliente) cliente = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS } });
 
   await pag.goto(`${URL}/clientes/${cliente.id}`, { waitUntil: 'load' });
   const estado = pag.locator('[data-seccion="estado"]');

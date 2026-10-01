@@ -268,10 +268,8 @@ async function arrancarSesion() {
   ver('b-nueva-compra', est.puedeComprar);
   ver('sin-compras', !est.puedeComprar);
 
-  /* SIN «NEGOCIO» (Mike, 1-oct-2026): «Ya no existe la opción de negocios
-   * (…) Sólo es una empresa/negocio todo». Desde el contrato 0.61.0 la API
-   * cuelga sola cada orden del registro de la empresa: aquí ya no se lista,
-   * no se escoge ni se recuerda. */
+  /* La empresa es una (Mike, 1-oct-2026): la API cuelga sola cada orden de
+   * ella. Aquí no se lista, no se escoge ni se recuerda nada. */
   enrutar();
 }
 

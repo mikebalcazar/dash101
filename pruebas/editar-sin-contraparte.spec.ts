@@ -15,7 +15,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { fuente } from "@/lib/fuente";
 import { entrarDePrueba, pedir } from "@/lib/api/cliente";
-import { createNegocio } from "@/lib/negocios";
 import { createCuenta } from "@/lib/cuentas";
 import { createMovimiento, getMovimiento, updateMovimiento, listMovimientos } from "@/lib/movimientos";
 
@@ -24,7 +23,7 @@ const ORG = `sc-${(process.env.GITHUB_RUN_ID ?? Date.now().toString(36)).toStrin
 const ORG_ANTES = process.env.NEXT_PUBLIC_ORG;
 
 let uid = "";
-const ids = { negocio: "", cuenta: "", sinContraparte: "" };
+const ids = { cuenta: "", sinContraparte: "" };
 
 beforeAll(async () => {
   expect(fuente()).toBe("api");
@@ -34,9 +33,7 @@ beforeAll(async () => {
   process.env.NEXT_PUBLIC_ORG = ORG;
   try { await pedir(`/admin/orgs/${ORG}`, { method: "DELETE" }); } catch { /* no existía */ }
   await pedir("/admin/orgs", { method: "POST", body: { id: ORG, nombre: "Sin contraparte" } });
-
-  ids.negocio = await createNegocio(uid, { nombre: "Taller", moneda: "MXN" });
-  ids.cuenta = await createCuenta(uid, { nombre: "Banco", tipo: "banco", saldo_inicial: 0, negocio_id: ids.negocio, moneda: "MXN" });
+  ids.cuenta = await createCuenta(uid, { nombre: "Banco", tipo: "banco", saldo_inicial: 0, moneda: "MXN" });
 
   /* El movimiento de Mike: un egreso sin proveedor. Existe de sobra —un
    * ajuste, un gasto fijo, algo importado— y la API lo acepta sin chistar. */
@@ -44,7 +41,6 @@ beforeAll(async () => {
     tipo: "egreso", monto: 4_500, fecha: new Date(2026, 2, 24),
     cuenta_id: ids.cuenta, cuenta_nombre: "Banco",
     contraparte_id: null, contraparte_tipo: "otro", contraparte_nombre: "Caseta",
-    negocio_id: ids.negocio,
   });
 }, 90000);
 
@@ -82,7 +78,7 @@ describe("corregir un movimiento sin contraparte", () => {
   });
 
   it("y sigue en la lista, con su nombre para reconocerlo", async () => {
-    const lista = await listMovimientos(ids.negocio);
+    const lista = await listMovimientos();
     const mio = lista.find((x) => x.id === ids.sinContraparte);
     expect(mio, "no desaparece de la lista por no tener contraparte").toBeTruthy();
     expect(mio!.contraparte_nombre).toBe("Caseta");

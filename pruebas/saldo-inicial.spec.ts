@@ -22,7 +22,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { fuente } from "@/lib/fuente";
 import { entrarDePrueba, pedir } from "@/lib/api/cliente";
-import { createNegocio } from "@/lib/negocios";
 import { createCliente } from "@/lib/clientes";
 import { createCuenta, getCuenta, updateCuenta } from "@/lib/cuentas";
 import { createMovimiento } from "@/lib/movimientos";
@@ -32,7 +31,7 @@ const ORG = `si-${(process.env.GITHUB_RUN_ID ?? Date.now().toString(36)).toStrin
 const ORG_ANTES = process.env.NEXT_PUBLIC_ORG;
 
 let uid = "";
-const ids = { negocio: "", cuenta: "", cliente: "" };
+const ids = { cuenta: "", cliente: "" };
 
 beforeAll(async () => {
   expect(fuente()).toBe("api");
@@ -42,13 +41,11 @@ beforeAll(async () => {
   process.env.NEXT_PUBLIC_ORG = ORG;
   try { await pedir(`/admin/orgs/${ORG}`, { method: "DELETE" }); } catch { /* no existía */ }
   await pedir("/admin/orgs", { method: "POST", body: { id: ORG, nombre: "Saldo inicial" } });
-
-  ids.negocio = await createNegocio(uid, { nombre: "Taller", moneda: "MXN" });
   // El número de prueba con el que se abrió la cuenta, igual que el de Mike.
   ids.cuenta = await createCuenta(uid, {
-    nombre: "Banco", tipo: "banco", saldo_inicial: 148_000, negocio_id: ids.negocio, moneda: "MXN",
+    nombre: "Banco", tipo: "banco", saldo_inicial: 148_000, moneda: "MXN",
   });
-  ids.cliente = await createCliente(uid, { nombre: "HOLCIM", negocio_id: ids.negocio });
+  ids.cliente = await createCliente(uid, { nombre: "HOLCIM"});
 }, 90000);
 
 afterAll(async () => {
@@ -63,7 +60,7 @@ describe("el saldo inicial de una cuenta", () => {
     expect(c.saldo_actual, "sin movimientos, el saldo ES el inicial").toBe(148_000);
 
     const movs = await pedir<{ filas: unknown[] }>(
-      `/orgs/${ORG}/movimientos?negocio_id=${ids.negocio}&cuenta_id=${ids.cuenta}`,
+      `/orgs/${ORG}/movimientos?cuenta_id=${ids.cuenta}`,
     );
     expect(movs.filas, "y no hay ningún movimiento que borrar: por eso no se veían").toEqual([]);
   });
@@ -73,7 +70,6 @@ describe("el saldo inicial de una cuenta", () => {
       tipo: "ingreso", monto: 30_000, fecha: new Date(2026, 2, 20),
       cuenta_id: ids.cuenta, cuenta_nombre: "Banco",
       contraparte_id: ids.cliente, contraparte_tipo: "cliente", contraparte_nombre: "HOLCIM",
-      negocio_id: ids.negocio,
     });
     expect((await getCuenta(ids.cuenta))!.saldo_actual, "148,000 + 30,000").toBe(178_000);
 
@@ -86,11 +82,11 @@ describe("el saldo inicial de una cuenta", () => {
 
   it("corregirlo NO toca los movimientos que ya existen", async () => {
     const antes = await pedir<{ total: number; filas: Array<{ monto: number }> }>(
-      `/orgs/${ORG}/movimientos?negocio_id=${ids.negocio}&cuenta_id=${ids.cuenta}`,
+      `/orgs/${ORG}/movimientos?cuenta_id=${ids.cuenta}`,
     );
     await updateCuenta(ids.cuenta, { saldo_inicial: 5_000 });
     const despues = await pedir<{ total: number; filas: Array<{ monto: number }> }>(
-      `/orgs/${ORG}/movimientos?negocio_id=${ids.negocio}&cuenta_id=${ids.cuenta}`,
+      `/orgs/${ORG}/movimientos?cuenta_id=${ids.cuenta}`,
     );
     expect(despues.total, "los mismos movimientos").toBe(antes.total);
     expect(despues.filas.map((m) => m.monto)).toEqual(antes.filas.map((m) => m.monto));

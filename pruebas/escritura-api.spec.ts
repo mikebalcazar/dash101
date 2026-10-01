@@ -14,7 +14,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Timestamp } from "firebase/firestore";
 import { apiBase, fuente } from "@/lib/fuente";
 import { entrarDePrueba, pedir } from "@/lib/api/cliente";
-import { createNegocio, getNegocio, updateNegocio, deleteNegocio } from "@/lib/negocios";
+import { getEmpresa, updateEmpresa } from "@/lib/empresa";
 import { createCuenta, listCuentas, updateCuenta, deleteCuenta } from "@/lib/cuentas";
 import { createCliente, getCliente, updateCliente, deleteCliente, getClienteUid } from "@/lib/clientes";
 import { createProveedor, getProveedor, deleteProveedor } from "@/lib/proveedores";
@@ -31,7 +31,7 @@ const ORG_ANTES = process.env.NEXT_PUBLIC_ORG;
 const CORREO_CLIENTE = "prueba.escritura@ejemplo.mx";
 
 let uid = "";
-const ids = { negocio: "", banco: "", caja: "", cliente: "", proveedor: "", proyecto: "", ingreso: "", egreso: "", opex: "" };
+const ids = { banco: "", caja: "", cliente: "", proveedor: "", proyecto: "", ingreso: "", egreso: "", opex: "" };
 
 const dia = (t: unknown) => (t as Timestamp).toDate();
 
@@ -75,22 +75,25 @@ afterAll(async () => {
   }
 });
 
-describe("negocio, cuentas, cliente, proveedor", () => {
+describe("la empresa, cuentas, cliente, proveedor", () => {
   it("se crean con la firma de siempre y se leen con la forma de siempre", async () => {
-    ids.negocio = await createNegocio(uid, { nombre: "Taller de prueba", moneda: "MXN", descripcion: "se acepta y no se guarda" });
-    const n = await getNegocio(ids.negocio);
-    expect(n?.nombre).toBe("Taller de prueba");
-    expect(n?.moneda).toBe("MXN");
+    /* La org nace con su empresa (contrato 0.63.0): no se da de alta, se
+     * lee; el nombre sí se puede poner. */
+    await updateEmpresa({ nombre: "Taller de prueba" });
+    const n = await getEmpresa();
+    expect(n.id).toBe("empresa");
+    expect(n.nombre).toBe("Taller de prueba");
+    expect(n.moneda).toBe("MXN");
 
-    ids.banco = await createCuenta(uid, { nombre: "Banco", tipo: "banco", banco: "Ficticio", moneda: "MXN", saldo_inicial: 10000.5, negocio_id: ids.negocio });
-    ids.caja = await createCuenta(uid, { nombre: "Caja", tipo: "caja", moneda: "MXN", saldo_inicial: 0, negocio_id: ids.negocio });
-    const cuentas = await listCuentas(ids.negocio);
+    ids.banco = await createCuenta(uid, { nombre: "Banco", tipo: "banco", banco: "Ficticio", moneda: "MXN", saldo_inicial: 10000.5});
+    ids.caja = await createCuenta(uid, { nombre: "Caja", tipo: "caja", moneda: "MXN", saldo_inicial: 0});
+    const cuentas = await listCuentas();
     const banco = cuentas.find((c) => c.id === ids.banco)!;
     expect(banco.saldo_inicial).toBe(10000.5);
     expect(banco.saldo_actual).toBe(10000.5);
     expect(banco.banco).toBe("Ficticio");
 
-    ids.cliente = await createCliente(uid, { nombre: "Cliente de Prueba", email: CORREO_CLIENTE, telefono: "55 1234 5678", negocio_id: ids.negocio });
+    ids.cliente = await createCliente(uid, { nombre: "Cliente de Prueba", email: CORREO_CLIENTE, telefono: "55 1234 5678"});
     const cli = await getCliente(ids.cliente);
     expect(cli?.email).toBe(CORREO_CLIENTE);
     expect(cli?.portal_activo).toBe(false);
@@ -101,10 +104,10 @@ describe("negocio, cuentas, cliente, proveedor", () => {
   });
 
   it("se actualizan y lo que no cambia se queda", async () => {
-    await updateNegocio(ids.negocio, { rfc: "XAXX010101000" });
-    expect((await getNegocio(ids.negocio))?.rfc).toBe("XAXX010101000");
+    await updateEmpresa({ rfc: "XAXX010101000" });
+    expect((await getEmpresa()).rfc).toBe("XAXX010101000");
     await updateCuenta(ids.banco, { nombre: "Banco Principal" });
-    const banco = (await listCuentas(ids.negocio)).find((c) => c.id === ids.banco)!;
+    const banco = (await listCuentas()).find((c) => c.id === ids.banco)!;
     expect(banco.nombre).toBe("Banco Principal");
     expect(banco.saldo_inicial).toBe(10000.5);
     await updateCliente(ids.cliente, { notas: "paga puntual" });
@@ -117,7 +120,7 @@ describe("negocio, cuentas, cliente, proveedor", () => {
 describe("el proyecto: precio, ítems, partidas y los cachés que la API recalcula", () => {
   it("sin ítems, el precio se guarda como un solo ítem con el nombre del proyecto", async () => {
     ids.proyecto = await createProyecto(uid, {
-      nombre: "Cocina de prueba", cliente_id: ids.cliente, cliente_nombre: "Cliente de Prueba", negocio_id: ids.negocio, negocio_nombre: "Taller de prueba",
+      nombre: "Cocina de prueba", cliente_id: ids.cliente, cliente_nombre: "Cliente de Prueba",
       precio_venta: 5000, partidas: [{ proveedor_id: ids.proveedor, proveedor_nombre: "Maderas de Prueba", concepto: "Tablero", monto_acordado: 1200.75 }],
       estado: "activo", fecha_inicio: new Date(2026, 8, 1),
     });
@@ -140,11 +143,11 @@ describe("el proyecto: precio, ítems, partidas y los cachés que la API recalcu
     ids.ingreso = await createMovimiento(uid, {
       tipo: "ingreso", monto: 2000, fecha: new Date(2026, 8, 2), cuenta_id: ids.banco, cuenta_nombre: "x", proyecto_id: ids.proyecto, proyecto_nombre: "x",
       contraparte_id: ids.cliente, contraparte_tipo: "cliente", contraparte_nombre: "Cliente de Prueba",
-      producto_id: antes.items![0].id, producto_nombre: "x", negocio_id: ids.negocio, descripcion: "Anticipo",
+      producto_id: antes.items![0].id, producto_nombre: "x", descripcion: "Anticipo",
     });
     ids.egreso = await createMovimiento(uid, {
       tipo: "egreso", monto: 700.25, fecha: new Date(2026, 8, 3), cuenta_id: ids.caja, cuenta_nombre: "x", proyecto_id: ids.proyecto, proyecto_nombre: "x",
-      contraparte_id: ids.proveedor, contraparte_tipo: "proveedor", contraparte_nombre: "Maderas de Prueba", negocio_id: ids.negocio, descripcion: "Anticipo tablero",
+      contraparte_id: ids.proveedor, contraparte_tipo: "proveedor", contraparte_nombre: "Maderas de Prueba", descripcion: "Anticipo tablero",
     });
 
     const p = (await getProyecto(ids.proyecto))!;
@@ -154,11 +157,11 @@ describe("el proyecto: precio, ítems, partidas y los cachés que la API recalcu
     expect(p.items![0].pagado).toBe(2000);
     expect(p.partidas[0]).toMatchObject({ monto_pagado: 700.25, estado: "parcial" });
 
-    const cuentas = await listCuentas(ids.negocio);
+    const cuentas = await listCuentas();
     expect(cuentas.find((c) => c.id === ids.banco)!.saldo_actual).toBe(12000.5);
     expect(cuentas.find((c) => c.id === ids.caja)!.saldo_actual).toBe(-700.25);
 
-    const movs = await listMovimientos(ids.negocio);
+    const movs = await listMovimientos();
     expect(movs).toHaveLength(2);
     expect(movs[0].descripcion).toBe("Anticipo tablero"); // el más reciente primero
     expect(movs[0]).toMatchObject({ cuenta_nombre: "Caja", proyecto_nombre: "Cocina de prueba", contraparte_tipo: "proveedor" });
@@ -197,9 +200,8 @@ describe("el proyecto: precio, ítems, partidas y los cachés que la API recalcu
     const p = (await getProyecto(ids.proyecto))!;
     expect(p.items).toHaveLength(1);
     expect(p.precio_venta).toBe(6000);
-    const lista = await listProyectos(ids.negocio);
+    const lista = await listProyectos();
     expect(lista).toHaveLength(1);
-    expect(lista[0].negocio_nombre).toBe("Taller de prueba");
   });
 });
 
@@ -251,15 +253,15 @@ describe("gastos fijos", () => {
   it("se crean, se editan y se borran, con su cuenta y su estimado", async () => {
     ids.opex = await createOpex(uid, {
       nombre: "Renta", tipo: "egreso", monto: 1800, moneda: "MXN", frecuencia: "mensual", dia_del_mes: 5,
-      fecha_inicio: new Date(2026, 0, 5), cuenta_id: ids.banco, cuenta_nombre: "x", activo: true, negocio_id: ids.negocio,
+      fecha_inicio: new Date(2026, 0, 5), cuenta_id: ids.banco, cuenta_nombre: "x", activo: true,
     });
-    let o = (await listOpex(ids.negocio)).find((x) => x.id === ids.opex)!;
+    let o = (await listOpex()).find((x) => x.id === ids.opex)!;
     expect(o).toMatchObject({ monto: 1800, frecuencia: "mensual", dia_del_mes: 5, cuenta_nombre: "Banco Principal", activo: true });
     await updateOpex(ids.opex, { monto: 1950.5, activo: false });
-    o = (await listOpex(ids.negocio)).find((x) => x.id === ids.opex)!;
+    o = (await listOpex()).find((x) => x.id === ids.opex)!;
     expect(o).toMatchObject({ monto: 1950.5, activo: false, dia_del_mes: 5 });
     await deleteOpex(ids.opex);
-    expect((await listOpex(ids.negocio)).find((x) => x.id === ids.opex)).toBeUndefined();
+    expect((await listOpex()).find((x) => x.id === ids.opex)).toBeUndefined();
   });
 });
 
@@ -269,7 +271,7 @@ describe("borrar: lo que se puede, lo que no, y con qué mensaje", () => {
     const p = (await getProyecto(ids.proyecto))!;
     expect(p.pagado).toBe(0);
     expect(p.partidas[0]).toMatchObject({ monto_pagado: 0, estado: "pendiente" });
-    expect((await listCuentas(ids.negocio)).find((c) => c.id === ids.caja)!.saldo_actual).toBe(0);
+    expect((await listCuentas()).find((c) => c.id === ids.caja)!.saldo_actual).toBe(0);
   });
 
   it("un proyecto con movimientos no se borra, y lo dice; sin ellos, se va y sus ítems quedan cancelados", async () => {
@@ -277,27 +279,21 @@ describe("borrar: lo que se puede, lo que no, y con qué mensaje", () => {
     await deleteMovimiento(ids.ingreso);
     await deleteProyecto(ids.proyecto);
     expect(await getProyecto(ids.proyecto)).toBe(null);
-    expect(await listProyectos(ids.negocio)).toHaveLength(0);
+    expect(await listProyectos()).toHaveLength(0);
   });
 
   it("un cliente con ítems (aunque cancelados) contesta con un mensaje claro, no un 500", async () => {
     await expect(deleteCliente(ids.cliente)).rejects.toThrow(/No se puede borrar el cliente/);
   });
 
-  it("proveedor y cuentas sí se van; el negocio con su cliente adentro no, y lo dice", async () => {
+  it("proveedor y cuentas sí se van; la empresa se queda", async () => {
     await deleteProveedor(ids.proveedor);
     expect(await getProveedor(ids.proveedor)).toBe(null);
     await deleteCuenta(ids.caja);
     await deleteCuenta(ids.banco);
-    expect(await listCuentas(ids.negocio)).toHaveLength(0);
-    /* Desde la API 0.45.0 (23-sep) un negocio con cosas adentro NO se borra:
-     * antes se borraba y su cliente y sus ítems se quedaban en la base
-     * apuntando a nada, invisibles desde todas las apps —Mike: «desapareció
-     * mi info de quote»—. Aquí el cliente sigue (tiene ítems cancelados, y ésos
-     * no se borran al borrar el proyecto), así que el negocio se queda.
-     * Hasta el 24-sep esta prueba esperaba lo contrario: se quedó sin correr
-     * contra la API nueva y la encontró la siguiente publicación. */
-    await expect(deleteNegocio(ids.negocio, uid)).rejects.toThrow(/No se puede borrar el negocio/);
-    expect(await getNegocio(ids.negocio)).not.toBe(null);
+    expect(await listCuentas()).toHaveLength(0);
+    /* La empresa es la org misma (0.63.0): no se borra, sigue ahí con lo
+     * que se le puso. */
+    expect((await getEmpresa()).nombre).toBe("Taller de prueba");
   });
 });

@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Timestamp } from "firebase/firestore";
 import { fuente } from "@/lib/fuente";
 import { entrarDePrueba, pedir } from "@/lib/api/cliente";
-import { createNegocio, getNegocio, updateNegocio } from "@/lib/negocios";
+import { getEmpresa, updateEmpresa } from "@/lib/empresa";
 import { createCuenta, listCuentas } from "@/lib/cuentas";
 import { createMovimiento, listMovimientos } from "@/lib/movimientos";
 import {
@@ -21,14 +21,14 @@ import {
   listConciliaciones,
   tocaConciliar,
 } from "@/lib/conciliacion";
-import { CATEGORIA_AJUSTE, type Negocio } from "@/types/schema";
+import { CATEGORIA_AJUSTE, type Empresa } from "@/types/schema";
 
 const CORREO = process.env.CORREO_SUPERADMIN ?? "mike@forespot.com";
 const ORG = `pc-${(process.env.GITHUB_RUN_ID ?? Date.now().toString(36)).toString().toLowerCase().slice(-12)}`;
 const ORG_ANTES = process.env.NEXT_PUBLIC_ORG;
 
 let uid = "";
-let negocio: Negocio;
+let empresa: Empresa;
 const ids: Record<string, string> = {};
 
 beforeAll(async () => {
@@ -52,15 +52,14 @@ beforeAll(async () => {
    * (run 35294156632, 18-sep-2026: «expected 5 to be 3»). */
   expect(alta.org_db_version).toBeGreaterThanOrEqual(3);
 
-  const negocioId = await createNegocio(uid, { nombre: "Taller que concilia", moneda: "MXN" });
-  negocio = (await getNegocio(negocioId))!;
+  empresa = await getEmpresa();
   for (const [clave, nombre, tipo, saldo] of [
     ["banco", "Banco", "banco", 250000],
     ["caja", "Caja", "caja", 5000],
     ["tarjeta", "Tarjeta", "credito", -30000],
     ["otra", "Otra", "otro", 1000],
   ] as Array<[string, string, "banco" | "caja" | "credito" | "otro", number]>) {
-    ids[clave] = await createCuenta(uid, { nombre, tipo, moneda: "MXN", saldo_inicial: saldo, negocio_id: negocioId });
+    ids[clave] = await createCuenta(uid, { nombre, tipo, moneda: "MXN", saldo_inicial: saldo});
   }
   // Banco: 250,000 + 120,000 − 25,000 = 345,000. Caja: 5,000 − 8,500 = −3,500.
   for (const [tipo, monto, cuenta] of [
@@ -70,7 +69,7 @@ beforeAll(async () => {
   ] as Array<["ingreso" | "egreso", number, string]>) {
     await createMovimiento(uid, {
       tipo, monto, fecha: new Date(2026, 8, 2), cuenta_id: ids[cuenta], cuenta_nombre: "x",
-      contraparte_tipo: "otro", contraparte_nombre: "x", negocio_id: negocioId,
+      contraparte_tipo: "otro", contraparte_nombre: "x",
     });
   }
 }, 120000);
@@ -84,31 +83,31 @@ afterAll(async () => {
 });
 
 describe("el día y el aviso", () => {
-  it("un negocio nace en lunes y el día se puede cambiar", async () => {
-    expect(negocio.dia_conciliacion).toBe(DIA_POR_OMISION);
-    await updateNegocio(negocio.id!, { dia_conciliacion: 3 });
-    expect((await getNegocio(negocio.id!))!.dia_conciliacion).toBe(3);
-    await updateNegocio(negocio.id!, { dia_conciliacion: 1 });
-    negocio = (await getNegocio(negocio.id!))!;
+  it("la empresa nace en lunes y el día se puede cambiar", async () => {
+    expect(empresa.dia_conciliacion).toBe(DIA_POR_OMISION);
+    await updateEmpresa({ dia_conciliacion: 3 });
+    expect((await getEmpresa()).dia_conciliacion).toBe(3);
+    await updateEmpresa({ dia_conciliacion: 1 });
+    empresa = await getEmpresa();
   });
 
   it("sin ningún corte toca conciliar; con uno de hoy, no; y si se saltó el día, sigue tocando", () => {
     const lunes = new Date(2026, 8, 7); // lunes
     const jueves = new Date(2026, 8, 10);
     const corte = (d: Date) => ({ corte_at: { toDate: () => d } } as never);
-    expect(tocaConciliar(negocio, null, lunes)).toBe(true);
-    expect(tocaConciliar(negocio, corte(lunes), lunes)).toBe(false);
+    expect(tocaConciliar(empresa, null, lunes)).toBe(true);
+    expect(tocaConciliar(empresa, corte(lunes), lunes)).toBe(false);
     // Se hizo el lunes pasado y ya pasó otro lunes: vuelve a tocar.
-    expect(tocaConciliar(negocio, corte(new Date(2026, 7, 31)), lunes)).toBe(true);
+    expect(tocaConciliar(empresa, corte(new Date(2026, 7, 31)), lunes)).toBe(true);
     // Se saltó el lunes: el jueves sigue pendiente.
-    expect(tocaConciliar(negocio, corte(new Date(2026, 8, 6)), jueves)).toBe(true);
-    expect(tocaConciliar(negocio, corte(lunes), jueves)).toBe(false);
+    expect(tocaConciliar(empresa, corte(new Date(2026, 8, 6)), jueves)).toBe(true);
+    expect(tocaConciliar(empresa, corte(lunes), jueves)).toBe(false);
   });
 });
 
 describe("el primer corte", () => {
   it("las cuentas llegan con el saldo que dash101 tiene registrado", async () => {
-    const cuentas = await cuentasPorConciliar(negocio.id!);
+    const cuentas = await cuentasPorConciliar();
     const por = Object.fromEntries(cuentas.map((c) => [c.cuenta.id!, c.saldo_registrado]));
     expect(por[ids.banco]).toBe(345000);
     expect(por[ids.caja]).toBe(-3500);
@@ -117,7 +116,7 @@ describe("el primer corte", () => {
   });
 
   it("la que cuadra no recibe ajuste; las demás quedan iguales al real", async () => {
-    const hecha = await conciliar(negocio.id!, [
+    const hecha = await conciliar([
       { cuenta_id: ids.banco, saldo_real: 344200 },   // le faltan $800
       { cuenta_id: ids.caja, saldo_real: -3500 },     // cuadra
       { cuenta_id: ids.tarjeta, saldo_real: -30500 }, // se debe $500 más
@@ -133,7 +132,7 @@ describe("el primer corte", () => {
     expect(hecha.cuentas.filter((c) => c.movimiento_id)).toHaveLength(3);
 
     // Y ahora cada cuenta dice exactamente lo que hay.
-    const saldos = Object.fromEntries((await listCuentas(negocio.id!)).map((c) => [c.id!, c.saldo_actual]));
+    const saldos = Object.fromEntries((await listCuentas()).map((c) => [c.id!, c.saldo_actual]));
     expect(saldos[ids.banco]).toBe(344200);
     expect(saldos[ids.caja]).toBe(-3500);
     expect(saldos[ids.tarjeta]).toBe(-30500);
@@ -141,7 +140,7 @@ describe("el primer corte", () => {
   });
 
   it("el ajuste es un movimiento aparte: sin proyecto y sin identificar", async () => {
-    const movs = await listMovimientos(negocio.id!);
+    const movs = await listMovimientos();
     const ajustes = movs.filter((m) => m.categoria === CATEGORIA_AJUSTE);
     expect(ajustes).toHaveLength(3);
     for (const a of ajustes) {
@@ -156,7 +155,7 @@ describe("el primer corte", () => {
 
 describe("la segunda semana y la estadística", () => {
   it("sólo mide lo nuevo, y el acumulado es la suma", async () => {
-    const segunda = await conciliar(negocio.id!, [
+    const segunda = await conciliar([
       { cuenta_id: ids.banco, saldo_real: 344000 }, // otros $200 que se fueron
       { cuenta_id: ids.caja, saldo_real: -3500 },
       { cuenta_id: ids.tarjeta, saldo_real: -30500 },
@@ -165,7 +164,7 @@ describe("la segunda semana y la estadística", () => {
     expect(segunda.diferencia_total).toBe(200);
     expect(segunda.cuentas.filter((c) => c.movimiento_id)).toHaveLength(1);
 
-    const e = await estadisticaConciliacion(negocio.id!);
+    const e = await estadisticaConciliacion();
     expect(e.acumulado).toEqual({ cortes: 2, diferencia_total: 1200, faltante: 1500, sobrante: 300 });
     expect(e.cortes).toHaveLength(2);
     expect(e.cortes[0].diferencia_total).toBe(200); // el más reciente primero
@@ -173,16 +172,16 @@ describe("la segunda semana y la estadística", () => {
   });
 
   it("un gasto capturado después con fecha vieja no cambia el corte pasado", async () => {
-    const antes = (await listConciliaciones(negocio.id!)).at(-1)!;
+    const antes = (await listConciliaciones()).at(-1)!;
     const delBanco = antes.cuentas.find((c) => c.cuenta_id === ids.banco)!;
     expect(delBanco.saldo_registrado).toBe(345000);
 
     await createMovimiento(uid, {
       tipo: "egreso", monto: 1111, fecha: new Date(2026, 8, 3), cuenta_id: ids.banco, cuenta_nombre: "x",
-      contraparte_tipo: "otro", contraparte_nombre: "x", negocio_id: negocio.id!, descripcion: "se capturó tarde",
+      contraparte_tipo: "otro", contraparte_nombre: "x", descripcion: "se capturó tarde",
     });
 
-    const despues = (await listConciliaciones(negocio.id!)).find((c) => c.id === antes.id)!;
+    const despues = (await listConciliaciones()).find((c) => c.id === antes.id)!;
     const mismo = despues.cuentas.find((c) => c.cuenta_id === ids.banco)!;
     expect(mismo.saldo_registrado).toBe(345000);
     expect(mismo.diferencia).toBe(800);
@@ -192,8 +191,8 @@ describe("la segunda semana y la estadística", () => {
 
 describe("lo que no se puede", () => {
   it("faltar una cuenta rechaza el corte entero y no escribe nada", async () => {
-    const antes = (await listConciliaciones(negocio.id!)).length;
-    await expect(conciliar(negocio.id!, [{ cuenta_id: ids.caja, saldo_real: -3500 }])).rejects.toThrow();
-    expect((await listConciliaciones(negocio.id!)).length).toBe(antes);
+    const antes = (await listConciliaciones()).length;
+    await expect(conciliar([{ cuenta_id: ids.caja, saldo_real: -3500 }])).rejects.toThrow();
+    expect((await listConciliaciones()).length).toBe(antes);
   });
 });

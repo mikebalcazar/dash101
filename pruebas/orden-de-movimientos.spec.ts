@@ -16,7 +16,7 @@ import type { Movimiento } from "@/types/schema";
 
 const mov = (id: string, dia: string, creado: string): Movimiento => ({
   id, tipo: "egreso", monto: 1, fecha: Timestamp.fromDate(new Date(`${dia}T12:00:00`)),
-  cuenta_id: "c", cuenta_nombre: "Caja", contraparte_tipo: "otro", contraparte_nombre: "", negocio_id: "n",
+  cuenta_id: "c", cuenta_nombre: "Caja", contraparte_tipo: "otro", contraparte_nombre: "",
   creado_at: Timestamp.fromDate(new Date(creado)), creado_por: "",
 });
 

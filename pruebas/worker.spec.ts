@@ -38,10 +38,10 @@ const pedir = (ruta: string, init?: RequestInit) => new Request(`https://dash101
 describe("lo que empieza con /s101 va a la API", () => {
   it("se le quita el prefijo y se le pone X-App: dash101", async () => {
     const api = apiDoble();
-    const r = await worker.fetch(pedir("/s101/orgs/demo/cuentas?negocio_id=n1"), api, ctx);
+    const r = await worker.fetch(pedir("/s101/orgs/demo/cuentas?cuenta_id=c1"), api, ctx);
     expect(r.status).toBe(200);
     expect(api.recibidas).toHaveLength(1);
-    expect(api.recibidas[0].url).toBe("https://dash101.ejemplo/orgs/demo/cuentas?negocio_id=n1");
+    expect(api.recibidas[0].url).toBe("https://dash101.ejemplo/orgs/demo/cuentas?cuenta_id=c1");
     expect(api.recibidas[0].app).toBe("dash101");
   });
 

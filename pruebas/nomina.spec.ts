@@ -19,7 +19,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { fuente } from "@/lib/fuente";
 import { entrarDePrueba, pedir } from "@/lib/api/cliente";
-import { createNegocio } from "@/lib/negocios";
 import { createCuenta } from "@/lib/cuentas";
 import { listMovimientos } from "@/lib/movimientos";
 import {
@@ -32,7 +31,7 @@ const ORG = `ny-${(process.env.GITHUB_RUN_ID ?? Date.now().toString(36)).toStrin
 const ORG_ANTES = process.env.NEXT_PUBLIC_ORG;
 
 let uid = "";
-const ids = { negocio: "", cuenta: "", lupe: "", beto: "", raya: "" };
+const ids = { cuenta: "", lupe: "", beto: "", raya: "" };
 
 beforeAll(async () => {
   expect(fuente()).toBe("api");
@@ -42,9 +41,7 @@ beforeAll(async () => {
   process.env.NEXT_PUBLIC_ORG = ORG;
   try { await pedir(`/admin/orgs/${ORG}`, { method: "DELETE" }); } catch { /* no existía */ }
   await pedir("/admin/orgs", { method: "POST", body: { id: ORG, nombre: "Raya" } });
-
-  ids.negocio = await createNegocio(uid, { nombre: "Taller", moneda: "MXN" });
-  ids.cuenta = await createCuenta(uid, { nombre: "Caja", tipo: "caja", saldo_inicial: 100_000, negocio_id: ids.negocio, moneda: "MXN" });
+  ids.cuenta = await createCuenta(uid, { nombre: "Caja", tipo: "caja", saldo_inicial: 100_000, moneda: "MXN" });
   ids.lupe = (await crearGente("Lupe Carpintera", "Carpintería")).id;
   ids.beto = (await crearGente("Beto Ayudante", "Ayudante")).id;
 }, 90000);
@@ -64,7 +61,7 @@ describe("la raya, desde dash101", () => {
     /* Si la conversión se cayera de un lado, un sueldo de $3,500 se pagaría
      * en $35 o en $350,000 y el total seguiría cuadrando consigo mismo. */
     const { raya, pagos } = await crearRaya({
-      negocio_id: ids.negocio, periodo_inicio: "2026-03-16", periodo_fin: "2026-03-22",
+      periodo_inicio: "2026-03-16", periodo_fin: "2026-03-22",
       pagos: [
         { personal_id: ids.lupe, concepto: "Semana", sueldo: 3_500, extras: 600, descuentos: 100 },
         { personal_id: ids.beto, concepto: "Semana", sueldo: 2_200 },
@@ -92,7 +89,7 @@ describe("la raya, desde dash101", () => {
     expect(raya.estado).toBe("pagada");
     expect(pagos.every((p) => p.movimiento_id)).toBe(true);
 
-    const movs = await listMovimientos(ids.negocio);
+    const movs = await listMovimientos();
     const dela = movs.filter((m) => m.categoria === "raya");
     expect(dela, "dos egresos, uno por persona").toHaveLength(2);
     expect(dela.map((m) => m.contraparte_nombre).sort()).toEqual(["Beto Ayudante", "Lupe Carpintera"]);
@@ -116,7 +113,7 @@ describe("la raya, desde dash101", () => {
   });
 
   it("el corte sale en la lista con su total y cuánta gente trae", async () => {
-    const lista = await listRayas(ids.negocio);
+    const lista = await listRayas();
     const mio = lista.find((r) => r.id === ids.raya)!;
     expect(mio.total).toBe(6_400);
     expect(mio.personas).toBe(2);

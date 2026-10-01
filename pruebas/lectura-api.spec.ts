@@ -14,18 +14,17 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { Timestamp } from "firebase/firestore";
 import { canjear, entrarDePrueba, pedir, urlGoogle, yo } from "@/lib/api/cliente";
 import { fuente, org } from "@/lib/fuente";
-import { listNegocios, getNegocio } from "@/lib/negocios";
+import { getEmpresa } from "@/lib/empresa";
 import { listCuentas } from "@/lib/cuentas";
 import { listClientes, getClienteUid } from "@/lib/clientes";
 import { listProveedores } from "@/lib/proveedores";
 import { listProyectos, getProyecto } from "@/lib/proyectos";
 import { listMovimientos, listMovimientosByProyecto } from "@/lib/movimientos";
 import { listOpex, estimarMensual } from "@/lib/opex";
-import { getUserDoc, canWriteInNegocio } from "@/lib/users";
+import { getUserDoc, canWrite, isOwner } from "@/lib/users";
 import { aCentavos, aPesos, aTimestamp } from "@/lib/api/adaptar";
 
 const CORREO = process.env.CORREO_SUPERADMIN ?? "mike@forespot.com";
-let negocioId = "";
 let uid = "";
 
 const dia = (t: unknown) => (t as Timestamp).toDate();
@@ -67,11 +66,11 @@ describe("la sesión", () => {
     expect(s?.superadmin).toBe(true);
   });
 
-  it("el usuario de la app sale de /yo: owner de todos los negocios", async () => {
+  it("el usuario de la app sale de /yo: dirige la empresa", async () => {
     const u = await getUserDoc(uid);
     expect(u?.email).toBe(CORREO);
-    expect(u?.negocios_acceso.length).toBeGreaterThan(0);
-    for (const n of u!.negocios_acceso) expect(canWriteInNegocio(u, n)).toBe(true);
+    expect(isOwner(u)).toBe(true);
+    expect(canWrite(u)).toBe(true);
   });
 });
 
@@ -85,20 +84,17 @@ describe("Google detrás del proxy: lo que la app puede medir sin credenciales",
   });
 });
 
-describe("negocios, cuentas, clientes, proveedores", () => {
-  it("el negocio de la siembra está y con la forma de siempre", async () => {
-    const lista = await listNegocios(uid);
-    const demo = lista.find((n) => n.nombre === "Taller Demo");
-    expect(demo).toBeTruthy();
-    expect(demo!.moneda).toBe("MXN");
-    expect(demo!.miembros_uids).toContain(uid);
-    negocioId = demo!.id!;
-    const uno = await getNegocio(negocioId);
-    expect(uno?.nombre).toBe("Taller Demo");
+describe("la empresa, cuentas, clientes, proveedores", () => {
+  it("la empresa de la siembra está, una sola y con su forma (0.63.0)", async () => {
+    const e = await getEmpresa();
+    expect(e.id).toBe("empresa");
+    expect(e.nombre.length).toBeGreaterThan(0);
+    expect(e.moneda).toBe("MXN");
+    expect(typeof e.dia_conciliacion).toBe("number");
   });
 
   it("las cuentas traen saldo_actual sumado de sus movimientos, en pesos", async () => {
-    const cuentas = await listCuentas(negocioId);
+    const cuentas = await listCuentas();
     const banco = cuentas.find((c) => c.nombre === "Banco Demo")!;
     const caja = cuentas.find((c) => c.nombre === "Caja chica")!;
     expect(banco.saldo_inicial).toBe(250000);
@@ -111,7 +107,7 @@ describe("negocios, cuentas, clientes, proveedores", () => {
   });
 
   it("la familia y sus datos de portal", async () => {
-    const clientes = await listClientes(negocioId);
+    const clientes = await listClientes();
     const fam = clientes.find((c) => c.nombre === "Familia Ramírez")!;
     expect(fam.email).toBe("familia.ramirez@ejemplo.mx");
     expect(fam.portal_activo).toBe(true);
@@ -127,14 +123,19 @@ describe("negocios, cuentas, clientes, proveedores", () => {
   });
 });
 
+/* La empresa demo es UNA (contrato 0.63.0) y guarda junto lo de la siembra y
+ * lo que las pruebas del navegador dejan en su patio. Lo sembrado se busca
+ * por su nombre; ya no es «lo único que hay». */
+const laCocina = async () => {
+  const p = (await listProyectos()).find((x) => x.nombre === "Cocina Ramírez");
+  expect(p, "el proyecto de la siembra").toBeTruthy();
+  return p!;
+};
+
 describe("el proyecto: cachés, partidas e ítems como los conoce la app", () => {
   it("las cifras cuadran con la siembra y con las fórmulas de Firestore", async () => {
-    const proyectos = await listProyectos(negocioId);
-    expect(proyectos).toHaveLength(1);
-    const p = proyectos[0];
-    expect(p.nombre).toBe("Cocina Ramírez");
+    const p = await laCocina();
     expect(p.cliente_nombre).toBe("Familia Ramírez");
-    expect(p.negocio_nombre).toBe("Taller Demo");
     expect(p.estado).toBe("activo");
     // en pesos, no en centavos
     expect(p.precio_venta).toBe(262000);
@@ -148,7 +149,7 @@ describe("el proyecto: cachés, partidas e ítems como los conoce la app", () =>
   });
 
   it("las partidas vienen de la tabla propia, con lo pagado que calculó la API", async () => {
-    const p = (await listProyectos(negocioId))[0];
+    const p = await laCocina();
     expect(p.partidas).toHaveLength(2);
     const maderas = p.partidas.find((x) => x.proveedor_nombre === "Maderas del Sur")!;
     expect(maderas).toMatchObject({ monto_acordado: 42000, monto_pagado: 25000, estado: "parcial" });
@@ -157,7 +158,7 @@ describe("el proyecto: cachés, partidas e ítems como los conoce la app", () =>
   });
 
   it("los ítems de la suite llegan como `items`, con lo pagado por ítem", async () => {
-    const p = await getProyecto((await listProyectos(negocioId))[0].id!);
+    const p = await getProyecto((await laCocina()).id!);
     expect(p!.items).toHaveLength(4);
     const cocina = p!.items!.find((x) => x.nombre === "Cocina integral en L")!;
     expect(cocina.monto).toBe(185000);
@@ -172,11 +173,10 @@ describe("el proyecto: cachés, partidas e ítems como los conoce la app", () =>
 
 describe("movimientos y gastos fijos", () => {
   it("los movimientos traen los nombres que la app enseña, ordenados del más reciente al más viejo", async () => {
-    const movs = await listMovimientos(negocioId);
-    // Cuatro de la siembra vieja y dos que nacieron al pagar órdenes de
-    // compra: un egreso por orden pagada, que es justamente lo que no hay
-    // que capturar dos veces.
-    expect(movs).toHaveLength(6);
+    // Todos los de la empresa, no los 100 de omisión: los de la siembra son
+    // de agosto y lo que dejan las pruebas del navegador es más nuevo.
+    const movs = await listMovimientos({ max: 5000 });
+    expect(movs.length).toBeGreaterThanOrEqual(6);
     for (let i = 1; i < movs.length; i++) expect(dia(movs[i - 1].fecha) >= dia(movs[i].fecha)).toBe(true);
     const anticipo = movs.find((m) => m.descripcion === "Anticipo 50% cocina e isla")!;
     expect(anticipo).toMatchObject({ tipo: "ingreso", monto: 120000, cuenta_nombre: "Banco Demo", proyecto_nombre: "Cocina Ramírez", contraparte_tipo: "cliente", producto_nombre: "Cocina integral en L" });
@@ -187,14 +187,14 @@ describe("movimientos y gastos fijos", () => {
   });
 
   it("por proyecto, los mismos cuatro", async () => {
-    const p = (await listProyectos(negocioId))[0];
+    const p = await laCocina();
     const movs = await listMovimientosByProyecto(p.id!);
     expect(movs).toHaveLength(4);
     expect(movs.filter((m) => m.tipo === "ingreso").reduce((s, m) => s + m.monto, 0)).toBe(p.cobrado);
   });
 
   it("los gastos fijos, con su cuenta y su estimado mensual", async () => {
-    const opex = await listOpex(negocioId);
+    const opex = await listOpex();
     const renta = opex.find((o) => o.nombre === "Renta del local")!;
     expect(renta).toMatchObject({ monto: 18000, frecuencia: "mensual", dia_del_mes: 5, cuenta_nombre: "Banco Demo", activo: true });
     expect(estimarMensual(renta)).toBe(18000);
