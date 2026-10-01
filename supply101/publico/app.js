@@ -128,8 +128,6 @@ const ORDEN_LISTA = { devuelta: 0, en_buzon: 1, pagada: 2, rechazada: 3 };
 const est = {
   yo: null,
   org: null,          // la empresa
-  negocios: [],
-  negocio: null,      // el negocio activo
   proveedores: [],
   proyectos: [],
   corrigiendo: null,  // la orden que se está corrigiendo, si es que
@@ -139,7 +137,6 @@ const est = {
 };
 const TIPO = { compra: 'Compra', reembolso: 'Reembolso' };
 const LLAVE_ORG = 'supply101:org';
-const LLAVE_NEG = 'supply101:negocio';
 const guardar = (k, v) => { try { localStorage.setItem(k, v); } catch { /* modo privado */ } };
 const leer = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 
@@ -262,14 +259,6 @@ async function arrancarSesion() {
   $('barra-correo').textContent = est.yo.usuario?.correo || '';
   ver('barra', true);
 
-  try {
-    est.negocios = (await pedir(`/orgs/${est.org.id}/negocios`)).filas || [];
-  } catch (e) {
-    mostrar('v-lista');
-    ver('b-nueva-compra', false);
-    decir('err-lista', enPalabras(e));
-    return;
-  }
   // Quién puede comprar lo dice el servidor. Si no contesta, se deja la
   // opción prendida: el servidor lo vuelve a decir al mandar.
   try {
@@ -279,16 +268,10 @@ async function arrancarSesion() {
   ver('b-nueva-compra', est.puedeComprar);
   ver('sin-compras', !est.puedeComprar);
 
-  /* UN SOLO NEGOCIO (Mike, 29-sep): «borres de dash (y de todas las
-   * plataformas) la opción de agregar diferentes negocios (…) Todo es para
-   * un negocio nada más». Aquí había un desplegable cuando la empresa tenía
-   * más de uno; ya no: se toma el de la empresa. Si por lo que sea todavía
-   * hay varios (antes de que quien dirige los junte en dash101), se toma el
-   * primero, y el que se había escogido se respeta mientras exista. */
-  const negGuardado = leer(LLAVE_NEG);
-  est.negocio = est.negocios.find((n) => n.id === negGuardado) || est.negocios[0] || null;
-  if (est.negocio) guardar(LLAVE_NEG, est.negocio.id);
-
+  /* SIN «NEGOCIO» (Mike, 1-oct-2026): «Ya no existe la opción de negocios
+   * (…) Sólo es una empresa/negocio todo». Desde el contrato 0.61.0 la API
+   * cuelga sola cada orden del registro de la empresa: aquí ya no se lista,
+   * no se escoge ni se recuerda. */
   enrutar();
 }
 
@@ -300,13 +283,10 @@ const escapar = (t) => String(t ?? '').replace(/[&<>"']/g, (c) =>
 async function verLista() {
   mostrar('v-lista');
   decir('err-lista', '');
-  $('lista-sub').textContent = est.negocio
-    ? `Lo que has pedido en ${est.negocio.nombre}, y en qué va cada una.`
-    : 'Lo que has pedido, y en qué va cada una.';
+  $('lista-sub').textContent = 'Lo que has pedido, y en qué va cada una.';
   $('lista').innerHTML = '<p class="vacio">Cargando…</p>';
   try {
-    const q = est.negocio ? `?negocio_id=${encodeURIComponent(est.negocio.id)}` : '';
-    const filas = (await pedir(`/orgs/${est.org.id}/ordenes${q}`)).filas || [];
+    const filas = (await pedir(`/orgs/${est.org.id}/ordenes`)).filas || [];
     filas.sort((a, b) => (ORDEN_LISTA[a.estado] - ORDEN_LISTA[b.estado]) || String(b.creado_at).localeCompare(String(a.creado_at)));
     $('lista').innerHTML = filas.length === 0
       ? `<div class="vacio"><b>Todavía no pides nada</b>Pide una compra y le llega directo a quien paga.</div>`
@@ -407,9 +387,7 @@ async function verPedir(orden, tipo = 'compra') {
   // proveedor se escribe a mano y la compra queda como gasto general.
   const [pv, py] = await Promise.all([
     pedir(`/orgs/${est.org.id}/proveedores`).then((r) => r.filas || []).catch(() => []),
-    est.negocio
-      ? pedir(`/orgs/${est.org.id}/proyectos?negocio_id=${encodeURIComponent(est.negocio.id)}`).then((r) => r.filas || []).catch(() => [])
-      : Promise.resolve([]),
+    pedir(`/orgs/${est.org.id}/proyectos`).then((r) => r.filas || []).catch(() => []),
   ]);
   est.proveedores = pv; est.proyectos = py;
   // Si entre tanto alguien ya escogió algo, se respeta.
@@ -730,7 +708,6 @@ $('f-pedir').onsubmit = async (ev) => {
   const b = $('b-pedir'); const antes = b.textContent; b.disabled = true; b.textContent = 'Mandando…';
 
   const cuerpo = {
-    negocio_id: est.negocio?.id,
     tipo: est.tipo,
     proveedor_id: $('proveedor').value || null,
     proveedor_nombre: $('proveedor').value
