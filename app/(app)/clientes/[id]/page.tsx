@@ -4,11 +4,26 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { getCliente, updateCliente, deleteCliente } from "@/lib/clientes";
+import { estadoDeCuenta, ligaDelExcelDelCliente, type EstadoDeCuenta } from "@/lib/estado-cuenta";
 import type { Cliente } from "@/types/schema";
-import { IconArrowLeft, IconTrash, IconReceipt2 } from "@tabler/icons-react";
+import { IconArrowLeft, IconTrash, IconPrinter, IconFileSpreadsheet, IconPencil } from "@tabler/icons-react";
 import { AccesoPortal } from "@/components/acceso-portal";
 import { FusionarCliente } from "@/components/fusionar-cliente";
+import { DocumentoEstadoDeCuenta } from "@/components/estado-de-cuenta-cliente";
 import { useNegocioActivo } from "@/lib/negocio-activo-context";
+
+/* LA PANTALLA DEL CLIENTE ES SU ESTADO DE CUENTA, no el formulario.
+ *
+ * Mike, 1-oct-2026: «Cuando entro a la pantalla de un cliente, no debo poder
+ * editar luego luego sus datos, sino ver su estado de cuenta completo (todos
+ * los movimientos de ese cliente de todos sus proyectos) y aparte poder ver
+ * por proyecto sus movimientos. Y debo poder exportar su estado de cuenta
+ * general y por proyecto».
+ *
+ * Abre con el documento: cada renglón de proyecto lleva a la hoja de ese
+ * proyecto (con su PDF y su Excel), y arriba están el PDF y el Excel del
+ * general. Los datos se editan sólo al picar «Editar datos»: el formulario,
+ * el acceso al portal, la fusión y la zona peligrosa se despliegan abajo. */
 
 export default function ClienteDetallePage() {
   const router = useRouter();
@@ -28,14 +43,24 @@ export default function ClienteDetallePage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [estado, setEstado] = useState<EstadoDeCuenta | null>(null);
+  const [errorEstado, setErrorEstado] = useState("");
+  const [editar, setEditar] = useState(false);
+
+  const cargarEstado = () =>
+    estadoDeCuenta(id)
+      .then((d) => { setEstado(d); setErrorEstado(""); })
+      .catch((e) => setErrorEstado(e instanceof Error ? e.message : "No se pudo abrir el estado de cuenta."));
 
   const recargar = () =>
     getCliente(id).then((c) => {
       if (c) setCliente(c);
+      void cargarEstado();
     });
 
   useEffect(() => {
     if (!id) return;
+    void cargarEstado();
     getCliente(id)
       .then((c) => {
         if (!c) {
@@ -67,6 +92,7 @@ export default function ClienteDetallePage() {
       });
       setNotice("Cambios guardados");
       setTimeout(() => setNotice(""), 2000);
+      void cargarEstado();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al guardar");
     } finally {
@@ -98,34 +124,61 @@ export default function ClienteDetallePage() {
     );
 
   return (
-    <div className="max-w-lg">
-      <Link
-        href="/clientes"
-        className="text-xs text-ink-muted inline-flex items-center gap-1 mb-4 hover:text-ink-dim transition"
-      >
-        <IconArrowLeft size={13} />
-        Volver a clientes
-      </Link>
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-medium text-ink-dim">Editar cliente</h2>
-        {/* El estado de cuenta se abre desde aquí porque es de este cliente y
-            de nadie más: buscarlo en otro menú obliga a escogerlo dos veces. */}
+    <div className="max-w-4xl">
+      <div className="print:hidden flex flex-wrap items-center justify-between gap-3 mb-4">
         <Link
-          href={`/clientes/${id}/estado-de-cuenta`}
-          className="text-xs text-ink-dim inline-flex items-center gap-1.5 bg-white border border-black/10 rounded-xl px-3 py-2 hover:border-black/20 transition"
+          href="/clientes"
+          className="text-xs text-ink-muted inline-flex items-center gap-1 hover:text-ink-dim transition"
         >
-          <IconReceipt2 size={14} />
-          Estado de cuenta
+          <IconArrowLeft size={13} />
+          Volver a clientes
         </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="bg-ink text-cream rounded-xl px-3 py-2 text-sm font-medium inline-flex items-center gap-1.5"
+          >
+            <IconPrinter size={15} /> Guardar como PDF
+          </button>
+          <a
+            href={ligaDelExcelDelCliente(id)}
+            data-excel-cliente
+            className="text-sm text-ink-dim inline-flex items-center gap-1.5 bg-white border border-black/10 rounded-xl px-3 py-2 hover:border-black/20 transition"
+          >
+            <IconFileSpreadsheet size={15} /> Excel
+          </a>
+          <button
+            type="button"
+            onClick={() => setEditar((v) => !v)}
+            aria-expanded={editar}
+            data-editar
+            className="text-sm text-ink-dim inline-flex items-center gap-1.5 bg-white border border-black/10 rounded-xl px-3 py-2 hover:border-black/20 transition"
+          >
+            <IconPencil size={15} /> {editar ? "Cerrar la edición" : "Editar datos"}
+          </button>
+        </div>
       </div>
+
+      <section data-seccion="estado">
+        {estado ? (
+          <DocumentoEstadoDeCuenta d={estado} />
+        ) : (
+          <p className="text-sm text-ink-muted">{errorEstado || "Cargando el estado de cuenta…"}</p>
+        )}
+      </section>
+
+      {editar && (
+      <section data-seccion="editar" className="print:hidden max-w-lg mt-10 pt-6 border-t border-black/10">
+      <h2 className="text-lg font-medium text-ink-dim">Datos del cliente</h2>
 
       <form onSubmit={handleSave} className="space-y-4 mt-6">
         <div>
-          <label className="text-xs font-medium text-ink-dim block mb-1.5">
+          <label htmlFor="cliente-nombre" className="text-xs font-medium text-ink-dim block mb-1.5">
             Nombre o razón social <span className="text-mauve-900">*</span>
           </label>
           <input
+            id="cliente-nombre"
             type="text"
             required
             maxLength={100}
@@ -136,8 +189,9 @@ export default function ClienteDetallePage() {
         </div>
 
         <div>
-          <label className="text-xs font-medium text-ink-dim block mb-1.5">RFC</label>
+          <label htmlFor="cliente-rfc" className="text-xs font-medium text-ink-dim block mb-1.5">RFC</label>
           <input
+            id="cliente-rfc"
             type="text"
             maxLength={13}
             value={rfc}
@@ -148,8 +202,9 @@ export default function ClienteDetallePage() {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs font-medium text-ink-dim block mb-1.5">Email</label>
+            <label htmlFor="cliente-email" className="text-xs font-medium text-ink-dim block mb-1.5">Email</label>
             <input
+              id="cliente-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -157,8 +212,9 @@ export default function ClienteDetallePage() {
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-ink-dim block mb-1.5">Teléfono</label>
+            <label htmlFor="cliente-telefono" className="text-xs font-medium text-ink-dim block mb-1.5">Teléfono</label>
             <input
+              id="cliente-telefono"
               type="tel"
               value={telefono}
               onChange={(e) => setTelefono(e.target.value)}
@@ -168,8 +224,9 @@ export default function ClienteDetallePage() {
         </div>
 
         <div>
-          <label className="text-xs font-medium text-ink-dim block mb-1.5">Notas</label>
+          <label htmlFor="cliente-notas" className="text-xs font-medium text-ink-dim block mb-1.5">Notas</label>
           <textarea
+            id="cliente-notas"
             maxLength={500}
             value={notas}
             onChange={(e) => setNotas(e.target.value)}
@@ -186,12 +243,13 @@ export default function ClienteDetallePage() {
         )}
 
         <div className="flex gap-2 pt-2">
-          <Link
-            href="/clientes"
+          <button
+            type="button"
+            onClick={() => setEditar(false)}
             className="bg-transparent border border-black/15 rounded-xl px-4 py-2 text-sm text-ink-dim hover:bg-white transition"
           >
             Cancelar
-          </Link>
+          </button>
           <button
             type="submit"
             disabled={saving || !nombre.trim()}
@@ -241,6 +299,8 @@ export default function ClienteDetallePage() {
           </div>
         )}
       </div>
+      </section>
+      )}
     </div>
   );
 }

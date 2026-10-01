@@ -78,7 +78,16 @@ const limpio = (d: AccionistaInput) => ({
   notas: d.notas?.trim() || null,
 });
 
-/** Todos los del negocio, activos primero y en orden de nombre. */
+/** Quién está en los expedientes de roster101 (contrato 0.60.0), para dar de
+ *  alta a un accionista sin volver a teclear sus datos. Mike, 1-oct-2026:
+ *  «se debe poder jalar al accionista de la base de datos de roster». */
+export interface PersonaDeRoster { id: string; nombre: string; rfc: string; correo: string; puesto: string }
+export async function personasDeRoster(): Promise<PersonaDeRoster[]> {
+  const r = await pedir<{ personas: Array<{ id: string; nombre: string; rfc: string | null; correo: string | null; puesto: string | null }> }>(ruta('/de-roster'));
+  return r.personas.map((p) => ({ id: p.id, nombre: p.nombre, rfc: p.rfc ?? '', correo: p.correo ?? '', puesto: p.puesto ?? '' }));
+}
+
+/** Todos del negocio, activos primero y en orden de nombre. */
 export async function listAccionistas(negocio_id: string): Promise<Accionista[]> {
   const filas = (await listarCompleto<FilaAccionista>('accionistas', { negocio_id })).map(accionista);
   return filas.sort((a, b) => Number(b.activo) - Number(a.activo) || a.nombre.localeCompare(b.nombre, 'es'));

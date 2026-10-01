@@ -1382,6 +1382,112 @@ test('las partidas son pestañas: se crea una con «+», se mueve un ítem, se r
 
 /* ═══════════════ 7 · el otro sentido de la puerta, al final ═══════════════ */
 
+/* ═══════════════ 1-oct: el saldo de la base, la cuenta, el cliente y los gastos generales ═══════════════ */
+
+test('1-oct: el líquido es el saldo que suma la API; la cuenta abre con su historial, el último arriba; un gasto general no lleva proyecto', async () => {
+  /* Mike, 1-oct: «ya hay movimientos por más de 70,000 de egresos y el total
+   * sigue sin contarlos» (el tope de 500 dejaba fuera lo de hoy), «cuando me
+   * meto a una cuenta, quiero ver el historial de los movimientos de esa
+   * cuenta», «el que esté hasta arriba es el último que se hizo» y «debe
+   * haber un concepto de gastos generales en el tipo de egreso». */
+  const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  const { neg, cuenta } = await negocioDePruebas(pag);
+  await elegirNegocio(pag, neg.id);
+
+  // ── un gasto general, de hoy, por la API: sin proyecto y con su categoría ──
+  const hoy = new Date().toISOString().slice(0, 10);
+  const gasto = await api(pag, `/orgs/${ORG}/movimientos`, {
+    method: 'POST',
+    body: {
+      negocio_id: neg.id, tipo: 'egreso', monto: 7_000_00, fecha: hoy, cuenta_id: cuenta.id,
+      contraparte_tipo: 'otro', categoria: 'gasto_general', descripcion: 'Renta del taller (navegador)',
+    },
+  });
+  assert.equal(gasto.proyecto_id ?? null, null, 'sin proyecto');
+
+  // ── el líquido del inicio es la suma de `saldo` que manda la API (0.60.0), no una lista con tope ──
+  const cuentas = filas(await api(pag, `/orgs/${ORG}/cuentas?negocio_id=${neg.id}`));
+  const mia = cuentas.find((c) => c.id === cuenta.id);
+  assert.equal(typeof mia.saldo, 'number', 'la API manda el saldo de la cuenta (contrato 0.60.0)');
+  const liquido = cuentas.reduce((t, c) => t + c.saldo, 0);
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  const hero = pag.locator('[data-capital="liquido"]');
+  await hero.waitFor({ timeout: 30000 });
+  await pag.waitForFunction((e) => document.querySelector('[data-capital="liquido"]')?.innerText.includes(e), pesos0(liquido), { timeout: 30000 })
+    .catch(async () => assert.fail(`el líquido debía ser ${pesos0(liquido)} y la pantalla dice: ${(await hero.innerText()).replace(/\s+/g, ' ').slice(0, 200)}`));
+
+  // ── la cuenta abre con su historial, y el de hoy está hasta arriba ──
+  await pag.goto(`${URL}/cuentas/${cuenta.id}`, { waitUntil: 'load' });
+  const historial = pag.locator('[data-movimientos-cuenta]');
+  await historial.waitFor({ timeout: 30000 });
+  await pag.locator('[data-mov]').first().waitFor({ timeout: 30000 });
+  const primero = await pag.locator('[data-mov]').first().getAttribute('data-mov');
+  assert.equal(primero, gasto.id, 'el último capturado queda hasta arriba de la cuenta');
+  const porApi = filas(await movimientosDe(pag, `cuenta_id=${cuenta.id}`))
+    .sort((a, b) => (b.fecha > a.fecha ? 1 : b.fecha < a.fecha ? -1 : b.creado_at > a.creado_at ? 1 : -1));
+  assert.equal(porApi[0].id, gasto.id, 'y es el mismo que la API dice que es el más reciente');
+  assert.ok((await historial.innerText()).includes('Renta del taller (navegador)'), 'con su concepto');
+
+  // ── en la lista general, con su marca, y el filtro «Gastos generales» lo aísla ──
+  await pag.goto(`${URL}/movimientos`, { waitUntil: 'load' });
+  const marca = pag.locator(`[data-orden-de="${gasto.id}"], [data-gasto-general]`).first();
+  await marca.waitFor({ timeout: 30000 });
+  await pag.getByRole('button', { name: 'Gastos generales' }).click();
+  await pag.waitForFunction(() => document.body.innerText.includes('Renta del taller (navegador)'), null, { timeout: 20000 });
+  assert.ok((await texto(pag)).includes('Renta del taller (navegador)'), 'el filtro lo enseña');
+
+  // ── al corregirlo, la marca viene puesta y el proyecto no se ofrece ──
+  await pag.goto(`${URL}/movimientos/${gasto.id}/editar`, { waitUntil: 'load' });
+  const casilla = pag.locator('#gasto-general');
+  await casilla.waitFor({ timeout: 25000 });
+  assert.equal(await casilla.isChecked(), true, 'la marca de gasto general viene puesta');
+  assert.equal(await pag.getByText(/^Proyecto/).count(), 0, 'y no se pide proyecto');
+  await casilla.uncheck();
+  await pag.getByText(/^Proyecto/).first().waitFor({ timeout: 10000 });
+  await casilla.check();
+  await pag.getByRole('button', { name: /^Guardar cambios$/ }).click();
+  await pag.waitForURL(/\/movimientos(\?|$)/, { timeout: 30000 });
+  const d = await api(pag, `/orgs/${ORG}/movimientos/${gasto.id}`);
+  assert.equal(d.categoria, 'gasto_general', 'sigue siendo gasto general');
+  assert.equal(d.proyecto_id ?? null, null, 'y sigue sin proyecto');
+
+  console.log(`    gasto general de ${pesos2(7_000_00)} en ${CUENTA_PRUEBAS}, líquido ${pesos0(liquido)}`);
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
+test('1-oct: la pantalla del cliente abre con su estado de cuenta, con PDF, Excel y «por proyecto»; los datos se editan sólo al pedirlo', async () => {
+  /* Mike, 1-oct: «no debo poder editar luego luego sus datos, sino ver su
+   * estado de cuenta completo… y debo poder exportar su estado de cuenta
+   * general y por proyecto». */
+  const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  const { neg } = await negocioDePruebas(pag);
+  await elegirNegocio(pag, neg.id);
+  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes?negocio_id=${neg.id}`)).find((c) => c.nombre === CLIENTE_PRUEBAS);
+  if (!cliente) cliente = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS, negocio_id: neg.id } });
+
+  await pag.goto(`${URL}/clientes/${cliente.id}`, { waitUntil: 'load' });
+  const estado = pag.locator('[data-seccion="estado"]');
+  await estado.waitFor({ timeout: 30000 });
+  await pag.waitForFunction((n) => document.querySelector('[data-seccion="estado"]')?.innerText.includes(n), cliente.nombre, { timeout: 30000 });
+  assert.equal(await pag.locator('[data-seccion="editar"]').count(), 0, 'el formulario NO está a la vista al entrar');
+  assert.equal(await pag.getByRole('button', { name: 'Guardar como PDF' }).count(), 1, 'el PDF del general');
+  const excel = pag.locator('[data-excel-cliente]');
+  assert.ok((await excel.getAttribute('href')).endsWith(`/clientes/${cliente.id}/estado.xlsx`), 'el Excel del general lo arma la API');
+  const estadoApi = await api(pag, `/orgs/${ORG}/clientes/${cliente.id}/estado-de-cuenta`);
+  assert.equal(await pag.locator('[data-estado-proyecto]').count(), estadoApi.proyectos.filter((p) => p.precio_venta !== 0 || p.cobrado !== 0).length, 'cada proyecto con movimiento lleva a su propio estado de cuenta');
+
+  await pag.locator('[data-editar]').click();
+  const editar = pag.locator('[data-seccion="editar"]');
+  await editar.waitFor({ timeout: 10000 });
+  assert.equal(await pag.locator('#cliente-nombre').inputValue(), cliente.nombre, 'y al pedirlo, el formulario trae sus datos');
+
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
 test('un código equivocado NO entra', async () => {
   const { ctx, pag } = await pestana();
   await pedirCodigoConPaciencia(pag, CORREO);

@@ -50,7 +50,7 @@ export default function NominaPage() {
   if (sinPermiso) {
     return (
       <div className="max-w-lg">
-        <h1 className="text-xl font-medium text-ink mb-3">Raya</h1>
+        <h1 className="text-xl font-medium text-ink mb-3">Nómina</h1>
         <div className="bg-white border border-black/5 rounded-2xl p-5">
           <p className="text-sm font-medium text-ink-dim mb-1.5 inline-flex items-center gap-1.5">
             <IconLock size={15} /> Esto lo lleva alguien más
@@ -68,7 +68,7 @@ export default function NominaPage() {
     <div>
       <div className="flex items-center justify-between mb-4 gap-3">
         <div>
-          <h1 className="text-xl font-medium text-ink">Raya</h1>
+          <h1 className="text-xl font-medium text-ink">Nómina</h1>
           <p className="text-xs text-ink-muted mt-0.5">
             Lo que se le paga a la gente, y su recibo. No calcula IMSS ni ISR: eso lo lleva tu
             contador.

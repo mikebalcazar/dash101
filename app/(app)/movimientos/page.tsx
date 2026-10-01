@@ -14,7 +14,7 @@ import {
   recalcularCuenta,
 } from "@/lib/movimientos";
 import type { Movimiento, TipoMovimiento } from "@/types/schema";
-import { CATEGORIA_AJUSTE } from "@/types/schema";
+import { CATEGORIA_AJUSTE, CATEGORIA_GASTO_GENERAL } from "@/types/schema";
 import { formatMonto, formatDateShort } from "@/lib/format";
 import { Timestamp } from "firebase/firestore";
 import {
@@ -48,7 +48,7 @@ export default function MovimientosPage() {
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [filtroTipo, setFiltroTipo] = useState<TipoMovimiento | "todos">("todos");
+  const [filtroTipo, setFiltroTipo] = useState<TipoMovimiento | "todos" | "generales">("todos");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [cleanupNotice, setCleanupNotice] = useState("");
 
@@ -132,8 +132,11 @@ export default function MovimientosPage() {
     );
   }
 
+  const esGastoGeneral = (m: Movimiento) => m.categoria === CATEGORIA_GASTO_GENERAL;
   const filtrados =
-    filtroTipo === "todos" ? movimientos : movimientos.filter((m) => m.tipo === filtroTipo);
+    filtroTipo === "todos" ? movimientos
+    : filtroTipo === "generales" ? movimientos.filter(esGastoGeneral)
+    : movimientos.filter((m) => m.tipo === filtroTipo);
 
   // El ajuste por conciliación es dinero que se movió sin que nadie lo
   // registrara: va aparte de los ingresos y gastos de verdad, no mezclado.
@@ -215,7 +218,7 @@ export default function MovimientosPage() {
 
       {/* Filtros */}
       <div className="flex gap-2 mb-4">
-        {(["todos", "ingreso", "egreso"] as const).map((t) => (
+        {(["todos", "ingreso", "egreso", "generales"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setFiltroTipo(t)}
@@ -225,7 +228,7 @@ export default function MovimientosPage() {
                 : "bg-white border border-black/10 text-ink-muted hover:border-black/20"
             }`}
           >
-            {t === "todos" ? "Todos" : t.charAt(0).toUpperCase() + t.slice(1)}
+            {t === "todos" ? "Todos" : t === "generales" ? "Gastos generales" : t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>
@@ -284,6 +287,11 @@ export default function MovimientosPage() {
                     {esAjuste(m) && (
                       <span className="text-[10px] uppercase tracking-wide bg-cream text-ink-muted rounded px-1.5 py-0.5 mr-1.5">
                         sin identificar
+                      </span>
+                    )}
+                    {esGastoGeneral(m) && (
+                      <span className="text-[10px] uppercase tracking-wide bg-cream text-ink-muted rounded px-1.5 py-0.5 mr-1.5" data-gasto-general>
+                        gasto general
                       </span>
                     )}
                     {m.descripcion || m.contraparte_nombre}

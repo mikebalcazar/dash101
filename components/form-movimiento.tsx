@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import { CATEGORIA_GASTO_GENERAL } from "@/types/schema";
 import { useNegocioActivo } from "@/lib/negocio-activo-context";
 import { listCuentas } from "@/lib/cuentas";
 import { listClientes, createCliente } from "@/lib/clientes";
@@ -73,6 +74,13 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
   const [tipo, setTipo] = useState<TipoMovimiento>(
     (searchParams?.get("tipo") as TipoMovimiento) ?? "ingreso"
   );
+  /* Gasto general del negocio (Mike, 1-oct-2026): un egreso que no va a
+   * ningún proyecto —renta, máquinas, herramienta, licencias—. Se guarda
+   * con `categoria: gasto_general` y sin proyecto. `categoriaDeLaCarga`
+   * recuerda lo que traía al abrir: si se le quita la marca al corregir,
+   * hay que mandar la categoría vacía para borrarla, no `undefined`. */
+  const [gastoGeneral, setGastoGeneral] = useState(false);
+  const [categoriaDeLaCarga, setCategoriaDeLaCarga] = useState<string>("");
   const [monto, setMonto] = useState("");
   const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
   const [proyectoId, setProyectoId] = useState(searchParams?.get("proyecto") ?? "");
@@ -178,6 +186,8 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
           setContraparteOriginal({ tipo: m.contraparte_tipo ?? "otro", nombre: m.contraparte_nombre ?? "" });
         }
         setProductoId(m.producto_id ?? "");
+        setCategoriaDeLaCarga(m.categoria ?? "");
+        setGastoGeneral(m.categoria === CATEGORIA_GASTO_GENERAL);
         setFactura(m.facturado ? "ya" : m.requiere_factura ? "falta" : "no");
         if (m.descripcion) { setDescripcion(m.descripcion); setShowNota(true); }
         archivosDe("movimientos", movimientoId).then((a) => { if (vivo) setColgados(a); }).catch(() => { /* sin lista, pero la pantalla sirve */ });
@@ -368,8 +378,11 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
         fecha: delDia(fecha),
         cuenta_id: cuenta.id!,
         cuenta_nombre: cuenta.nombre,
-        proyecto_id: proyectoId || null,
-        proyecto_nombre: proyectoSel?.nombre ?? null,
+        proyecto_id: gastoGeneral ? null : proyectoId || null,
+        proyecto_nombre: gastoGeneral ? null : proyectoSel?.nombre ?? null,
+        categoria: gastoGeneral
+          ? CATEGORIA_GASTO_GENERAL
+          : categoriaDeLaCarga === CATEGORIA_GASTO_GENERAL ? "" : undefined,
         /* Sin contraparte se conserva lo que traía, tal cual. No se le
          * inventa una para poder guardar. */
         contraparte_id: contraparteObj ? contraparteObj.id! : null,
@@ -482,6 +495,7 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
               type="button"
               onClick={() => {
                 setTipo("ingreso");
+                setGastoGeneral(false);
                 setContraparteId("");
                 setQuickCreate(null);
               }}
@@ -511,6 +525,26 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
               Egreso
             </button>
           </div>
+          {!isIngreso && (
+            <label htmlFor="gasto-general" className="mt-3 flex items-start gap-2 text-sm text-ink-dim cursor-pointer">
+              <input
+                id="gasto-general"
+                type="checkbox"
+                checked={gastoGeneral}
+                onChange={(e) => {
+                  setGastoGeneral(e.target.checked);
+                  if (e.target.checked) setProyectoId("");
+                }}
+                className="mt-0.5"
+              />
+              <span>
+                Gasto general del negocio
+                <span className="block text-xs text-ink-muted font-normal">
+                  Renta, máquinas, herramienta, licencias: no va a ningún proyecto.
+                </span>
+              </span>
+            </label>
+          )}
         </div>
 
         <div className="space-y-3">
@@ -545,7 +579,8 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
             <p className="text-xs text-ink-muted text-center py-3">Cargando catálogo…</p>
           ) : (
             <>
-              {/* Proyecto */}
+              {/* Proyecto (no aplica a un gasto general) */}
+              {!gastoGeneral && (
               <SelectConCrear
                 /* Al CAPTURAR un ingreso el proyecto es obligatorio: un cobro
                  * que no se sabe de qué obra es no sirve para nada después.
@@ -573,6 +608,7 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
                 }
                 isOpenCreate={quickCreate === "proyecto"}
               />
+              )}
               {quickCreate === "proyecto" && (
                 <QuickCreateProyecto
                   clientes={clientes}
