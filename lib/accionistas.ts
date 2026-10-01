@@ -93,9 +93,10 @@ export async function listAccionistas(negocio_id: string): Promise<Accionista[]>
   return filas.sort((a, b) => Number(b.activo) - Number(a.activo) || a.nombre.localeCompare(b.nombre, 'es'));
 }
 
-export async function createAccionista(negocio_id: string, d: AccionistaInput): Promise<Accionista> {
+/** `_negocio_id` ya no viaja (0.61.0): la API cuelga al accionista de la empresa. */
+export async function createAccionista(_negocio_id: string, d: AccionistaInput): Promise<Accionista> {
   try {
-    return accionista(await pedir<FilaAccionista>(ruta(), { method: 'POST', body: { negocio_id, ...limpio(d) } }));
+    return accionista(await pedir<FilaAccionista>(ruta(), { method: 'POST', body: limpio(d) }));
   } catch (e) { enClaro(e); }
 }
 
@@ -153,7 +154,7 @@ export async function registrarRetiro(uid: string, d: RetiroInput): Promise<stri
   return createMovimiento(uid, {
     tipo: 'egreso', monto: d.monto, fecha: d.fecha, cuenta_id: d.cuenta_id, cuenta_nombre: d.cuenta_nombre,
     contraparte_tipo: 'accionista', contraparte_id: d.accionista.id, contraparte_nombre: d.accionista.nombre,
-    negocio_id: d.negocio_id, categoria: CATEGORIA_RETIRO_UTILIDADES,
+    categoria: CATEGORIA_RETIRO_UTILIDADES,
     descripcion: d.descripcion?.trim() || `Retiro de utilidades · ${d.accionista.nombre}`,
   });
 }
