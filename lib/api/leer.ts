@@ -18,9 +18,15 @@ const porId = <T extends { id: string }>(filas: T[]): Map<string, T> => new Map(
 
 /* ─────────────── negocios ─────────────── */
 
+/** EN EL ORDEN DE LA API, que es por nombre. El primero es el registro de la
+ *  empresa: el mismo que la API toma sola (0.61.0, `negocioDeLaEmpresa`) y el
+ *  mismo que miden las pruebas. Hasta el 1-oct-2026 aquí se reordenaba por
+ *  fecha de alta, y en la org demo de staging —que todavía tiene varios— la
+ *  pantalla abría uno y la API colgaba lo nuevo de otro (corrida
+ *  36908695856: la cuenta de pruebas no aparecía en ningún desplegable). */
 export async function listNegocios(uid: string): Promise<Negocio[]> {
   const filas = await listar<A.FilaNegocio>('negocios');
-  return filas.map((f) => A.negocio(f, uid)).sort((a, b) => String(b.creado_at) < String(a.creado_at) ? -1 : 1);
+  return filas.map((f) => A.negocio(f, uid));
 }
 
 export async function getNegocio(id: string, uid = ''): Promise<Negocio | null> {
