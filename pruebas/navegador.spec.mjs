@@ -1446,9 +1446,11 @@ test('1-oct: el líquido es el saldo que suma la API; la cuenta abre con su hist
   const casilla = pag.locator('#gasto-general');
   await casilla.waitFor({ timeout: 25000 });
   assert.equal(await casilla.isChecked(), true, 'la marca de gasto general viene puesta');
-  assert.equal(await pag.getByText(/^Proyecto/).count(), 0, 'y no se pide proyecto');
+  /* Se mira el campo, no el texto «Proyecto»: en esa pantalla hay más de
+   * un texto que empieza así (corrida 36905113064: 1 !== 0). */
+  assert.equal(await pag.locator('[data-campo="proyecto"]').count(), 0, 'y no se pide proyecto');
   await casilla.uncheck();
-  await pag.getByText(/^Proyecto/).first().waitFor({ timeout: 10000 });
+  await pag.locator('[data-campo="proyecto"]').waitFor({ timeout: 10000 });
   await casilla.check();
   await pag.getByRole('button', { name: /^Guardar cambios$/ }).click();
   await pag.waitForURL(/\/movimientos(\?|$)/, { timeout: 30000 });

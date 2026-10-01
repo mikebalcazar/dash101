@@ -581,6 +581,7 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
             <>
               {/* Proyecto (no aplica a un gasto general) */}
               {!gastoGeneral && (
+              <div data-campo="proyecto">
               <SelectConCrear
                 /* Al CAPTURAR un ingreso el proyecto es obligatorio: un cobro
                  * que no se sabe de qué obra es no sirve para nada después.
@@ -608,6 +609,7 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
                 }
                 isOpenCreate={quickCreate === "proyecto"}
               />
+              </div>
               )}
               {quickCreate === "proyecto" && (
                 <QuickCreateProyecto
