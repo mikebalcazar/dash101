@@ -25,7 +25,7 @@ import { createProveedor } from "@/lib/proveedores";
 import { createProyecto } from "@/lib/proyectos";
 import {
   corregirOrden, crearOrden, desglosar, devolverOrden, getBuzon, getPermisosOrdenes, getResumenOrdenes,
-  listContadores, listMisOrdenes, listPartidasDe, marcarContador, pagarOrden, vencida, verOrden,
+  listContadores, listMisOrdenes, listOrdenesPagadas, listPartidasDe, marcarContador, pagarOrden, vencida, verOrden,
 } from "@/lib/ordenes";
 import {
   crearCfdi, getCuadre, getIva, ligarCfdi, listCfdi, listPendientes, cancelarCfdi,
@@ -165,6 +165,16 @@ describe("pagar", () => {
     const r = await verOrden(ids.orden);
     expect(r.orden.movimiento_id).toBe(ids.movimiento);
     expect(r.eventos.map((e) => e.que)).toContain("pagada");
+  });
+
+  it("el historial de lo pagado la trae, en pesos, y suma lo que lista (Mike, 1-oct-2026)", async () => {
+    const h = await listOrdenesPagadas(ids.negocio);
+    expect(h.filas.map((o) => o.id)).toContain(ids.orden);
+    expect(h.filas.every((o) => o.estado === "pagada")).toBe(true);
+    expect(h.filas.find((o) => o.id === ids.orden)!.monto, "en pesos, no en centavos").toBe(1160);
+    expect(h.total).toBeCloseTo(h.filas.reduce((s, o) => s + o.monto, 0), 2);
+    const otro = await listOrdenesPagadas("negocio-que-no-existe");
+    expect(otro.filas).toEqual([]);
   });
 
   it("la misma orden no se paga dos veces: nada de dobles egresos", async () => {

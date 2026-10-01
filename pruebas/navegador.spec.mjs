@@ -460,11 +460,15 @@ test('pedir una compra desde el celular, pagarla, y que el que la pidió lo vea'
   assert.equal(suyos[0].tipo, 'egreso');
   assert.equal(suyos[0].monto, 116000, 'por 116 000 centavos, que son los $1,160.00');
 
-  // ── el que la pidió lo ve ──
+  // ── en Compras: por pagar arriba, pagadas abajo, y ahí está (Mike, 1-oct) ──
   await pag.goto(`${URL}/ordenes`, { waitUntil: 'load' });
-  await pag.getByText(folio).first().waitFor({ timeout: 15000 });
+  const pagadas = pag.locator('[data-seccion="pagadas"]');
+  await pagadas.waitFor({ timeout: 15000 });
+  await pag.waitForFunction((f) => document.querySelector('[data-seccion="pagadas"]')?.innerText.includes(f), folio, { timeout: 15000 });
+  assert.match(await pagadas.innerText(), /Pagada/, 'el historial la enseña como pagada');
   const lista = await texto(pag);
-  assert.match(lista, /Pagada/, 'en Mis compras ya dice Pagada');
+  assert.ok(lista.indexOf('Por pagar') < lista.indexOf('Pagadas'), 'por pagar va arriba de pagadas');
+  assert.ok(!/El buzón de lo que hay por pagar/.test(lista), 'y ya no hay que entrar a un buzón aparte');
 
   console.log(`    ${folio}: pedida a 390×844 con foto, pagada de ${CUENTA_PRUEBAS}, egreso de 116000 centavos`);
   assert.deepEqual(errores, [], 'cero errores de JavaScript');
