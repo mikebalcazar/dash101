@@ -319,21 +319,7 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
     );
   }
 
-  if (negocios.length === 0) {
-    return (
-      <div className="max-w-lg">
-        <Link href="/movimientos" className="text-xs text-ink-muted hover:text-ink-dim">
-          ← Volver
-        </Link>
-        <p className="mt-4 text-sm text-ink-muted">
-          Crea un negocio primero.{" "}
-          <Link href="/negocios/nuevo" className="underline">
-            Crear negocio
-          </Link>
-        </p>
-      </div>
-    );
-  }
+  if (!activo) return <div className="text-sm text-ink-muted">Cargando…</div>;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -558,22 +544,7 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
             />
           </div>
 
-          <div>
-            <label className="text-xs font-medium text-ink-dim block mb-1.5">
-              Negocio <span className="text-mauve-900">*</span>
-            </label>
-            <select
-              value={negocioId}
-              onChange={(e) => setNegocioId(e.target.value)}
-              className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
-            >
-              {negocios.map((n) => (
-                <option key={n.id} value={n.id}>
-                  {n.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* El negocio ya no se escoge (Mike, 1-oct-2026): es el de la empresa, y lo pone el contexto. */}
 
           {loadingCat ? (
             <p className="text-xs text-ink-muted text-center py-3">Cargando catálogo…</p>

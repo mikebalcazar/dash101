@@ -32,15 +32,7 @@ export default function ClientesPage() {
   if (!activo) {
     return (
       <div className="bg-white border border-black/5 rounded-2xl p-10 text-center">
-        <p className="text-sm font-medium text-ink-dim mb-1">Sin negocio activo</p>
-        <p className="text-xs text-ink-muted mb-4">Crea un negocio primero.</p>
-        <Link
-          href="/negocios/nuevo"
-          className="inline-flex items-center gap-1.5 bg-ink text-cream rounded-xl px-4 py-2 text-sm font-medium hover:bg-ink/90 transition"
-        >
-          <IconPlus size={14} />
-          Crear negocio
-        </Link>
+        <p className="text-sm font-medium text-ink-dim mb-1">Cargando la empresa…</p>
       </div>
     );
   }

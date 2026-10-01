@@ -170,7 +170,7 @@ export default function NuevaOrdenPage() {
   if (!activo) {
     return (
       <div className="bg-white border border-black/5 rounded-2xl p-10 text-center">
-        <p className="text-sm font-medium text-ink-dim mb-1">Sin negocio activo</p>
+        <p className="text-sm font-medium text-ink-dim mb-1">Cargando la empresa…</p>
       </div>
     );
   }

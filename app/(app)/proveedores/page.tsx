@@ -26,7 +26,7 @@ export default function ProveedoresPage() {
         <div>
           <h2 className="text-lg font-medium text-ink-dim">Proveedores</h2>
           <p className="text-xs text-ink-muted mt-0.5">
-            Catálogo global · compartido entre todos los negocios ·{" "}
+            Catálogo de la empresa ·{" "}
             {proveedores.length === 0
               ? "vacío"
               : `${proveedores.length} ${proveedores.length === 1 ? "proveedor" : "proveedores"}`}
@@ -52,7 +52,7 @@ export default function ProveedoresPage() {
           </div>
           <p className="text-sm font-medium text-ink-dim mb-1">Sin proveedores</p>
           <p className="text-xs text-ink-muted mb-5 max-w-xs mx-auto">
-            Un proveedor puede trabajar en proyectos de varios negocios. Solo se registra una vez.
+            Un proveedor se registra una vez y sirve para todos los proyectos.
           </p>
           <Link
             href="/proveedores/nuevo"
