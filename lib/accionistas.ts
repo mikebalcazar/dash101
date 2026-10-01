@@ -154,7 +154,8 @@ export async function registrarRetiro(uid: string, d: RetiroInput): Promise<stri
   return createMovimiento(uid, {
     tipo: 'egreso', monto: d.monto, fecha: d.fecha, cuenta_id: d.cuenta_id, cuenta_nombre: d.cuenta_nombre,
     contraparte_tipo: 'accionista', contraparte_id: d.accionista.id, contraparte_nombre: d.accionista.nombre,
-    categoria: CATEGORIA_RETIRO_UTILIDADES,
+    /* El tipo todavía lo pide; escribir.ts ya no lo manda a la API. */
+    negocio_id: d.negocio_id, categoria: CATEGORIA_RETIRO_UTILIDADES,
     descripcion: d.descripcion?.trim() || `Retiro de utilidades · ${d.accionista.nombre}`,
   });
 }
