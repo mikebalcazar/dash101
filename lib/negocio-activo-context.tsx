@@ -7,15 +7,14 @@
  * de negocio». Por dentro la suite todavía cuelga cuentas, proyectos,
  * movimientos y clientes de un `negocio_id` (la API lo sigue pidiendo hasta
  * que se quite de ahí también), así que aquí se resuelve UNA vez y nadie más
- * lo ve: el primero que la API devuelva es el de la empresa, y si no hay
- * ninguno se crea con el nombre de la empresa. Ningún formulario lo pide,
- * ninguna pantalla lo enseña, no se guarda en el navegador. */
+ * lo ve: la API contesta la empresa por su ruta (/empresa, contrato 0.62.0)
+ * y la bautiza la primera vez. Ningún formulario lo pide, ninguna pantalla
+ * lo enseña, no se guarda en el navegador. */
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "./auth-context";
-import { createNegocio, listNegocios } from "./negocios";
-import { yo } from "./api/cliente";
-import { org } from "./fuente";
+import { getEmpresa } from "./empresa";
+import { Timestamp } from "firebase/firestore";
 import type { Negocio } from "@/types/schema";
 
 type NegocioActivoContextValue = {
@@ -29,17 +28,6 @@ type NegocioActivoContextValue = {
 
 const NegocioActivoContext = createContext<NegocioActivoContextValue | undefined>(undefined);
 
-/** El nombre de la empresa, para bautizar el registro la primera vez. */
-async function nombreDeLaEmpresa(): Promise<string> {
-  try {
-    const s = await yo();
-    const mia = s?.orgs.find((o) => o.id === org());
-    return mia?.nombre?.trim() || "Mi empresa";
-  } catch {
-    return "Mi empresa";
-  }
-}
-
 export function NegocioActivoProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [negocios, setNegocios] = useState<Negocio[]>([]);
@@ -49,13 +37,18 @@ export function NegocioActivoProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     if (!user) return;
     try {
-      let list = await listNegocios(user.uid);
-      if (list.length === 0) {
-        await createNegocio(user.uid, { nombre: await nombreDeLaEmpresa(), moneda: "MXN" });
-        list = await listNegocios(user.uid);
-      }
-      setNegocios(list);
-      setActivo(list[0] ?? null);
+      /* La API contesta la empresa (y la bautiza la primera vez, contrato
+       * 0.62.0). Se envuelve con la forma de `Negocio` para que las pantallas
+       * que todavía leen `activo.id`, `activo.moneda` o `activo.nombre` no
+       * cambien hoy; la limpieza de esa forma es de la fase D. */
+      const e = await getEmpresa();
+      const una: Negocio = {
+        id: e.id, nombre: e.nombre, descripcion: "", rfc: e.rfc ?? "", moneda: e.moneda,
+        dia_conciliacion: e.dia_conciliacion, owner_uid: user.uid, miembros_uids: [user.uid],
+        creado_at: Timestamp.now(), creado_por: "",
+      };
+      setNegocios([una]);
+      setActivo(una);
     } catch (e) {
       console.error("No se pudo leer la empresa:", e);
     } finally {

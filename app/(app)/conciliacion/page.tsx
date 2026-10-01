@@ -18,7 +18,7 @@ import {
   tocaConciliar,
   type CuentaPorConciliar,
 } from "@/lib/conciliacion";
-import { updateNegocio } from "@/lib/negocios";
+import { updateEmpresa } from "@/lib/empresa";
 import { formatMontoExact, formatDateLong } from "@/lib/format";
 import { TIPO_CUENTA_LABELS, type Conciliacion, type EstadisticaConciliacion } from "@/types/schema";
 import type { Timestamp } from "firebase/firestore";
@@ -111,7 +111,7 @@ export default function ConciliacionPage() {
   const cambiarDia = async (nuevo: number) => {
     if (!activo?.id) return;
     try {
-      await updateNegocio(activo.id, { dia_conciliacion: nuevo });
+      await updateEmpresa({ dia_conciliacion: nuevo });
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error");
