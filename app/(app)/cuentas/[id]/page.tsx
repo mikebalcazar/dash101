@@ -9,7 +9,7 @@ import type { Movimiento } from "@/types/schema";
 import { formatDateShort } from "@/lib/format";
 import type { Cuenta, TipoCuenta, Moneda } from "@/types/schema";
 import { TIPO_CUENTA_LABELS } from "@/types/schema";
-import { IconArrowLeft, IconTrash, IconArrowDownLeft, IconArrowUpRight } from "@tabler/icons-react";
+import { IconArrowLeft, IconTrash, IconArrowDownLeft, IconArrowUpRight, IconPencil } from "@tabler/icons-react";
 
 function formatMonto(n: number, moneda: string) {
   return new Intl.NumberFormat("es-MX", {
@@ -49,6 +49,11 @@ export default function CuentaDetallePage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  /* LA CUENTA ABRE CON SU HISTORIAL, no con el formulario (Mike, 1-oct-2026:
+   * «quiero ver el historial de los movimientos específicos de esa cuenta. Y
+   * solo editar si ahí doy click a un botón de editar»). El formulario, con
+   * la zona peligrosa, se despliega con «Editar datos». */
+  const [editar, setEditar] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -86,6 +91,8 @@ export default function CuentaDetallePage() {
       });
       setNotice("Cambios guardados");
       setTimeout(() => setNotice(""), 2000);
+      /* El saldo cambia si se corrigió el inicial: se vuelve a leer. */
+      getCuenta(id).then((c) => { if (c) setCuenta(c); }).catch(() => { /* se queda el de antes */ });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al guardar");
     } finally {
@@ -126,11 +133,63 @@ export default function CuentaDetallePage() {
         Volver a cuentas
       </Link>
 
-      <h2 className="text-lg font-medium text-ink-dim">Editar cuenta</h2>
-      <p className="text-xs text-ink-muted mt-0.5 mb-6">
-        Saldo actual: <strong>{formatMonto(cuenta!.saldo_actual, cuenta!.moneda)}</strong>
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-medium text-ink-dim">{cuenta!.nombre}</h2>
+          <p className="text-xs text-ink-muted mt-0.5">
+            Saldo actual: <strong data-saldo-cuenta>{formatMonto(cuenta!.saldo_actual, cuenta!.moneda)}</strong>
+            {" · "}{TIPO_CUENTA_LABELS[cuenta!.tipo]}{cuenta!.banco ? ` · ${cuenta!.banco}` : ""}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setEditar((v) => !v)}
+          aria-expanded={editar}
+          data-editar
+          className="text-sm text-ink-dim inline-flex items-center gap-1.5 bg-white border border-black/10 rounded-xl px-3 py-2 hover:border-black/20 transition"
+        >
+          <IconPencil size={15} /> {editar ? "Cerrar la edición" : "Editar datos"}
+        </button>
+      </div>
 
+      <section className="mt-6" data-seccion="historial" data-movimientos-cuenta={movimientos?.length ?? ""}>
+        <div className="flex justify-between items-baseline mb-2 gap-3">
+          <h3 className="text-sm font-medium text-ink-dim">
+            Movimientos de esta cuenta{" "}
+            {movimientos && <span className="text-ink-muted font-normal tabular-nums">{movimientos.length}</span>}
+          </h3>
+          <Link href="/movimientos" className="text-xs text-ink-muted hover:text-ink-dim">Todos los movimientos →</Link>
+        </div>
+        {movimientos === null ? (
+          <p className="text-xs text-ink-muted">Cargando…</p>
+        ) : movimientos.length === 0 ? (
+          <p className="text-xs text-ink-muted">Esta cuenta todavía no tiene movimientos; su saldo es el inicial.</p>
+        ) : (
+          <div className="bg-white border border-black/5 rounded-2xl divide-y divide-black/5">
+            {movimientos.map((m) => (
+              <Link key={m.id} href={`/movimientos/${m.id}/editar`} data-mov={m.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-cream/50 transition">
+                <span className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${m.tipo === "ingreso" ? "bg-mint-50 text-mint-900" : "bg-mauve-50 text-mauve-900"}`}>
+                  {m.tipo === "ingreso" ? <IconArrowDownLeft size={14} /> : <IconArrowUpRight size={14} />}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-ink-dim truncate">{m.descripcion || m.contraparte_nombre || (m.tipo === "ingreso" ? "Ingreso" : "Egreso")}</p>
+                  <p className="text-[11px] text-ink-muted truncate">
+                    {formatDateShort((m.fecha as { toMillis: () => number }).toMillis())}
+                    {m.contraparte_nombre && m.descripcion ? ` · ${m.contraparte_nombre}` : ""}
+                    {m.proyecto_nombre ? ` · ${m.proyecto_nombre}` : ""}
+                  </p>
+                </div>
+                <p className={`text-sm font-medium tabular-nums whitespace-nowrap ${m.tipo === "ingreso" ? "text-mint-900" : "text-mauve-900"}`}>
+                  {m.tipo === "ingreso" ? "+" : "−"}{formatMonto(m.monto, cuenta!.moneda)}
+                </p>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {editar && (
+      <section data-seccion="editar" className="mt-6 pt-6 border-t border-black/5">
       <form onSubmit={handleSave} className="space-y-4">
         <div>
           <label className="text-xs font-medium text-ink-dim block mb-1.5">
@@ -228,12 +287,13 @@ export default function CuentaDetallePage() {
         )}
 
         <div className="flex gap-2 pt-2">
-          <Link
-            href="/cuentas"
+          <button
+            type="button"
+            onClick={() => setEditar(false)}
             className="bg-transparent border border-black/15 rounded-xl px-4 py-2 text-sm text-ink-dim hover:bg-white transition"
           >
             Cancelar
-          </Link>
+          </button>
           <button
             type="submit"
             disabled={saving || !nombre.trim()}
@@ -244,41 +304,6 @@ export default function CuentaDetallePage() {
         </div>
       </form>
 
-      <section className="mt-8 pt-6 border-t border-black/5" data-seccion="historial" data-movimientos-cuenta={movimientos?.length ?? ""}>
-        <div className="flex justify-between items-baseline mb-2 gap-3">
-          <h3 className="text-sm font-medium text-ink-dim">
-            Movimientos de esta cuenta{" "}
-            {movimientos && <span className="text-ink-muted font-normal tabular-nums">{movimientos.length}</span>}
-          </h3>
-          <Link href="/movimientos" className="text-xs text-ink-muted hover:text-ink-dim">Todos los movimientos →</Link>
-        </div>
-        {movimientos === null ? (
-          <p className="text-xs text-ink-muted">Cargando…</p>
-        ) : movimientos.length === 0 ? (
-          <p className="text-xs text-ink-muted">Esta cuenta todavía no tiene movimientos; su saldo es el inicial.</p>
-        ) : (
-          <div className="bg-white border border-black/5 rounded-2xl divide-y divide-black/5">
-            {movimientos.map((m) => (
-              <Link key={m.id} href={`/movimientos/${m.id}/editar`} data-mov={m.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-cream/50 transition">
-                <span className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${m.tipo === "ingreso" ? "bg-mint-50 text-mint-900" : "bg-mauve-50 text-mauve-900"}`}>
-                  {m.tipo === "ingreso" ? <IconArrowDownLeft size={14} /> : <IconArrowUpRight size={14} />}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-ink-dim truncate">{m.descripcion || m.contraparte_nombre || (m.tipo === "ingreso" ? "Ingreso" : "Egreso")}</p>
-                  <p className="text-[11px] text-ink-muted truncate">
-                    {formatDateShort((m.fecha as { toMillis: () => number }).toMillis())}
-                    {m.contraparte_nombre && m.descripcion ? ` · ${m.contraparte_nombre}` : ""}
-                    {m.proyecto_nombre ? ` · ${m.proyecto_nombre}` : ""}
-                  </p>
-                </div>
-                <p className={`text-sm font-medium tabular-nums whitespace-nowrap ${m.tipo === "ingreso" ? "text-mint-900" : "text-mauve-900"}`}>
-                  {m.tipo === "ingreso" ? "+" : "−"}{formatMonto(m.monto, cuenta!.moneda)}
-                </p>
-              </Link>
-            ))}
-          </div>
-        )}
-      </section>
 
       <div className="mt-10 pt-6 border-t border-mauve-50">
         <h3 className="text-xs font-medium text-mauve-900 uppercase tracking-wide mb-2">
@@ -315,6 +340,8 @@ export default function CuentaDetallePage() {
           </div>
         )}
       </div>
+      </section>
+      )}
     </div>
   );
 }
