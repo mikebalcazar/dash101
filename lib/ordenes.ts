@@ -203,6 +203,19 @@ export async function getBuzon(negocio_id?: string | null, tipo?: TipoOrden | nu
   };
 }
 
+/** El historial de lo pagado (contrato 0.59.0). Mike, 1-oct-2026: «quiero
+ *  ver en la pantalla de compras un historial completo de las órdenes de
+ *  compra ya pagadas». La más reciente arriba; lo lee quien paga, como el
+ *  buzón. `total` en PESOS: la suma de lo que se lista. */
+export async function listOrdenesPagadas(negocio_id?: string | null, tipo?: TipoOrden | null): Promise<{ filas: Orden[]; total: number }> {
+  const q = new URLSearchParams();
+  if (negocio_id) q.set('negocio_id', negocio_id);
+  if (tipo) q.set('tipo', tipo);
+  const qs = q.toString();
+  const r = await pedir<{ filas: FilaOrden[]; total: number }>(`${base()}/pagadas${qs ? `?${qs}` : ''}`);
+  return { filas: r.filas.map(orden), total: aPesos(r.total) };
+}
+
 /** Lo que hay en el buzón, en dos cifras (0.47.0), EN PESOS. Para el inicio:
  *  Mike pidió «el total de reembolsos pendientes en la pantalla inicial junto
  *  con los otros totales», y que reste del capital de la empresa. Lo lee
