@@ -53,8 +53,8 @@ export async function conciliar(
   saldos: Array<{ cuenta_id: string; saldo_real: number }>,
 ): Promise<Conciliacion> {
   soloApi();
+  /* Sin negocio_id (0.61.0): la API concilia la empresa. */
   const cuerpo = {
-    negocio_id: negocioId,
     corte_at: new Date().toISOString(),
     saldos: saldos.map((s) => ({ cuenta_id: s.cuenta_id, saldo_real: A.aCentavos(s.saldo_real) })),
   };

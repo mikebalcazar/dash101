@@ -121,12 +121,17 @@ export async function deleteNegocio(id: string): Promise<void> {
   await borrar('negocios', id);
 }
 
+/* NEGOCIO_ID YA NO VIAJA (1-oct-2026, contrato 0.61.0): la API cuelga sola
+ * cada fila del registro de la empresa. Mike: «Elimina todas las lógicas que
+ * involucran el concepto de "negocio"». Mandarlo dejará de ser posible cuando
+ * la columna se vaya (fase D): un campo que no existe es 403. */
+
 /* ─────────────── cuentas ─────────────── */
 
 /** `numero` no existe en la suite; se acepta y no se guarda. */
 export async function createCuenta(_uid: string, d: CuentaInput): Promise<string> {
   const f = await crear<A.FilaCuenta>('cuentas', {
-    negocio_id: d.negocio_id, nombre: d.nombre, tipo: d.tipo, banco: oNulo(d.banco), moneda: d.moneda,
+    nombre: d.nombre, tipo: d.tipo, banco: oNulo(d.banco), moneda: d.moneda,
     saldo_inicial: A.aCentavos(d.saldo_inicial),
   });
   return f.id;
@@ -160,7 +165,7 @@ export async function deleteCuenta(id: string): Promise<void> {
 
 export async function createCliente(_uid: string, d: ClienteInput): Promise<string> {
   const f = await crear<A.FilaCliente>('clientes', {
-    negocio_id: d.negocio_id, nombre: d.nombre, correo: oNulo(d.email), telefono: oNulo(d.telefono), rfc: oNulo(d.rfc), notas: oNulo(d.notas),
+    nombre: d.nombre, correo: oNulo(d.email), telefono: oNulo(d.telefono), rfc: oNulo(d.rfc), notas: oNulo(d.notas),
   });
   return f.id;
 }
@@ -268,9 +273,9 @@ export async function deleteProveedor(id: string): Promise<void> {
 const cantidadDe = (p: ItemProyectoInput): number =>
   p.cantidad && p.cantidad > 0 ? Math.trunc(p.cantidad) : 1;
 
-function filaItem(p: ItemProyectoInput, proyecto: { id: string; negocio_id: string; cliente_id: string }): Record<string, unknown> {
+function filaItem(p: ItemProyectoInput, proyecto: { id: string; cliente_id: string }): Record<string, unknown> {
   return {
-    negocio_id: proyecto.negocio_id, cliente_id: proyecto.cliente_id, proyecto_id: proyecto.id,
+    cliente_id: proyecto.cliente_id, proyecto_id: proyecto.id,
     nombre: p.nombre, descripcion: oNulo(p.descripcion), monto: A.aCentavos(p.monto),
     cantidad: cantidadDe(p), moneda: 'MXN', estado: 'vendido',
     tipo: 'mueble', fecha_entrega: dia(p.fecha_entrega),
@@ -304,10 +309,10 @@ function itemsOPrecio(nombre: string, precio: number, items: ItemProyectoInput[]
 
 export async function createProyecto(_uid: string, d: ProyectoInput): Promise<string> {
   const f = await crear<A.FilaProyecto>('proyectos', {
-    negocio_id: d.negocio_id, cliente_id: d.cliente_id, nombre: d.nombre, descripcion: oNulo(d.descripcion), estado: d.estado,
+    cliente_id: d.cliente_id, nombre: d.nombre, descripcion: oNulo(d.descripcion), estado: d.estado,
     fecha_inicio: dia(d.fecha_inicio), fecha_fin_estimada: dia(d.fecha_fin_estimada),
   });
-  const donde = { id: f.id, negocio_id: d.negocio_id, cliente_id: d.cliente_id };
+  const donde = { id: f.id, cliente_id: d.cliente_id };
   for (const p of itemsOPrecio(d.nombre, d.precio_venta, d.items)) await crear('items', filaItem(p, donde));
   for (const p of d.partidas) await crear('partidas', filaPartida(p, f.id));
   return f.id;
@@ -325,7 +330,7 @@ export async function updateProyecto(
 ): Promise<void> {
   const actual = await obtener<A.FilaProyecto>('proyectos', id);
   if (!actual) throw new Error('Proyecto no encontrado');
-  const donde = { id, negocio_id: actual.negocio_id, cliente_id: actual.cliente_id };
+  const donde = { id, cliente_id: actual.cliente_id };
 
   await cambiar('proyectos', id, {
     nombre: d.nombre, descripcion: d.descripcion === undefined ? undefined : oNulo(d.descripcion), estado: d.estado,
@@ -437,7 +442,7 @@ export async function deleteProyecto(id: string): Promise<void> {
  *  `item_id`. Los cachés (saldo, cobrado, partidas) los recalcula la API. */
 export async function createMovimiento(_uid: string, d: MovimientoInput): Promise<string> {
   const f = await crear<A.FilaMovimiento>('movimientos', {
-    negocio_id: d.negocio_id, tipo: d.tipo, monto: A.aCentavos(d.monto), fecha: A.aDia(d.fecha), cuenta_id: d.cuenta_id,
+    tipo: d.tipo, monto: A.aCentavos(d.monto), fecha: A.aDia(d.fecha), cuenta_id: d.cuenta_id,
     proyecto_id: oNulo(d.proyecto_id), item_id: oNulo(d.producto_id),
     contraparte_tipo: d.contraparte_tipo, contraparte_id: oNulo(d.contraparte_id), contraparte_nombre: oNulo(d.contraparte_nombre),
     transfer_id: oNulo(d.transfer_id), descripcion: oNulo(d.descripcion), categoria: oNulo(d.categoria),
@@ -515,7 +520,7 @@ export async function deleteMovimiento(id: string): Promise<void> {
  *  la suite no tiene descripción de gasto fijo. */
 export async function createOpex(_uid: string, d: OpexInput): Promise<string> {
   const f = await crear<A.FilaOpex>('opex', {
-    negocio_id: d.negocio_id, nombre: d.nombre, tipo: d.tipo, monto: A.aCentavos(d.monto), moneda: d.moneda, frecuencia: d.frecuencia,
+    nombre: d.nombre, tipo: d.tipo, monto: A.aCentavos(d.monto), moneda: d.moneda, frecuencia: d.frecuencia,
     dia_semana: d.dia_semana ?? null, dia_del_mes: d.dia_del_mes ?? null, fecha_inicio: A.aDia(d.fecha_inicio), fecha_fin: dia(d.fecha_fin),
     cuenta_id: oNulo(d.cuenta_id), categoria: oNulo(d.categoria), activo: d.activo,
   });
