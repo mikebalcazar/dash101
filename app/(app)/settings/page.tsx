@@ -12,20 +12,17 @@
  */
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { useNegocioActivo } from "@/lib/negocio-activo-context";
-import { updateNegocio } from "@/lib/negocios";
+import { updateEmpresa } from "@/lib/empresa";
 import type { Moneda } from "@/types/schema";
-import { IconBuildingStore, IconArrowsJoin, IconPlus } from "@tabler/icons-react";
+import { IconBuildingStore } from "@tabler/icons-react";
 
 export default function ConfiguracionPage() {
   const { user } = useAuth();
-  const { negocios, loading, refresh } = useNegocioActivo();
-  const negocio = negocios.length === 1 ? negocios[0] : null;
+  const { activo: negocio, loading, refresh } = useNegocioActivo();
 
   const [nombre, setNombre] = useState("");
-  const [descripcion, setDescripcion] = useState("");
   const [rfc, setRfc] = useState("");
   const [moneda, setMoneda] = useState<Moneda>("MXN");
   const [saving, setSaving] = useState(false);
@@ -35,7 +32,6 @@ export default function ConfiguracionPage() {
   useEffect(() => {
     if (!negocio) return;
     setNombre(negocio.nombre);
-    setDescripcion(negocio.descripcion ?? "");
     setRfc(negocio.rfc ?? "");
     setMoneda(negocio.moneda);
   }, [negocio]);
@@ -47,12 +43,7 @@ export default function ConfiguracionPage() {
     if (!negocio?.id) return;
     setError(""); setNotice(""); setSaving(true);
     try {
-      await updateNegocio(negocio.id, {
-        nombre: nombre.trim(),
-        descripcion: descripcion.trim() || undefined,
-        rfc: rfc.trim() || undefined,
-        moneda,
-      });
+      await updateEmpresa({ nombre: nombre.trim(), rfc: rfc.trim() || null, moneda });
       await refresh();
       setNotice("Cambios guardados");
       setTimeout(() => setNotice(""), 2500);
@@ -95,17 +86,6 @@ export default function ConfiguracionPage() {
                 disabled={!isOwner}
                 onChange={(e) => setNombre(e.target.value)}
                 className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition disabled:opacity-60"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-ink-dim block mb-1.5">Descripción</label>
-              <textarea
-                maxLength={200}
-                value={descripcion}
-                disabled={!isOwner}
-                onChange={(e) => setDescripcion(e.target.value)}
-                rows={2}
-                className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 resize-none transition disabled:opacity-60"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
