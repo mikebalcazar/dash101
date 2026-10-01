@@ -23,7 +23,7 @@ import { useNegocioActivo } from "@/lib/negocio-activo-context";
 import { ErrorApi } from "@/lib/api/cliente";
 import { listCuentas } from "@/lib/cuentas";
 import {
-  createAccionista, darDeBaja, listAccionistas, listRetiros, registrarRetiro, retiradoPor, type Retiro,
+  createAccionista, darDeBaja, listAccionistas, listRetiros, personasDeRoster, registrarRetiro, retiradoPor, type PersonaDeRoster, type Retiro,
 } from "@/lib/accionistas";
 import { formatMontoExact } from "@/lib/format";
 import type { Accionista, Cuenta } from "@/types/schema";
@@ -53,6 +53,10 @@ export default function AccionistasPage() {
   const [error, setError] = useState("");
 
   const [altaAbierta, setAltaAbierta] = useState(false);
+  /* Los expedientes de roster101, para jalar de ahí al accionista (Mike,
+   * 1-oct-2026). Si la lista no abre, el alta a mano sigue igual. */
+  const [deRoster, setDeRoster] = useState<PersonaDeRoster[]>([]);
+  const [escogido, setEscogido] = useState("");
   const [alta, setAlta] = useState({ nombre: "", porcentaje: "", rfc: "", correo: "", telefono: "", notas: "" });
   const [retiroDe, setRetiroDe] = useState<Accionista | null>(null);
   const [retiro, setRetiro] = useState({ monto: "", fecha: hoy(), cuenta_id: "", descripcion: "" });
@@ -77,6 +81,14 @@ export default function AccionistasPage() {
   }, [activo]);
 
   useEffect(() => { if (!cargandoNegocio) void cargar(); }, [cargandoNegocio, cargar]);
+  useEffect(() => { personasDeRoster().then(setDeRoster).catch(() => setDeRoster([])); }, []);
+
+  const jalarDeRoster = (id: string) => {
+    setEscogido(id);
+    const p = deRoster.find((x) => x.id === id);
+    if (!p) return;
+    setAlta((a) => ({ ...a, nombre: p.nombre, rfc: p.rfc || a.rfc, correo: p.correo || a.correo }));
+  };
 
   const { por, total } = useMemo(() => retiradoPor(retiros), [retiros]);
   const activos = accionistas.filter((a) => a.activo);
@@ -93,6 +105,7 @@ export default function AccionistasPage() {
         porcentaje: alta.porcentaje.trim() === "" ? "" : Number(alta.porcentaje),
       });
       setAlta({ nombre: "", porcentaje: "", rfc: "", correo: "", telefono: "", notas: "" });
+      setEscogido("");
       setAltaAbierta(false);
       await cargar();
     } catch (err) {
@@ -172,6 +185,17 @@ export default function AccionistasPage() {
       {altaAbierta && (
         <form onSubmit={guardarAlta} className="bg-white border border-black/5 rounded-2xl p-4 mb-4 space-y-3" data-forma="alta">
           <p className="text-sm font-medium text-ink-dim">Nuevo accionista</p>
+          {deRoster.length > 0 && (
+            <div>
+              <label htmlFor="alta-roster" className={ETIQUETA}>Jalarlo de roster101</label>
+              <select id="alta-roster" value={escogido} onChange={(e) => jalarDeRoster(e.target.value)} className={CAMPO} data-de-roster={deRoster.length}>
+                <option value="">— Escoger de los expedientes, o capturar abajo —</option>
+                {deRoster.map((p) => (
+                  <option key={p.id} value={p.id}>{p.nombre}{p.puesto ? ` · ${p.puesto}` : ""}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label htmlFor="alta-nombre" className={ETIQUETA}>Nombre <span className="text-mauve-900">*</span></label>
             <input id="alta-nombre" required maxLength={100} value={alta.nombre} onChange={(e) => setAlta({ ...alta, nombre: e.target.value })} className={CAMPO} placeholder="Nombre completo" />

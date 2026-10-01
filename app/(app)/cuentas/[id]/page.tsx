@@ -4,9 +4,12 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { getCuenta, updateCuenta, deleteCuenta } from "@/lib/cuentas";
+import { listMovimientosDeCuenta } from "@/lib/movimientos";
+import type { Movimiento } from "@/types/schema";
+import { formatDateShort } from "@/lib/format";
 import type { Cuenta, TipoCuenta, Moneda } from "@/types/schema";
 import { TIPO_CUENTA_LABELS } from "@/types/schema";
-import { IconArrowLeft, IconTrash } from "@tabler/icons-react";
+import { IconArrowLeft, IconTrash, IconArrowDownLeft, IconArrowUpRight } from "@tabler/icons-react";
 
 function formatMonto(n: number, moneda: string) {
   return new Intl.NumberFormat("es-MX", {
@@ -21,6 +24,10 @@ export default function CuentaDetallePage() {
   const id = params?.id as string;
 
   const [cuenta, setCuenta] = useState<Cuenta | null>(null);
+  /* El historial de ESTA cuenta (Mike, 1-oct-2026: «cuando me meto a una
+   * cuenta, quiero ver el historial de los movimientos específicos de esa
+   * cuenta»). Completo y del más reciente al más antiguo; null mientras carga. */
+  const [movimientos, setMovimientos] = useState<Movimiento[] | null>(null);
   const [nombre, setNombre] = useState("");
   const [tipo, setTipo] = useState<TipoCuenta>("banco");
   const [banco, setBanco] = useState("");
@@ -45,6 +52,7 @@ export default function CuentaDetallePage() {
 
   useEffect(() => {
     if (!id) return;
+    listMovimientosDeCuenta(id).then(setMovimientos).catch(() => setMovimientos([]));
     getCuenta(id)
       .then((c) => {
         if (!c) {
@@ -235,6 +243,42 @@ export default function CuentaDetallePage() {
           </button>
         </div>
       </form>
+
+      <section className="mt-8 pt-6 border-t border-black/5" data-seccion="historial" data-movimientos-cuenta={movimientos?.length ?? ""}>
+        <div className="flex justify-between items-baseline mb-2 gap-3">
+          <h3 className="text-sm font-medium text-ink-dim">
+            Movimientos de esta cuenta{" "}
+            {movimientos && <span className="text-ink-muted font-normal tabular-nums">{movimientos.length}</span>}
+          </h3>
+          <Link href="/movimientos" className="text-xs text-ink-muted hover:text-ink-dim">Todos los movimientos →</Link>
+        </div>
+        {movimientos === null ? (
+          <p className="text-xs text-ink-muted">Cargando…</p>
+        ) : movimientos.length === 0 ? (
+          <p className="text-xs text-ink-muted">Esta cuenta todavía no tiene movimientos; su saldo es el inicial.</p>
+        ) : (
+          <div className="bg-white border border-black/5 rounded-2xl divide-y divide-black/5">
+            {movimientos.map((m) => (
+              <Link key={m.id} href={`/movimientos/${m.id}/editar`} data-mov={m.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-cream/50 transition">
+                <span className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${m.tipo === "ingreso" ? "bg-mint-50 text-mint-900" : "bg-mauve-50 text-mauve-900"}`}>
+                  {m.tipo === "ingreso" ? <IconArrowDownLeft size={14} /> : <IconArrowUpRight size={14} />}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-ink-dim truncate">{m.descripcion || m.contraparte_nombre || (m.tipo === "ingreso" ? "Ingreso" : "Egreso")}</p>
+                  <p className="text-[11px] text-ink-muted truncate">
+                    {formatDateShort((m.fecha as { toMillis: () => number }).toMillis())}
+                    {m.contraparte_nombre && m.descripcion ? ` · ${m.contraparte_nombre}` : ""}
+                    {m.proyecto_nombre ? ` · ${m.proyecto_nombre}` : ""}
+                  </p>
+                </div>
+                <p className={`text-sm font-medium tabular-nums whitespace-nowrap ${m.tipo === "ingreso" ? "text-mint-900" : "text-mauve-900"}`}>
+                  {m.tipo === "ingreso" ? "+" : "−"}{formatMonto(m.monto, cuenta!.moneda)}
+                </p>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
 
       <div className="mt-10 pt-6 border-t border-mauve-50">
         <h3 className="text-xs font-medium text-mauve-900 uppercase tracking-wide mb-2">

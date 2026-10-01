@@ -40,7 +40,8 @@ const items: NavItem[] = [
   { href: "/opex", icon: IconReceipt, label: "OPEX" },
   // «Compras» a secas (Mike, 30-sep-2026): los reembolsos viven adentro.
   { href: "/ordenes", icon: IconShoppingCart, label: "Compras" },
-  { href: "/nomina", icon: IconCash, label: "Raya" },
+  // «Nómina», no «Raya» (Mike, 1-oct-2026).
+  { href: "/nomina", icon: IconCash, label: "Nómina" },
   // Mike, 30-sep-2026: «un módulo de accionistas donde se registren pagos a
   // los accionistas como retiro de utilidades».
   { href: "/accionistas", icon: IconCoins, label: "Accionistas" },

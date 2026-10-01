@@ -10,7 +10,12 @@
  */
 
 import { pedir } from './api/cliente';
-import { org } from './fuente';
+import { apiBase, org } from './fuente';
+
+/** El Excel del estado de cuenta del cliente (contrato 0.60.0): la misma
+ *  liga sirve para bajarlo, con la cookie de sesión. */
+export const ligaDelExcelDelCliente = (cliente_id: string) =>
+  `${apiBase()}/orgs/${org()}/clientes/${encodeURIComponent(cliente_id)}/estado.xlsx`;
 
 const aPesos = (centavos: number) => Math.round(Number(centavos ?? 0)) / 100;
 

@@ -210,19 +210,47 @@ async function nombresDe(negocioId: string) {
   return { cuentas: porId(cuentas), proyectos: porId(proyectos), items: porId(items), clientes: porId(clientes) };
 }
 
+const millis = (t: unknown): number => (t && typeof (t as { toMillis?: unknown }).toMillis === 'function' ? (t as { toMillis: () => number }).toMillis() : 0);
+
+/** Del más reciente al más antiguo DE VERDAD: por el día del movimiento y,
+ *  dentro del mismo día, por el momento en que se capturó. Hasta el
+ *  1-oct-2026 sólo contaba el día, y dentro de hoy el orden era el que
+ *  devolviera la base: el primero capturado quedaba hasta arriba. Mike: «el
+ *  que esté hasta arriba es el último que se hizo, no el primero que se hizo
+ *  del día presente». */
+export const masRecientePrimero = (a: Movimiento, b: Movimiento): number =>
+  millis(b.fecha) - millis(a.fecha) || millis(b.creado_at) - millis(a.creado_at);
+
 export async function listMovimientos(negocioId: string, opts?: { max?: number }): Promise<Movimiento[]> {
-  const [filas, nombres] = await Promise.all([listar<A.FilaMovimiento>('movimientos', { negocio_id: negocioId }), nombresDe(negocioId)]);
+  /* Hasta 5,000 y no las 500 de omisión: Mike quiere el historial, y con
+   * 500 la pantalla se quedaba ciega a lo de hoy en cuanto el negocio pasó
+   * de 500 movimientos (1-oct-2026). La API los manda del más reciente al
+   * más viejo desde 0.60.0; aquí se vuelve a ordenar por si fuera vieja. */
+  const [filas, nombres] = await Promise.all([listar<A.FilaMovimiento>('movimientos', { negocio_id: negocioId, limite: '5000' }), nombresDe(negocioId)]);
   const lista = filas.map((f) => A.movimiento(f, nombres));
-  lista.sort((a, b) => ((b.fecha as { toMillis: () => number }).toMillis() - (a.fecha as { toMillis: () => number }).toMillis()));
+  lista.sort(masRecientePrimero);
   return lista.slice(0, opts?.max ?? 100);
 }
 
 export async function listMovimientosByProyecto(proyectoId: string): Promise<Movimiento[]> {
   const p = await obtener<A.FilaProyecto>('proyectos', proyectoId);
   if (!p) return [];
-  const [filas, nombres] = await Promise.all([listar<A.FilaMovimiento>('movimientos', { proyecto_id: proyectoId }), nombresDe(p.negocio_id)]);
+  const [filas, nombres] = await Promise.all([listar<A.FilaMovimiento>('movimientos', { proyecto_id: proyectoId, limite: '5000' }), nombresDe(p.negocio_id)]);
   const lista = filas.map((f) => A.movimiento(f, nombres));
-  lista.sort((a, b) => ((b.fecha as { toMillis: () => number }).toMillis() - (a.fecha as { toMillis: () => number }).toMillis()));
+  lista.sort(masRecientePrimero);
+  return lista;
+}
+
+/** Todos los movimientos de UNA cuenta, completos (no las 500 de siempre),
+ *  del más reciente al más antiguo. Mike, 1-oct-2026: «cuando me meto a una
+ *  cuenta, quiero ver el historial de los movimientos específicos de esa
+ *  cuenta». */
+export async function listMovimientosDeCuenta(cuentaId: string): Promise<Movimiento[]> {
+  const c = await obtener<A.FilaCuenta>('cuentas', cuentaId);
+  if (!c) return [];
+  const [filas, nombres] = await Promise.all([listarCompleto<A.FilaMovimiento>('movimientos', { cuenta_id: cuentaId }), nombresDe(c.negocio_id)]);
+  const lista = filas.map((f) => A.movimiento(f, nombres));
+  lista.sort(masRecientePrimero);
   return lista;
 }
 

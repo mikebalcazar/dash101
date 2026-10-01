@@ -80,7 +80,7 @@ export function delDia(dia: string): Date {
 /* ─────────────── las filas de la API, con sus nombres ─────────────── */
 
 export interface FilaNegocio { id: string; nombre: string; rfc: string | null; moneda: 'MXN' | 'USD'; dia_conciliacion: number; creado_at: string }
-export interface FilaCuenta { id: string; negocio_id: string; nombre: string; tipo: string; banco: string | null; moneda: 'MXN' | 'USD'; saldo_inicial: number; creado_at: string }
+export interface FilaCuenta { id: string; negocio_id: string; nombre: string; tipo: string; banco: string | null; moneda: 'MXN' | 'USD'; saldo_inicial: number; saldo?: number; creado_at: string }
 export interface FilaCliente { id: string; negocio_id: string; nombre: string; correo: string | null; telefono: string | null; rfc: string | null; notas: string | null; usuario_id: string | null; portal_activo: boolean; creado_at: string }
 export interface FilaProveedor { id: string; nombre: string; rfc: string | null; categoria: string | null; correo: string | null; telefono: string | null; terminos_pago: string | null; notas: string | null; creado_at: string }
 export interface FilaProyecto {
@@ -142,17 +142,24 @@ export function negocio(f: FilaNegocio, uid: string): Negocio {
   };
 }
 
-/** `saldo_actual` era caché en Firestore; la API no lo guarda. Se suma aquí
- *  de los movimientos de la cuenta: saldo_inicial + ingresos − egresos. */
+/** `saldo_actual` era caché en Firestore. Desde el contrato 0.60.0 LO SUMA LA
+ *  API en cada fila de `cuentas` (`saldo`, centavos, sobre TODOS sus
+ *  movimientos). Hasta el 1-oct-2026 se sumaba aquí de la lista de
+ *  movimientos, que tiene tope de 500 y salía de la más vieja a la más nueva:
+ *  pasando de 500, los últimos egresos no entraban y el capital líquido se
+ *  quedaba quieto (Mike: «ya hay movimientos por más de 70,000 de egresos y
+ *  el total sigue sin contarlos»). La suma local se queda sólo como respaldo
+ *  para una API vieja que no traiga `saldo`. */
 export function cuenta(f: FilaCuenta, movimientos: FilaMovimiento[]): Cuenta {
   let delta = 0;
   for (const m of movimientos) {
     if (m.cuenta_id !== f.id) continue;
     delta += m.tipo === 'ingreso' ? m.monto : -m.monto;
   }
+  const saldo = typeof f.saldo === 'number' ? f.saldo : f.saldo_inicial + delta;
   return {
     id: f.id, nombre: f.nombre, tipo: (f.tipo as Cuenta['tipo']) ?? 'otro', banco: f.banco ?? '', numero: '',
-    moneda: f.moneda, saldo_inicial: aPesos(f.saldo_inicial), saldo_actual: aPesos(f.saldo_inicial + delta),
+    moneda: f.moneda, saldo_inicial: aPesos(f.saldo_inicial), saldo_actual: aPesos(saldo),
     negocio_id: f.negocio_id, creado_at: ts(f.creado_at), creado_por: '',
   };
 }

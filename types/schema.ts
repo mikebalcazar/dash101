@@ -236,6 +236,10 @@ export interface Movimiento {
 /** La categoría con la que la API marca el ajuste de una conciliación. En los
  *  reportes sale aparte: es dinero que se movió sin que nadie lo registrara. */
 export const CATEGORIA_AJUSTE = "ajuste_conciliacion";
+/** Un egreso que no es de ningún proyecto: renta, máquinas, herramienta,
+ *  licencias de software (contrato 0.60.0). Mike, 1-oct-2026: «debe haber
+ *  un concepto de gastos generales en el tipo de egreso». */
+export const CATEGORIA_GASTO_GENERAL = "gasto_general";
 
 /** Una conciliación: la foto de un corte. No se edita nunca. */
 export interface Conciliacion {

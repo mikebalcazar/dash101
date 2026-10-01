@@ -62,6 +62,15 @@ export async function listMovimientos(
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Movimiento));
 }
 
+/** El historial de una cuenta (1-oct-2026). Con Firestore, por `cuenta_id`
+ *  y fecha; con la API, completo y ordenado por el momento real. */
+export async function listMovimientosDeCuenta(cuentaId: string): Promise<Movimiento[]> {
+  if (fuente() === 'api') return leer.listMovimientosDeCuenta(cuentaId);
+  const q = query(collection(db, "movimientos"), where("cuenta_id", "==", cuentaId), orderBy("fecha", "desc"));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Movimiento));
+}
+
 export async function listMovimientosByProyecto(proyectoId: string): Promise<Movimiento[]> {
   if (fuente() === 'api') return leer.listMovimientosByProyecto(proyectoId);
   const q = query(
