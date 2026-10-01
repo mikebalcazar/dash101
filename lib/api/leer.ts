@@ -81,7 +81,12 @@ async function partesDeProyectos() {
      * no rompe nada; que truene la pantalla de proyectos, sí. El detalle del
      * proyecto —el que decide qué se guarda— sí exige la lista completa. */
     listar<A.FilaItem>('items', { estado: 'vendido' }),
-    listar<A.FilaMovimiento>('movimientos'),
+    /* Hasta 5,000, no las 500 de fábrica: de aquí sale `pagado` por ítem
+     * (Σ ingresos con su item_id) y `cobrado` por proyecto, y con el tope
+     * de 500 los movimientos viejos se caen de la respuesta y los ítems de
+     * un proyecto de hace meses salen «sin pagar». Se vio el 1-oct en la
+     * empresa demo, que pasó de 500 movimientos al juntar sus registros. */
+    listar<A.FilaMovimiento>('movimientos', { limite: '5000' }),
     listar<A.FilaCliente>('clientes'),
   ]);
   return { partidas, items, movimientos, clientes: porId(clientes) };
