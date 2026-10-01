@@ -13,7 +13,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { IconArrowLeft, IconPlus, IconTrash } from "@tabler/icons-react";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import {
   crearGente, crearRaya, genteDeRoster, listGente, listTrabajadores,
   type GenteDeRaya, type TrabajadorDeRoster,
@@ -39,7 +39,7 @@ function semanaDeHoy(): { inicio: string; fin: string } {
 
 export default function NuevaRayaPage() {
   const router = useRouter();
-  const { activo } = useNegocioActivo();
+  const { empresa } = useEmpresa();
   const semana = semanaDeHoy();
 
   const [inicio, setInicio] = useState(semana.inicio);
@@ -112,7 +112,7 @@ export default function NuevaRayaPage() {
 
   const guardar = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activo?.id) return;
+    if (!empresa?.id) return;
     const pagos = renglones.filter((r) => r.personal_id);
     if (pagos.length === 0) { setError("Ponle al menos una persona al corte."); return; }
     const negativo = pagos.find((r) => netoDe(r) < 0);
@@ -123,7 +123,7 @@ export default function NuevaRayaPage() {
     setGuardando(true); setError("");
     try {
       const { raya } = await crearRaya({
-        negocio_id: activo.id, periodo_inicio: inicio, periodo_fin: fin, nota: nota.trim() || undefined,
+        periodo_inicio: inicio, periodo_fin: fin, nota: nota.trim() || undefined,
         pagos: pagos.map((r) => ({
           personal_id: r.personal_id, concepto: r.concepto.trim() || "Sueldo",
           sueldo: num(r.sueldo), extras: num(r.extras), descuentos: num(r.descuentos),

@@ -19,7 +19,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { fuente } from "@/lib/fuente";
 import { entrarDePrueba, pedir } from "@/lib/api/cliente";
-import { createNegocio } from "@/lib/negocios";
 import { createCliente } from "@/lib/clientes";
 import { createCuenta, getCuenta } from "@/lib/cuentas";
 import { createMovimiento, createTransferencia, getMovimiento, updateMovimiento } from "@/lib/movimientos";
@@ -30,14 +29,14 @@ const ORG = `em-${(process.env.GITHUB_RUN_ID ?? Date.now().toString(36)).toStrin
 const ORG_ANTES = process.env.NEXT_PUBLIC_ORG;
 
 let uid = "";
-const ids = { negocio: "", cuenta: "", otra: "", cliente: "" };
+const ids = { cuenta: "", otra: "", cliente: "" };
 
 const cobrar = (monto: number, extra: Record<string, unknown> = {}) =>
   createMovimiento(uid, {
     tipo: "ingreso", monto, fecha: new Date(2026, 2, 18),
     cuenta_id: ids.cuenta, cuenta_nombre: "Banco",
     contraparte_id: ids.cliente, contraparte_tipo: "cliente", contraparte_nombre: "HOLCIM",
-    negocio_id: ids.negocio, descripcion: "Con un cero de mas", ...extra,
+    descripcion: "Con un cero de mas", ...extra,
   });
 
 beforeAll(async () => {
@@ -48,11 +47,9 @@ beforeAll(async () => {
   process.env.NEXT_PUBLIC_ORG = ORG;
   try { await pedir(`/admin/orgs/${ORG}`, { method: "DELETE" }); } catch { /* no existía */ }
   await pedir("/admin/orgs", { method: "POST", body: { id: ORG, nombre: "Corregir movimientos" } });
-
-  ids.negocio = await createNegocio(uid, { nombre: "Taller", moneda: "MXN" });
-  ids.cuenta = await createCuenta(uid, { nombre: "Banco", tipo: "banco", saldo_inicial: 0, negocio_id: ids.negocio, moneda: "MXN" });
-  ids.otra = await createCuenta(uid, { nombre: "Caja", tipo: "caja", saldo_inicial: 100_000, negocio_id: ids.negocio, moneda: "MXN" });
-  ids.cliente = await createCliente(uid, { nombre: "HOLCIM", negocio_id: ids.negocio });
+  ids.cuenta = await createCuenta(uid, { nombre: "Banco", tipo: "banco", saldo_inicial: 0, moneda: "MXN" });
+  ids.otra = await createCuenta(uid, { nombre: "Caja", tipo: "caja", saldo_inicial: 100_000, moneda: "MXN" });
+  ids.cliente = await createCliente(uid, { nombre: "HOLCIM"});
 }, 90000);
 
 afterAll(async () => {
@@ -84,12 +81,12 @@ describe("corregir un movimiento", () => {
 
   it("una pata de transferencia NO se corrige: son dos movimientos espejo", async () => {
     await createTransferencia(uid, {
-      negocio_id: ids.negocio, monto: 20_000, fecha: new Date(2026, 2, 20),
+      monto: 20_000, fecha: new Date(2026, 2, 20),
       cuenta_origen: { id: ids.otra, nombre: "Caja" },
       cuenta_destino: { id: ids.cuenta, nombre: "Banco" },
     });
     const filas = await pedir<{ filas: Array<{ id: string; transfer_id: string | null }> }>(
-      `/orgs/${ORG}/movimientos?negocio_id=${ids.negocio}`,
+      `/orgs/${ORG}/movimientos`,
     );
     const pata = filas.filas.find((m) => m.transfer_id);
     expect(pata, "se creó la transferencia").toBeTruthy();
@@ -100,7 +97,7 @@ describe("corregir un movimiento", () => {
   it("el monto de un movimiento YA facturado no se mueve, pero lo demás sí", async () => {
     const id = await cobrar(116_000);
     const c = await crearCfdi({
-      negocio_id: ids.negocio, uuid: `${Date.now()}-1111-2222-3333-444444444444`.slice(0, 36),
+      uuid: `${Date.now()}-1111-2222-3333-444444444444`.slice(0, 36),
       tipo: "ingreso", rfc: "XAXX010101000",
       subtotal: 100_000, iva: 16_000, retenciones: 0, total: 116_000, fecha: "2026-03-18",
     });

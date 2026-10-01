@@ -22,7 +22,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import { listProveedores } from "@/lib/proveedores";
 import { listProyectos } from "@/lib/proyectos";
 import { SoltarArchivo } from "@/components/soltar-archivo";
@@ -43,7 +43,7 @@ const hoy = () => {
 export default function NuevaOrdenPage() {
   const router = useRouter();
   const params = useSearchParams();
-  const { activo, loading: cargandoNegocio } = useNegocioActivo();
+  const { empresa, loading: cargandoEmpresa } = useEmpresa();
 
   // `?tipo=reembolso` abre directo en reembolso (es la liga del botón de
   // «Mis compras» y la del inicio).
@@ -73,10 +73,10 @@ export default function NuevaOrdenPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (cargandoNegocio || !activo?.id) return;
+    if (cargandoEmpresa || !empresa?.id) return;
     void (async () => {
       try {
-        const [pv, py] = await Promise.all([listProveedores(), listProyectos(activo.id!)]);
+        const [pv, py] = await Promise.all([listProveedores(), listProyectos()]);
         setProveedores(pv);
         setProyectos(py);
       } catch (e) {
@@ -91,7 +91,7 @@ export default function NuevaOrdenPage() {
         if (!p.puede_comprar) setTipo("reembolso");
       } catch { /* se decide al mandar */ }
     })();
-  }, [activo, cargandoNegocio]);
+  }, [empresa, cargandoEmpresa]);
 
   // Las partidas del proyecto escogido: a cuál de los compromisos que ya
   // existen va esta compra. Si a ninguno, se crea una nueva.
@@ -124,16 +124,15 @@ export default function NuevaOrdenPage() {
     ? proveedores.find((p) => p.id === proveedorId)?.nombre ?? ""
     : proveedorNuevo.trim();
 
-  const listo = !!activo?.id && Number(String(monto).replace(/[\s$,]/g, "")) > 0
+  const listo = !!empresa?.id && Number(String(monto).replace(/[\s$,]/g, "")) > 0
     && concepto.trim().length > 0 && cuadra && !guardando;
 
   const guardar = async () => {
-    if (!activo?.id) return;
+    if (!empresa?.id) return;
     setError("");
     setGuardando(true);
     try {
       const o = await crearOrden({
-        negocio_id: activo.id,
         tipo,
         proveedor_id: proveedorId || null,
         proveedor_nombre: nombreProveedor || null,
@@ -166,8 +165,8 @@ export default function NuevaOrdenPage() {
     }
   };
 
-  if (cargandoNegocio) return <div className="text-sm text-ink-muted">Cargando…</div>;
-  if (!activo) {
+  if (cargandoEmpresa) return <div className="text-sm text-ink-muted">Cargando…</div>;
+  if (!empresa) {
     return (
       <div className="bg-white border border-black/5 rounded-2xl p-10 text-center">
         <p className="text-sm font-medium text-ink-dim mb-1">Cargando la empresa…</p>

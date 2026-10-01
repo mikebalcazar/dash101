@@ -51,7 +51,6 @@ export interface PagoDeRaya {
 
 export interface Raya {
   id: string;
-  negocio_id: string;
   periodo_inicio: string;
   periodo_fin: string;
   cuenta_id: string | null;
@@ -120,8 +119,8 @@ export async function crearGente(nombre: string, puesto = ''): Promise<GenteDeRa
 
 /* ─────────────── los cortes ─────────────── */
 
-export async function listRayas(negocio_id: string): Promise<Raya[]> {
-  const r = await pedir<{ rayas: Record<string, unknown>[] }>(`${base()}/rayas?negocio_id=${encodeURIComponent(negocio_id)}`);
+export async function listRayas(): Promise<Raya[]> {
+  const r = await pedir<{ rayas: Record<string, unknown>[] }>(`${base()}/rayas`);
   return r.rayas.map(enPesos);
 }
 
@@ -131,7 +130,7 @@ export async function getRaya(id: string): Promise<{ raya: Raya; pagos: PagoDeRa
 }
 
 export async function crearRaya(d: {
-  negocio_id: string; periodo_inicio: string; periodo_fin: string; nota?: string; pagos?: RenglonDeRaya[];
+  periodo_inicio: string; periodo_fin: string; nota?: string; pagos?: RenglonDeRaya[];
 }): Promise<{ raya: Raya; pagos: PagoDeRaya[] }> {
   const r = await pedir<{ raya: Record<string, unknown>; pagos: Record<string, unknown>[] }>(`${base()}/rayas`, {
     method: 'POST',

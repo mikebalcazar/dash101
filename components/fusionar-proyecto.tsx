@@ -36,11 +36,9 @@ const enPalabras = (movidos: Record<string, number>) =>
 
 export function FusionarProyecto({
   proyecto,
-  negocioId,
   onFusionado,
 }: {
   proyecto: Proyecto;
-  negocioId: string;
   onFusionado: () => void;
 }) {
   const [otros, setOtros] = useState<Proyecto[]>([]);
@@ -52,11 +50,11 @@ export function FusionarProyecto({
 
   useEffect(() => {
     let vivo = true;
-    listProyectos(negocioId)
+    listProyectos()
       .then((ps) => { if (vivo) setOtros(ps.filter((p) => p.id !== proyecto.id)); })
       .catch(() => { if (vivo) setOtros([]); });
     return () => { vivo = false; };
-  }, [negocioId, proyecto.id]);
+  }, [proyecto.id]);
 
   if (otros.length === 0) return null;
 

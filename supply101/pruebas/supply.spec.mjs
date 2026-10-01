@@ -107,10 +107,9 @@ test('se entra con la cuenta de la suite', async () => {
 });
 
 test('se pide una compra desde el teléfono, con foto y con su desglose', async () => {
-  /* La cuenta de pruebas tiene que existir en el registro de la empresa,
-   * que es al que la API cuelga cada orden desde el contrato 0.61.0 (1-oct:
-   * ya no hay negocio que escoger). Aquí sólo se comprueba; de ella se paga
-   * en la prueba que sigue. */
+  /* La cuenta de pruebas tiene que existir en la empresa, que es de la que
+   * la API cuelga cada orden (contrato 0.63.0). Aquí sólo se comprueba; de
+   * ella se paga en la prueba que sigue. */
   await cuentaDePruebas();
   await pag.getByRole('button', { name: 'Pedir una compra' }).waitFor({ timeout: 30000 });
 

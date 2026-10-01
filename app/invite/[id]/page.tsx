@@ -23,8 +23,6 @@ export default function AceptarInvitacionPage() {
   const id = params?.id as string;
   const { user, loading: authLoading, signInGoogle, signInEmail, signUpEmail } = useAuth();
 
-  // Solo usar el context de negocio activo si el usuario está logueado
-  // (evita error si el provider no está)
   const [inv, setInv] = useState<Invitacion | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -99,7 +97,7 @@ export default function AceptarInvitacionPage() {
     setAccepting(true);
     try {
       const res = await aceptarInvitacion(inv.id!, user.uid, user.email ?? "");
-      setAccepted({ nombre: res.negocio_nombre });
+      setAccepted({ nombre: res.empresa_nombre });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al aceptar");
       setAccepting(false);
@@ -192,7 +190,7 @@ export default function AceptarInvitacionPage() {
           ) : (
             <>
               <h2 className="text-base font-medium text-ink-dim mb-1">
-                Invitación a {inv!.negocio_nombre}
+                Invitación a {inv!.empresa_nombre}
               </h2>
               <p className="text-xs text-ink-muted mb-4">
                 <strong>{inv!.invited_by_nombre}</strong> te invitó a colaborar

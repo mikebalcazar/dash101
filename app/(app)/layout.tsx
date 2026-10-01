@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { NegocioActivoProvider } from "@/lib/negocio-activo-context";
+import { EmpresaProvider } from "@/lib/empresa-context";
 import { Sidebar } from "@/components/sidebar";
 import { Topbar } from "@/components/topbar";
 import { VersionNueva } from "@/components/version-nueva";
@@ -25,7 +25,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <NegocioActivoProvider>
+    <EmpresaProvider>
       {/* En el teléfono el marco no se puede dar el lujo de márgenes: 16 de
           página + 24 de main + 64 de menú dejaban 246 px para el contenido a
           390 de ancho, y todo salía apretado y en letra chica (Mike, 30-sep:
@@ -41,6 +41,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <VersionNueva />
         </div>
       </div>
-    </NegocioActivoProvider>
+    </EmpresaProvider>
   );
 }

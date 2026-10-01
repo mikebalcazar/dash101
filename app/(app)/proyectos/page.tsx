@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import { listProyectos } from "@/lib/proyectos";
 import type { Proyecto } from "@/types/schema";
 import { ESTADO_PROYECTO_LABELS } from "@/types/schema";
@@ -18,28 +18,28 @@ const ESTADO_STYLE: Record<string, string> = {
 };
 
 export default function ProyectosPage() {
-  const { activo, loading: loadingNegocio } = useNegocioActivo();
+  const { empresa, loading: loadingEmpresa } = useEmpresa();
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (loadingNegocio) return;
-    if (!activo?.id) {
+    if (loadingEmpresa) return;
+    if (!empresa?.id) {
       setProyectos([]);
       setLoading(false);
       return;
     }
     setLoading(true);
-    listProyectos(activo.id)
+    listProyectos()
       .then(setProyectos)
       .catch((e) => setError(e instanceof Error ? e.message : "Error al cargar"))
       .finally(() => setLoading(false));
-  }, [activo, loadingNegocio]);
+  }, [empresa, loadingEmpresa]);
 
-  if (loadingNegocio || loading) return <div className="text-sm text-ink-muted">Cargando…</div>;
+  if (loadingEmpresa || loading) return <div className="text-sm text-ink-muted">Cargando…</div>;
 
-  if (!activo) {
+  if (!empresa) {
     return (
       <div className="bg-white border border-black/5 rounded-2xl p-10 text-center">
         <p className="text-sm font-medium text-ink-dim mb-1">Cargando la empresa…</p>
@@ -56,10 +56,10 @@ export default function ProyectosPage() {
         <div>
           <h2 className="text-lg font-medium text-ink-dim">Proyectos</h2>
           <p className="text-xs text-ink-muted mt-0.5">
-            {activo.nombre} ·{" "}
+            {empresa.nombre} ·{" "}
             {proyectos.length === 0
               ? "Sin proyectos"
-              : `${proyectos.length} · Vendido ${formatMonto(totalVenta, activo.moneda)} · Disponible ${formatMonto(totalDisp, activo.moneda)}`}
+              : `${proyectos.length} · Vendido ${formatMonto(totalVenta, empresa.moneda)} · Disponible ${formatMonto(totalDisp, empresa.moneda)}`}
           </p>
         </div>
         <Link

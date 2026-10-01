@@ -3,14 +3,14 @@
  * Mike, 30-sep-2026: «El dash, necesito un módulo de accionistas donde se
  * registren pagos a los accionistas como retiro de utilidades».
  *
- * El accionista es una fila de la suite (`accionistas`, por negocio). El
+ * El accionista es una fila de la suite (`accionistas`, de la empresa). El
  * RETIRO NO ES UNA TABLA: es un egreso en `movimientos` con la categoría
  * `retiro_utilidades` y la contraparte `accionista`. Se registra con el
  * mismo `createMovimiento` de siempre —pesos con decimales, `Date`— para
  * que baje el saldo de la cuenta de la que salió, aparezca en Movimientos,
  * en la conciliación y en el flujo, y se pueda corregir o borrar como
  * cualquier otro movimiento. La categoría es lo que lo aparta de los
- * gastos: un retiro no es un gasto del negocio, es utilidad que se reparte.
+ * gastos: un retiro no es un gasto de la empresa, es utilidad que se reparte.
  *
  * Sólo API (como la raya): no hay versión de Firestore de esto. */
 
@@ -21,7 +21,7 @@ import { createMovimiento } from './movimientos';
 import { CATEGORIA_RETIRO_UTILIDADES, type Accionista } from '@/types/schema';
 
 export interface FilaAccionista {
-  id: string; negocio_id: string; nombre: string; nombre_norm: string; rfc: string | null; correo: string | null;
+  id: string; nombre: string; nombre_norm: string; rfc: string | null; correo: string | null;
   telefono: string | null; porcentaje: number | null; notas: string | null; activo: boolean; creado_at: string;
 }
 
@@ -52,7 +52,7 @@ const ruta = (resto = '') => `/orgs/${org()}/accionistas${resto}`;
 
 export function accionista(f: FilaAccionista): Accionista {
   return {
-    id: f.id, negocio_id: f.negocio_id, nombre: f.nombre, rfc: f.rfc ?? '', correo: f.correo ?? '', telefono: f.telefono ?? '',
+    id: f.id, nombre: f.nombre, rfc: f.rfc ?? '', correo: f.correo ?? '', telefono: f.telefono ?? '',
     porcentaje: f.porcentaje === null || f.porcentaje === undefined ? null : Number(f.porcentaje), notas: f.notas ?? '', activo: !!f.activo,
   };
 }
@@ -87,14 +87,13 @@ export async function personasDeRoster(): Promise<PersonaDeRoster[]> {
   return r.personas.map((p) => ({ id: p.id, nombre: p.nombre, rfc: p.rfc ?? '', correo: p.correo ?? '', puesto: p.puesto ?? '' }));
 }
 
-/** Todos del negocio, activos primero y en orden de nombre. */
-export async function listAccionistas(negocio_id: string): Promise<Accionista[]> {
-  const filas = (await listarCompleto<FilaAccionista>('accionistas', { negocio_id })).map(accionista);
+/** Todos los de la empresa, activos primero y en orden de nombre. */
+export async function listAccionistas(): Promise<Accionista[]> {
+  const filas = (await listarCompleto<FilaAccionista>('accionistas')).map(accionista);
   return filas.sort((a, b) => Number(b.activo) - Number(a.activo) || a.nombre.localeCompare(b.nombre, 'es'));
 }
 
-/** `_negocio_id` ya no viaja (0.61.0): la API cuelga al accionista de la empresa. */
-export async function createAccionista(_negocio_id: string, d: AccionistaInput): Promise<Accionista> {
+export async function createAccionista(d: AccionistaInput): Promise<Accionista> {
   try {
     return accionista(await pedir<FilaAccionista>(ruta(), { method: 'POST', body: limpio(d) }));
   } catch (e) { enClaro(e); }
@@ -118,12 +117,12 @@ export async function darDeBaja(id: string, activo = false): Promise<Accionista>
   } catch (e) { enClaro(e); }
 }
 
-/** Los retiros del negocio, el más reciente primero. Se leen los egresos
+/** Los retiros de la empresa, el más reciente primero. Se leen los egresos
  *  COMPLETOS (no las 500 de siempre) y se quedan los de la categoría. */
-export async function listRetiros(negocio_id: string): Promise<Retiro[]> {
+export async function listRetiros(): Promise<Retiro[]> {
   const [egresos, cuentas] = await Promise.all([
-    listarCompleto<A.FilaMovimiento>('movimientos', { negocio_id, tipo: 'egreso' }),
-    listar<A.FilaCuenta>('cuentas', { negocio_id }),
+    listarCompleto<A.FilaMovimiento>('movimientos', { tipo: 'egreso' }),
+    listar<A.FilaCuenta>('cuentas'),
   ]);
   const nombreDeCuenta = new Map(cuentas.map((c) => [c.id, c.nombre]));
   return egresos
@@ -137,7 +136,6 @@ export async function listRetiros(negocio_id: string): Promise<Retiro[]> {
 }
 
 export interface RetiroInput {
-  negocio_id: string;
   accionista: Accionista;
   cuenta_id: string;
   cuenta_nombre: string;
@@ -154,8 +152,7 @@ export async function registrarRetiro(uid: string, d: RetiroInput): Promise<stri
   return createMovimiento(uid, {
     tipo: 'egreso', monto: d.monto, fecha: d.fecha, cuenta_id: d.cuenta_id, cuenta_nombre: d.cuenta_nombre,
     contraparte_tipo: 'accionista', contraparte_id: d.accionista.id, contraparte_nombre: d.accionista.nombre,
-    /* El tipo todavía lo pide; escribir.ts ya no lo manda a la API. */
-    negocio_id: d.negocio_id, categoria: CATEGORIA_RETIRO_UTILIDADES,
+    categoria: CATEGORIA_RETIRO_UTILIDADES,
     descripcion: d.descripcion?.trim() || `Retiro de utilidades · ${d.accionista.nombre}`,
   });
 }

@@ -3,13 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
-import {
-  listInvitacionesByNegocio,
-  revocarInvitacion,
-} from "@/lib/invitaciones";
-import { removeMiembro, listMiembrosDeNegocio } from "@/lib/negocios";
-import { getUserDoc, getMembership } from "@/lib/users";
+import { useEmpresa } from "@/lib/empresa-context";
+import { listInvitaciones, revocarInvitacion } from "@/lib/invitaciones";
+import { removeMiembro, listMiembros } from "@/lib/equipo";
+import { getUserDoc, getMembership, isOwner } from "@/lib/users";
 import type { Invitacion, Usuario, MembershipInfo } from "@/types/schema";
 import { ROL_LABELS } from "@/types/schema";
 import { Timestamp } from "firebase/firestore";
@@ -47,7 +44,9 @@ const ROL_COLOR = {
 
 export default function EquipoPage() {
   const { user } = useAuth();
-  const { activo, loading: loadingNegocio } = useNegocioActivo();
+  const { empresa, loading: loadingEmpresa } = useEmpresa();
+  /** Quien está en sesión, con su rol en la empresa. */
+  const [yo, setYo] = useState<Usuario | null>(null);
   const [miembros, setMiembros] = useState<MiembroData[]>([]);
   const [invitaciones, setInvitaciones] = useState<Invitacion[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,7 +54,7 @@ export default function EquipoPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const load = async () => {
-    if (!activo?.id) {
+    if (!empresa?.id || !user) {
       setMiembros([]);
       setInvitaciones([]);
       setLoading(false);
@@ -63,19 +62,21 @@ export default function EquipoPage() {
     }
     setLoading(true);
     try {
-      const [uids, invs] = await Promise.all([
-        listMiembrosDeNegocio(activo.id),
-        listInvitacionesByNegocio(activo.id),
+      const [mio, uids, invs] = await Promise.all([
+        getUserDoc(user.uid),
+        listMiembros(),
+        listInvitaciones(),
       ]);
+      setYo(mio);
       const usuarios = await Promise.all(
         uids.map(async (uid) => {
           const u = await getUserDoc(uid);
-          const m = getMembership(u, activo.id!);
+          const m = getMembership(u);
           return {
             uid,
             user: u,
             membership: m,
-            isOwner: uid === activo.owner_uid || m?.rol === "owner",
+            isOwner: m?.rol === "owner",
           } as MiembroData;
         })
       );
@@ -89,12 +90,12 @@ export default function EquipoPage() {
   };
 
   useEffect(() => {
-    if (loadingNegocio) return;
+    if (loadingEmpresa) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activo, loadingNegocio]);
+  }, [empresa, loadingEmpresa]);
 
-  const soyOwner = user && activo && activo.owner_uid === user.uid;
+  const soyOwner = !!user && !!empresa && isOwner(yo);
 
   const handleCopyLink = (id: string) => {
     const url = `${window.location.origin}/invite/${id}`;
@@ -117,16 +118,16 @@ export default function EquipoPage() {
     if (!confirm(`¿Remover a ${nombre} de la empresa? Perderá acceso inmediatamente.`))
       return;
     try {
-      await removeMiembro(activo!.id!, uid);
+      await removeMiembro(uid);
       load();
     } catch (e) {
       alert(e instanceof Error ? e.message : "Error");
     }
   };
 
-  if (loadingNegocio || loading) return <div className="text-sm text-ink-muted">Cargando…</div>;
+  if (loadingEmpresa || loading) return <div className="text-sm text-ink-muted">Cargando…</div>;
 
-  if (!activo) {
+  if (!empresa) {
     return (
       <div className="bg-white border border-black/5 rounded-2xl p-10 text-center">
         <p className="text-sm font-medium text-ink-dim mb-1">Cargando la empresa…</p>
@@ -143,7 +144,7 @@ export default function EquipoPage() {
         <div>
           <h2 className="text-lg font-medium text-ink-dim">Equipo</h2>
           <p className="text-xs text-ink-muted mt-0.5">
-            {activo.nombre} · {miembros.length}{" "}
+            {empresa.nombre} · {miembros.length}{" "}
             {miembros.length === 1 ? "miembro" : "miembros"}
             {pendientes.length > 0 && ` · ${pendientes.length} invitación${pendientes.length === 1 ? "" : "es"} pendiente${pendientes.length === 1 ? "" : "s"}`}
           </p>

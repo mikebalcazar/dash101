@@ -85,7 +85,7 @@ export async function activarAccesoPortal(
     const err = validarPin(pin);
     if (err) throw new Error(err);
     const r = await escribir.darAccesoPortal(clienteId, correo, pin);
-    const n = await contarLoVisible(clienteId, cliente.negocio_id);
+    const n = await contarLoVisible(clienteId);
     return { uid: r.usuario_id, ...n, reactivado: !!cliente.uid && cliente.uid === r.usuario_id };
   }
 
@@ -95,7 +95,7 @@ export async function activarAccesoPortal(
       setAccesoPortal(clienteId, { uid: cliente.uid!, portal_email: correo, portal_activo: true })
     );
     const n = await paso("2/3 marcar proyectos e ingresos del cliente", () =>
-      propagarClienteUid(clienteId, cliente.uid!, cliente.negocio_id)
+      propagarClienteUid(clienteId, cliente.uid!)
     );
     return { uid: cliente.uid, ...n, reactivado: true };
   }
@@ -126,7 +126,7 @@ export async function activarAccesoPortal(
     setAccesoPortal(clienteId, { uid, portal_email: correo, portal_activo: true })
   );
   const n = await paso("2/3 marcar proyectos e ingresos del cliente", () =>
-    propagarClienteUid(clienteId, uid, cliente.negocio_id)
+    propagarClienteUid(clienteId, uid)
   );
   return { uid, ...n, reactivado: false };
 }
@@ -144,7 +144,7 @@ export async function desactivarAccesoPortal(cliente: Cliente): Promise<void> {
     portal_email: cliente.portal_email ?? null,
     portal_activo: false,
   });
-  await propagarClienteUid(cliente.id!, null, cliente.negocio_id);
+  await propagarClienteUid(cliente.id!, null);
 }
 
 /** Con la API el socio pone el PIN nuevo aquí mismo: es el mismo POST de dar
@@ -159,10 +159,10 @@ export async function cambiarPinPortal(cliente: Cliente, pin: string): Promise<v
 }
 
 /** Cuántos proyectos e ingresos verá el cliente en su portal, para el aviso. */
-async function contarLoVisible(clienteId: string, negocioId: string): Promise<{ proyectos: number; movimientos: number }> {
-  const proyectos = await listar<FilaProyecto>("proyectos", { negocio_id: negocioId, cliente_id: clienteId });
+async function contarLoVisible(clienteId: string): Promise<{ proyectos: number; movimientos: number }> {
+  const proyectos = await listar<FilaProyecto>("proyectos", { cliente_id: clienteId });
   const ids = new Set(proyectos.map((p) => p.id));
-  const movs = await listar<FilaMovimiento>("movimientos", { negocio_id: negocioId });
+  const movs = await listar<FilaMovimiento>("movimientos");
   return { proyectos: proyectos.length, movimientos: movs.filter((m) => m.tipo === "ingreso" && m.proyecto_id && ids.has(m.proyecto_id)).length };
 }
 

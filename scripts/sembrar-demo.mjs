@@ -29,7 +29,7 @@ const ORG = 'demo';
 
 /* La familia y su cocina. Dinero en centavos, como lo guarda la API. */
 const DEMO = {
-  negocio: { nombre: 'Taller Demo', moneda: 'MXN' },
+  empresa: { nombre: 'Taller Demo', moneda: 'MXN' },
   cuentas: [
     { nombre: 'Banco Demo', tipo: 'banco', banco: 'Banco Ficticio', saldo_inicial: 25000000 },
     { nombre: 'Caja chica', tipo: 'caja', saldo_inicial: 500000 },
@@ -163,23 +163,31 @@ async function main() {
   else if (org.estado === 409) { hallados.push(`orgs/${ORG}`); rev(true, `la org ${ORG} ya existía`); }
   else throw new Error(`crear org: ${org.estado} ${org.error ?? ''}`);
 
-  /* ── negocio, cuentas, proveedores ── */
-  const negocio = await asegurar('negocios', null, 'nombre', DEMO.negocio.nombre, DEMO.negocio);
+  /* ── la empresa, cuentas, proveedores ── */
+  /* La empresa es una y nace con la org (contrato 0.63.0): se lee por su
+   * ruta y, si no se llama como la demo, se le pone el nombre. */
+  const empresa = await pedir(`/orgs/${ORG}/empresa`, { app: 'dash101' });
+  if (empresa.estado !== 200) throw new Error(`empresa: ${empresa.estado} ${empresa.error ?? ''}`);
+  if (empresa.data.nombre !== DEMO.empresa.nombre || empresa.data.moneda !== DEMO.empresa.moneda) {
+    const r = await pedir(`/orgs/${ORG}/empresa`, { app: 'dash101', method: 'PATCH', body: DEMO.empresa });
+    if (r.estado !== 200) throw new Error(`empresa: no se pudo nombrar (${r.estado} ${r.error ?? ''})`);
+    rev(true, `la empresa se llama ${DEMO.empresa.nombre}`);
+  } else hallados.push('empresa');
   const cuentas = {};
-  for (const c of DEMO.cuentas) cuentas[c.nombre] = await asegurar('cuentas', { negocio_id: negocio.id }, 'nombre', c.nombre, { ...c, negocio_id: negocio.id });
+  for (const c of DEMO.cuentas) cuentas[c.nombre] = await asegurar('cuentas', null, 'nombre', c.nombre, c);
   const proveedores = {};
   for (const p of DEMO.proveedores) proveedores[p.nombre] = await asegurar('proveedores', null, 'nombre', p.nombre, p);
 
   /* ── la familia y su cocina ── */
-  const cliente = await asegurar('clientes', { negocio_id: negocio.id }, 'nombre', DEMO.cliente.nombre, { ...DEMO.cliente, negocio_id: negocio.id });
-  const proyecto = await asegurar('proyectos', { negocio_id: negocio.id, cliente_id: cliente.id }, 'nombre', DEMO.proyecto.nombre, { ...DEMO.proyecto, negocio_id: negocio.id, cliente_id: cliente.id });
+  const cliente = await asegurar('clientes', null, 'nombre', DEMO.cliente.nombre, DEMO.cliente);
+  const proyecto = await asegurar('proyectos', { cliente_id: cliente.id }, 'nombre', DEMO.proyecto.nombre, { ...DEMO.proyecto, cliente_id: cliente.id });
 
   /* ── ítems en varias etapas ── */
   const items = {};
   for (const it of DEMO.items) {
     const { etapa, notas, ...datos } = it;
     const fila = await asegurar('items', { proyecto_id: proyecto.id }, 'nombre', it.nombre, {
-      ...datos, estado: 'vendido', proyecto_id: proyecto.id, cliente_id: cliente.id, negocio_id: negocio.id, moneda: 'MXN',
+      ...datos, estado: 'vendido', proyecto_id: proyecto.id, cliente_id: cliente.id, moneda: 'MXN',
     });
     items[it.nombre] = fila;
     // Las etapas sólo se mueven con /etapa y sólo hacia adelante, una por una,
@@ -203,7 +211,7 @@ async function main() {
   for (const m of DEMO.movimientos) {
     const { cuenta, proveedor, item, ...datos } = m;
     await asegurar('movimientos', { proyecto_id: proyecto.id }, 'descripcion', m.descripcion, {
-      ...datos, negocio_id: negocio.id, cuenta_id: cuentas[cuenta].id, proyecto_id: proyecto.id,
+      ...datos, cuenta_id: cuentas[cuenta].id, proyecto_id: proyecto.id,
       item_id: item ? items[item].id : null,
       contraparte_id: m.contraparte_tipo === 'cliente' ? cliente.id : proveedores[proveedor].id,
       contraparte_nombre: m.contraparte_tipo === 'cliente' ? cliente.nombre : proveedor,
@@ -213,7 +221,7 @@ async function main() {
   /* ── gastos fijos ── */
   for (const o of DEMO.opex) {
     const { cuenta, ...datos } = o;
-    await asegurar('opex', { negocio_id: negocio.id }, 'nombre', o.nombre, { ...datos, negocio_id: negocio.id, cuenta_id: cuentas[cuenta].id });
+    await asegurar('opex', null, 'nombre', o.nombre, { ...datos, cuenta_id: cuentas[cuenta].id });
   }
 
   /* ── el portal de la familia (peek101 depende de esto) ── */
@@ -247,7 +255,7 @@ async function main() {
   for (const it of DEMO.items) rev(porNombre[it.nombre]?.etapa === it.etapa, `${it.nombre}: etapa ${it.etapa}`, porNombre[it.nombre]?.clave ? `clave ${porNombre[it.nombre].clave}` : '');
   rev(!!porNombre['Cocina integral en L']?.clave, 'la cocina ya tiene clave (nace en la 4)');
 
-  for (const t of ['negocios', 'cuentas', 'clientes', 'proveedores', 'proyectos', 'items', 'partidas', 'movimientos', 'opex', 'avances']) {
+  for (const t of ['cuentas', 'clientes', 'proveedores', 'proyectos', 'items', 'partidas', 'movimientos', 'opex', 'avances']) {
     const l = await pedir(`/orgs/${ORG}/${t}`, { app: 'dash101' });
     linea(`  ${t.padEnd(12)} ${String(l.data?.total ?? '?').padStart(3)}`);
   }
@@ -287,7 +295,6 @@ async function main() {
     let oc = porConceptoOC[c.concepto];
     if (!oc) {
       const r = await pedir(`/orgs/${ORG}/ordenes`, { app: 'dash101', method: 'POST', body: {
-        negocio_id: negocio.id,
         proveedor_id: proveedores[c.proveedor].id, proveedor_nombre: c.proveedor,
         concepto: c.concepto, monto: c.monto, con_factura: true, urgente: !!c.urgente,
         fecha_maxima_pago: dia(c.dias),
@@ -306,7 +313,7 @@ async function main() {
       // que YA existe, que es como llega en la vida real.
       if (c.factura) {
         const cf = await pedir(`/orgs/${ORG}/fiscal/cfdi`, { app: 'dash101', method: 'POST', body: {
-          negocio_id: negocio.id, uuid: c.factura, tipo: 'egreso', rfc: 'XAXX010101000',
+          uuid: c.factura, tipo: 'egreso', rfc: 'XAXX010101000',
           razon_social: c.proveedor, subtotal: oc.subtotal, iva: oc.iva, total: oc.monto, fecha: dia(0),
         } });
         if (cf.estado === 201) {

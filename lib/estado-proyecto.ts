@@ -53,7 +53,8 @@ export interface EstadoDelProyecto {
   generado_at: string;
   proyecto: { id: string; nombre: string; estado: string; fecha_inicio: string | null; fecha_cierre: string | null };
   cliente: { id: string; nombre: string; rfc: string | null; correo: string | null; telefono: string | null } | null;
-  negocio: { id: string; nombre: string; rfc: string | null; moneda: string | null } | null;
+  /** Quien vende: la empresa, con su RFC. */
+  empresa: { id: string; nombre: string; rfc: string | null; moneda: string | null } | null;
   items: RenglonDelEstado[];
   movimientos: PagoDelEstado[];
   /** Todo en PESOS, menos `tasa_iva`, que va en PUNTOS BASE (1600 = 16 %). */
@@ -62,6 +63,14 @@ export interface EstadoDelProyecto {
     tasa_iva: number; iva_incluido: boolean;
     cobrado: number; saldo: number; piezas: number;
   };
+}
+
+/** Quien vende es LA EMPRESA. El contrato 0.63.0 todavía manda ese bloque
+ *  con el nombre de antes, por compatibilidad; aquí se acepta con cualquiera
+ *  de los dos y las pantallas sólo conocen `empresa`. */
+function quienVende(r: Record<string, any>): EstadoDelProyecto['empresa'] {
+  const e = r.empresa ?? r.negocio;
+  return e ? { id: String(e.id), nombre: String(e.nombre ?? ''), rfc: e.rfc ?? null, moneda: e.moneda ?? 'MXN' } : null;
 }
 
 export async function estadoDelProyecto(proyecto_id: string): Promise<EstadoDelProyecto> {
@@ -77,10 +86,7 @@ export async function estadoDelProyecto(proyecto_id: string): Promise<EstadoDelP
       ? { id: String(r.cliente.id), nombre: String(r.cliente.nombre ?? ''), rfc: r.cliente.rfc ?? null,
           correo: r.cliente.correo ?? null, telefono: r.cliente.telefono ?? null }
       : null,
-    negocio: r.negocio
-      ? { id: String(r.negocio.id), nombre: String(r.negocio.nombre ?? ''), rfc: r.negocio.rfc ?? null,
-          moneda: r.negocio.moneda ?? 'MXN' }
-      : null,
+    empresa: quienVende(r),
     items: (r.items ?? []).map((i: Record<string, any>) => ({
       id: String(i.id), clave: i.clave ?? null, nombre: String(i.nombre ?? ''),
       descripcion: i.descripcion ?? null, tipo: i.tipo ?? null,

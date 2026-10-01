@@ -36,8 +36,8 @@ export interface IvaDelMes {
   facturas: { emitidas: number; recibidas: number; canceladas: number };
 }
 
-export async function getIva(rango: Rango, negocio_id?: string | null): Promise<IvaDelMes> {
-  const r = await pedir<IvaDelMes>(`${base()}/iva${query(rango, negocio_id)}`);
+export async function getIva(rango: Rango): Promise<IvaDelMes> {
+  const r = await pedir<IvaDelMes>(`${base()}/iva${query(rango)}`);
   return {
     ...r,
     trasladado: aPesos(r.trasladado),
@@ -65,8 +65,8 @@ export interface Cuadre {
   egresos: LadoDelCuadre;
 }
 
-export async function getCuadre(rango: Rango, negocio_id?: string | null): Promise<Cuadre> {
-  const r = await pedir<Cuadre>(`${base()}/cuadre${query(rango, negocio_id)}`);
+export async function getCuadre(rango: Rango): Promise<Cuadre> {
+  const r = await pedir<Cuadre>(`${base()}/cuadre${query(rango)}`);
   const lado = (l: LadoDelCuadre): LadoDelCuadre => ({
     total: aPesos(l.total), facturado: aPesos(l.facturado), fuera: aPesos(l.fuera),
   });
@@ -97,11 +97,9 @@ export interface PendienteDeFactura {
  *  hasta entonces sólo podían venir egresos, porque la espera de la factura
  *  se leía de la orden de compra y un cobro no tiene orden. */
 export async function listPendientes(
-  negocio_id?: string | null,
   tipo?: 'ingreso' | 'egreso',
 ): Promise<PendienteDeFactura[]> {
   const q = new URLSearchParams();
-  if (negocio_id) q.set('negocio_id', negocio_id);
   if (tipo) q.set('tipo', tipo);
   const s = q.toString();
   const r = await pedir<{ filas: (Omit<PendienteDeFactura, 'monto'> & { monto: number })[] }>(
@@ -117,7 +115,6 @@ export type EstadoCfdi = 'vigente' | 'cancelada';
 
 export interface Cfdi {
   id: string;
-  negocio_id: string;
   /** El folio fiscal del SAT. Único por empresa. */
   uuid: string;
   rfc: string | null;
@@ -146,7 +143,6 @@ const cfdiDePesos = (f: FilaCfdi): Cfdi => ({
 });
 
 export interface CfdiInput {
-  negocio_id: string;
   uuid: string;
   tipo: TipoCfdi;
   rfc?: string | null;
@@ -161,12 +157,11 @@ export interface CfdiInput {
 }
 
 export async function listCfdi(
-  rango: Rango, filtros: { tipo?: TipoCfdi; estado?: EstadoCfdi; negocio_id?: string | null } = {},
+  rango: Rango, filtros: { tipo?: TipoCfdi; estado?: EstadoCfdi } = {},
 ): Promise<Cfdi[]> {
   const q = new URLSearchParams(parametros(rango));
   if (filtros.tipo) q.set('tipo', filtros.tipo);
   if (filtros.estado) q.set('estado', filtros.estado);
-  if (filtros.negocio_id) q.set('negocio_id', filtros.negocio_id);
   const s = q.toString();
   const r = await pedir<{ filas: FilaCfdi[] }>(`${base()}/cfdi${s ? '?' + s : ''}`);
   return r.filas.map(cfdiDePesos);
@@ -176,7 +171,7 @@ export async function crearCfdi(d: CfdiInput): Promise<Cfdi> {
   return cfdiDePesos(await pedir<FilaCfdi>(`${base()}/cfdi`, {
     method: 'POST',
     body: {
-      negocio_id: d.negocio_id, uuid: d.uuid.trim(), tipo: d.tipo,
+      uuid: d.uuid.trim(), tipo: d.tipo,
       rfc: d.rfc || null, razon_social: d.razon_social || null,
       subtotal: aCentavos(d.subtotal), iva: aCentavos(d.iva),
       retenciones: aCentavos(d.retenciones ?? 0), total: aCentavos(d.total),
@@ -229,13 +224,8 @@ export type Rango = { mes: string } | { desde: string; hasta: string };
 function parametros(r: Rango): Record<string, string> {
   return 'mes' in r ? { mes: r.mes } : { desde: r.desde, hasta: r.hasta };
 }
-function query(r: Rango, negocio_id?: string | null): string {
-  const q = new URLSearchParams(parametros(r));
-  // El RFC vive en el negocio: el IVA de un mes es el de UN negocio, no la
-  // suma de los que tenga la empresa. El filtro lo aplica el servidor,
-  // dentro de las mismas consultas que suman.
-  if (negocio_id) q.set('negocio_id', negocio_id);
-  return `?${q.toString()}`;
+function query(r: Rango): string {
+  return `?${new URLSearchParams(parametros(r)).toString()}`;
 }
 
 /** El mes de hoy, en `AAAA-MM`, por día local. */

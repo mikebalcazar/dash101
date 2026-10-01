@@ -1,6 +1,6 @@
 "use client";
 
-/* La raya: los cortes de este negocio.
+/* La raya: los cortes de la empresa.
  *
  * Mike, 20-sep: «pon en la fila un administrador de nóminas», con el alcance
  * que él escogió —pagos de raya y recibos, no nómina calculada— y aquí
@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { IconPlus, IconCash, IconLock } from "@tabler/icons-react";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import { ErrorApi } from "@/lib/api/cliente";
 import { listRayas, type Raya } from "@/lib/nomina";
 import { formatMonto } from "@/lib/format";
@@ -26,26 +26,26 @@ const COLOR: Record<Raya["estado"], string> = {
 };
 
 export default function NominaPage() {
-  const { activo, loading: cargandoNegocio } = useNegocioActivo();
+  const { empresa, loading: cargandoEmpresa } = useEmpresa();
   const [filas, setFilas] = useState<Raya[]>([]);
   const [cargando, setCargando] = useState(true);
   const [sinPermiso, setSinPermiso] = useState(false);
   const [error, setError] = useState("");
 
   const cargar = useCallback(async () => {
-    if (!activo?.id) return;
+    if (!empresa?.id) return;
     setCargando(true); setError(""); setSinPermiso(false);
     try {
-      setFilas(await listRayas(activo.id));
+      setFilas(await listRayas());
     } catch (e) {
       if (e instanceof ErrorApi && e.error === "sin_permiso") setSinPermiso(true);
       else setError(e instanceof Error ? e.message : "Error");
     } finally {
       setCargando(false);
     }
-  }, [activo]);
+  }, [empresa]);
 
-  useEffect(() => { if (!cargandoNegocio) void cargar(); }, [cargandoNegocio, cargar]);
+  useEffect(() => { if (!cargandoEmpresa) void cargar(); }, [cargandoEmpresa, cargar]);
 
   if (sinPermiso) {
     return (

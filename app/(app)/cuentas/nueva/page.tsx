@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import { createCuenta } from "@/lib/cuentas";
 import type { Moneda, TipoCuenta } from "@/types/schema";
 import { TIPO_CUENTA_LABELS } from "@/types/schema";
@@ -13,18 +13,18 @@ import { IconArrowLeft } from "@tabler/icons-react";
 export default function NuevaCuentaPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { activo } = useNegocioActivo();
+  const { empresa } = useEmpresa();
 
   const [nombre, setNombre] = useState("");
   const [tipo, setTipo] = useState<TipoCuenta>("banco");
   const [banco, setBanco] = useState("");
   const [numero, setNumero] = useState("");
-  const [moneda, setMoneda] = useState<Moneda>(activo?.moneda ?? "MXN");
+  const [moneda, setMoneda] = useState<Moneda>(empresa?.moneda ?? "MXN");
   const [saldoInicial, setSaldoInicial] = useState("0");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  if (!activo) {
+  if (!empresa) {
     return (
       <div className="max-w-lg">
         <Link href="/cuentas" className="text-xs text-ink-muted hover:text-ink-dim">
@@ -49,7 +49,6 @@ export default function NuevaCuentaPage() {
         numero: numero.trim() || undefined,
         moneda,
         saldo_inicial: saldoNum,
-        negocio_id: activo.id!,
       });
       router.push("/cuentas");
     } catch (err) {

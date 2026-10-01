@@ -7,7 +7,7 @@ import { getOrdenDeMovimiento } from "@/lib/ordenes";
 import { MarcaFiscal } from "@/components/marca-fiscal";
 import { deleteDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import {
   listMovimientos,
   deleteMovimiento,
@@ -44,7 +44,7 @@ const TIPO_META = {
 } as const;
 
 export default function MovimientosPage() {
-  const { activo, loading: loadingNegocio } = useNegocioActivo();
+  const { empresa, loading: loadingEmpresa } = useEmpresa();
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -53,13 +53,13 @@ export default function MovimientosPage() {
   const [cleanupNotice, setCleanupNotice] = useState("");
 
   const load = () => {
-    if (!activo?.id) {
+    if (!empresa?.id) {
       setMovimientos([]);
       setLoading(false);
       return;
     }
     setLoading(true);
-    listMovimientos(activo.id, { max: 200 })
+    listMovimientos({ max: 200 })
       .then(async (all) => {
         // Auto-cleanup: borrar movs viejos con tipo="transferencia"
         const legacy = all.filter((m) => (m.tipo as string) === "transferencia");
@@ -79,7 +79,7 @@ export default function MovimientosPage() {
             );
             setTimeout(() => setCleanupNotice(""), 5000);
             // Recargar sin las viejas
-            const fresh = await listMovimientos(activo!.id!, { max: 200 });
+            const fresh = await listMovimientos({ max: 200 });
             setMovimientos(fresh.filter((m) => m.tipo === "ingreso" || m.tipo === "egreso"));
           } catch (e) {
             console.warn("Cleanup legacy transfers falló:", e);
@@ -94,10 +94,10 @@ export default function MovimientosPage() {
   };
 
   useEffect(() => {
-    if (loadingNegocio) return;
+    if (loadingEmpresa) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activo, loadingNegocio]);
+  }, [empresa, loadingEmpresa]);
 
   const handleDelete = async (m: Movimiento) => {
     const msg = m.transfer_id
@@ -115,9 +115,9 @@ export default function MovimientosPage() {
     }
   };
 
-  if (loadingNegocio || loading) return <div className="text-sm text-ink-muted">Cargando…</div>;
+  if (loadingEmpresa || loading) return <div className="text-sm text-ink-muted">Cargando…</div>;
 
-  if (!activo) {
+  if (!empresa) {
     return (
       <div className="bg-white border border-black/5 rounded-2xl p-10 text-center">
         <p className="text-sm font-medium text-ink-dim mb-1">Cargando la empresa…</p>
@@ -176,20 +176,20 @@ export default function MovimientosPage() {
         <div>
           <h2 className="text-lg font-medium text-ink-dim">Movimientos</h2>
           <p className="text-xs text-ink-muted mt-0.5">
-            {activo.nombre} · Mes:{" "}
+            {empresa.nombre} · Mes:{" "}
             <span className="text-mint-900">
-              +{formatMonto(totalesMes.ingresos, activo.moneda, { short: true })}
+              +{formatMonto(totalesMes.ingresos, empresa.moneda, { short: true })}
             </span>{" "}
             /{" "}
             <span className="text-mauve-900">
-              −{formatMonto(totalesMes.egresos, activo.moneda, { short: true })}
+              −{formatMonto(totalesMes.egresos, empresa.moneda, { short: true })}
             </span>
           </p>
           {totalesMes.sin_identificar !== 0 && (
             <p className="text-[11px] text-ink-muted mt-0.5">
               Sin identificar (conciliación):{" "}
               <span className="text-mauve-900">
-                {formatMonto(totalesMes.sin_identificar, activo.moneda, { short: true })}
+                {formatMonto(totalesMes.sin_identificar, empresa.moneda, { short: true })}
               </span>
             </p>
           )}
@@ -309,7 +309,7 @@ export default function MovimientosPage() {
                 </div>
                 <p className={`text-sm font-medium whitespace-nowrap ${meta.montoColor}`}>
                   {meta.prefix}
-                  {formatMonto(m.monto, activo.moneda)}
+                  {formatMonto(m.monto, empresa.moneda)}
                 </p>
                 {/* El egreso que dejó una orden pagada lleva a la orden. Va aquí,
                     entre las acciones, y no dentro del renglón del concepto: ese

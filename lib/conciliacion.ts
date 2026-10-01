@@ -15,7 +15,7 @@ import * as A from "./api/adaptar";
 import { listar, pedir } from "./api/cliente";
 import { fuente, org } from "./fuente";
 import { listCuentas } from "./cuentas";
-import type { Conciliacion, Cuenta, EstadisticaConciliacion, Negocio } from "@/types/schema";
+import type { Conciliacion, Cuenta, Empresa, EstadisticaConciliacion } from "@/types/schema";
 import type { Timestamp } from "firebase/firestore";
 
 function soloApi(): void {
@@ -33,10 +33,10 @@ export interface CuentaPorConciliar {
   saldo_registrado: number;
 }
 
-/** Las cuentas del negocio con el saldo que dash101 cree tener ahora mismo. */
-export async function cuentasPorConciliar(negocioId: string): Promise<CuentaPorConciliar[]> {
+/** Las cuentas de la empresa con el saldo que dash101 cree tener ahora mismo. */
+export async function cuentasPorConciliar(): Promise<CuentaPorConciliar[]> {
   soloApi();
-  const cuentas = await listCuentas(negocioId);
+  const cuentas = await listCuentas();
   return cuentas.map((cuenta) => ({ cuenta, saldo_registrado: cuenta.saldo_actual }));
 }
 
@@ -45,15 +45,13 @@ export async function cuentasPorConciliar(negocioId: string): Promise<CuentaPorC
  * la diferencia contra el real y crea los ajustes, todo de una vez: o queda
  * entero o no queda nada.
  *
- * Se mandan **todas** las cuentas del negocio (decisión 5 de Mike); si falta
+ * Se mandan **todas** las cuentas de la empresa (decisión 5 de Mike); si falta
  * alguna, la API contesta `faltan_cuentas` y no escribe nada.
  */
 export async function conciliar(
-  negocioId: string,
   saldos: Array<{ cuenta_id: string; saldo_real: number }>,
 ): Promise<Conciliacion> {
   soloApi();
-  /* Sin negocio_id (0.61.0): la API concilia la empresa. */
   const cuerpo = {
     corte_at: new Date().toISOString(),
     saldos: saldos.map((s) => ({ cuenta_id: s.cuenta_id, saldo_real: A.aCentavos(s.saldo_real) })),
@@ -62,17 +60,17 @@ export async function conciliar(
     `/orgs/${org()}/conciliaciones`,
     { method: "POST", body: cuerpo },
   );
-  const nombres = new Map((await listCuentas(negocioId)).map((c) => [c.id!, c.nombre]));
+  const nombres = new Map((await listCuentas()).map((c) => [c.id!, c.nombre]));
   return A.conciliacion(r.conciliacion, r.cuentas, nombres);
 }
 
-/** Los cortes del negocio, del más reciente al más viejo. */
-export async function listConciliaciones(negocioId: string): Promise<Conciliacion[]> {
+/** Los cortes de la empresa, del más reciente al más viejo. */
+export async function listConciliaciones(): Promise<Conciliacion[]> {
   soloApi();
   const [filas, renglones, cuentas] = await Promise.all([
-    listar<A.FilaConciliacion>("conciliaciones", { negocio_id: negocioId }),
+    listar<A.FilaConciliacion>("conciliaciones"),
     listar<A.FilaConciliacionCuenta>("conciliacion_cuentas"),
-    listCuentas(negocioId),
+    listCuentas(),
   ]);
   const nombres = new Map(cuentas.map((c) => [c.id!, c.nombre]));
   return filas
@@ -81,11 +79,9 @@ export async function listConciliaciones(negocioId: string): Promise<Conciliacio
 }
 
 /** Lo que se escapó: por corte, por cuenta y el acumulado. */
-export async function estadisticaConciliacion(negocioId: string): Promise<EstadisticaConciliacion> {
+export async function estadisticaConciliacion(): Promise<EstadisticaConciliacion> {
   soloApi();
-  const d = await pedir<Parameters<typeof A.estadistica>[0]>(
-    `/orgs/${org()}/conciliaciones/estadistica?negocio_id=${encodeURIComponent(negocioId)}`,
-  );
+  const d = await pedir<Parameters<typeof A.estadistica>[0]>(`/orgs/${org()}/conciliaciones/estadistica`);
   return A.estadistica(d);
 }
 
@@ -94,9 +90,9 @@ export async function estadisticaConciliacion(negocioId: string): Promise<Estadi
  * el día configurado. Si se saltó el lunes, sigue pendiente el martes: la
  * conciliación no se pierde por no hacerla a tiempo.
  */
-export function tocaConciliar(negocio: Negocio | null, ultima: Conciliacion | null, hoy = new Date()): boolean {
-  if (!negocio) return false;
-  const dia = negocio.dia_conciliacion ?? DIA_POR_OMISION;
+export function tocaConciliar(empresa: Empresa | null, ultima: Conciliacion | null, hoy = new Date()): boolean {
+  if (!empresa) return false;
+  const dia = empresa.dia_conciliacion ?? DIA_POR_OMISION;
   const desde = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
   // Cuántos días hay que retroceder para caer en el día configurado.
   desde.setDate(desde.getDate() - ((desde.getDay() - dia + 7) % 7));

@@ -10,7 +10,7 @@ import { IconArrowLeft, IconTrash, IconPrinter, IconFileSpreadsheet, IconPencil 
 import { AccesoPortal } from "@/components/acceso-portal";
 import { FusionarCliente } from "@/components/fusionar-cliente";
 import { DocumentoEstadoDeCuenta } from "@/components/estado-de-cuenta-cliente";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 
 /* LA PANTALLA DEL CLIENTE ES SU ESTADO DE CUENTA, no el formulario.
  *
@@ -29,7 +29,7 @@ export default function ClienteDetallePage() {
   const router = useRouter();
   const params = useParams();
   const id = params?.id as string;
-  const { activo } = useNegocioActivo();
+  const { empresa } = useEmpresa();
 
   const [cliente, setCliente] = useState<Cliente | null>(null);
   const [nombre, setNombre] = useState("");
@@ -263,8 +263,8 @@ export default function ClienteDetallePage() {
       {cliente && <AccesoPortal cliente={cliente} emailSugerido={email} onChange={recargar} />}
 
       {/* Juntar dos que son el mismo (contrato 0.23.0). */}
-      {cliente && activo?.id && (
-        <FusionarCliente cliente={cliente} negocioId={activo.id} onFusionado={recargar} />
+      {cliente && empresa?.id && (
+        <FusionarCliente cliente={cliente} onFusionado={recargar} />
       )}
 
       <div className="mt-10 pt-6 border-t border-mauve-50">

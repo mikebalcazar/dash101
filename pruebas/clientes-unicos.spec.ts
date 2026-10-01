@@ -16,7 +16,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { fuente } from "@/lib/fuente";
 import { entrarDePrueba, pedir } from "@/lib/api/cliente";
-import { createNegocio } from "@/lib/negocios";
 import { clientesParecidos, createCliente, fusionarClientes, getCliente, listClientes } from "@/lib/clientes";
 import { createProyecto, getProyecto } from "@/lib/proyectos";
 
@@ -25,7 +24,7 @@ const ORG = `cl-${(process.env.GITHUB_RUN_ID ?? Date.now().toString(36)).toStrin
 const ORG_ANTES = process.env.NEXT_PUBLIC_ORG;
 
 let uid = "";
-const ids = { negocio: "", enDash: "", enQuote: "", proyecto: "" };
+const ids = { enDash: "", enQuote: "", proyecto: "" };
 
 beforeAll(async () => {
   expect(fuente()).toBe("api");
@@ -35,14 +34,12 @@ beforeAll(async () => {
   process.env.NEXT_PUBLIC_ORG = ORG;
   try { await pedir(`/admin/orgs/${ORG}`, { method: "DELETE" }); } catch { /* no existía */ }
   await pedir("/admin/orgs", { method: "POST", body: { id: ORG, nombre: "Prueba de clientes" } });
-
-  ids.negocio = await createNegocio(uid, { nombre: "Taller", moneda: "MXN" });
   // El mismo cliente, capturado dos veces con nombres distintos.
-  ids.enDash = await createCliente(uid, { nombre: "Muebles Luna SA de CV", telefono: "5555555555", negocio_id: ids.negocio });
-  ids.enQuote = await createCliente(uid, { nombre: "Muebles Luna", email: "compras@luna.mx", negocio_id: ids.negocio });
+  ids.enDash = await createCliente(uid, { nombre: "Muebles Luna SA de CV", telefono: "5555555555"});
+  ids.enQuote = await createCliente(uid, { nombre: "Muebles Luna", email: "compras@luna.mx"});
   ids.proyecto = await createProyecto(uid, {
     nombre: "Cocina Luna", cliente_id: ids.enQuote, cliente_nombre: "Muebles Luna",
-    negocio_id: ids.negocio, negocio_nombre: "Taller",
+   
     precio_venta: 0, estado: "activo", fecha_inicio: new Date(2026, 8, 1), partidas: [],
     items: [{ nombre: "Cocina", monto: 100 }],
   });
@@ -55,14 +52,14 @@ afterAll(async () => {
 
 describe("¿no te refieres a X?", () => {
   it("el nombre corto encuentra al largo y al revés, sin importar acentos ni mayúsculas", async () => {
-    const corto = await clientesParecidos("Muebles Luna", [], ids.negocio);
+    const corto = await clientesParecidos("Muebles Luna", []);
     expect(corto.map((c) => c.id).sort()).toEqual([ids.enDash, ids.enQuote].sort());
-    const feo = await clientesParecidos("  MÚEBLES   luna ", [], ids.negocio);
+    const feo = await clientesParecidos("  MÚEBLES   luna ", []);
     expect(feo.map((c) => c.id).sort()).toEqual([ids.enDash, ids.enQuote].sort());
   });
 
   it("otro nombre no molesta a nadie", async () => {
-    expect(await clientesParecidos("Herrería Sol", [], ids.negocio)).toHaveLength(0);
+    expect(await clientesParecidos("Herrería Sol", [])).toHaveLength(0);
   });
 });
 
@@ -82,7 +79,7 @@ describe("fusionar los dos que son el mismo", () => {
   });
 
   it("y queda un solo cliente en la lista", async () => {
-    const lista = await listClientes(ids.negocio);
+    const lista = await listClientes();
     expect(lista.map((c) => c.id)).toEqual([ids.enDash]);
   });
 });

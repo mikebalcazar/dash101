@@ -20,7 +20,7 @@
 
 import { Timestamp } from 'firebase/firestore';
 import type {
-  Cliente, Conciliacion, ConciliacionCuenta, Cuenta, EstadisticaConciliacion, Movimiento, Negocio, Opex,
+  Cliente, Conciliacion, ConciliacionCuenta, Cuenta, EstadisticaConciliacion, Movimiento, Opex,
   ItemProyecto, PartidaProyecto, Proveedor, Proyecto, RolMiembro, TipoContraparte, Usuario,
 } from '@/types/schema';
 
@@ -79,12 +79,11 @@ export function delDia(dia: string): Date {
 
 /* ─────────────── las filas de la API, con sus nombres ─────────────── */
 
-export interface FilaNegocio { id: string; nombre: string; rfc: string | null; moneda: 'MXN' | 'USD'; dia_conciliacion: number; creado_at: string }
-export interface FilaCuenta { id: string; negocio_id: string; nombre: string; tipo: string; banco: string | null; moneda: 'MXN' | 'USD'; saldo_inicial: number; saldo?: number; creado_at: string }
-export interface FilaCliente { id: string; negocio_id: string; nombre: string; correo: string | null; telefono: string | null; rfc: string | null; notas: string | null; usuario_id: string | null; portal_activo: boolean; creado_at: string }
+export interface FilaCuenta { id: string; nombre: string; tipo: string; banco: string | null; moneda: 'MXN' | 'USD'; saldo_inicial: number; saldo?: number; creado_at: string }
+export interface FilaCliente { id: string; nombre: string; correo: string | null; telefono: string | null; rfc: string | null; notas: string | null; usuario_id: string | null; portal_activo: boolean; creado_at: string }
 export interface FilaProveedor { id: string; nombre: string; rfc: string | null; categoria: string | null; correo: string | null; telefono: string | null; terminos_pago: string | null; notas: string | null; creado_at: string }
 export interface FilaProyecto {
-  id: string; negocio_id: string; cliente_id: string; nombre: string; descripcion: string | null;
+  id: string; cliente_id: string; nombre: string; descripcion: string | null;
   estado: 'planeando' | 'activo' | 'pausado' | 'finiquito' | 'cerrado';
   fecha_inicio: string | null; fecha_fin_estimada: string | null; fecha_cierre: string | null;
   precio_venta: number; cobrado: number; pagado_prov: number; compromiso: number; avance: number;
@@ -112,7 +111,7 @@ export interface FilaItem { id: string; proyecto_id: string | null; nombre: stri
   refs?: { agrupados?: unknown[] } | null }
 export interface FilaPartida { id: string; proyecto_id: string; item_id: string | null; proveedor_id: string | null; proveedor_nombre: string | null; concepto: string | null; monto_acordado: number; monto_pagado: number; estado: 'pendiente' | 'parcial' | 'pagado' }
 export interface FilaMovimiento {
-  id: string; negocio_id: string; tipo: 'ingreso' | 'egreso'; monto: number; fecha: string; cuenta_id: string;
+  id: string; tipo: 'ingreso' | 'egreso'; monto: number; fecha: string; cuenta_id: string;
   proyecto_id: string | null; item_id: string | null; contraparte_tipo: string; contraparte_id: string | null;
   contraparte_nombre: string | null; transfer_id: string | null; descripcion: string | null; categoria: string | null;
   creado_por: string; creado_at: string;
@@ -124,23 +123,12 @@ export interface FilaMovimiento {
   facturado?: boolean; requiere_factura?: boolean; uuid_cfdi?: string | null;
 }
 export interface FilaOpex {
-  id: string; negocio_id: string; nombre: string; tipo: string; monto: number; moneda: 'MXN' | 'USD'; frecuencia: string;
+  id: string; nombre: string; tipo: string; monto: number; moneda: 'MXN' | 'USD'; frecuencia: string;
   dia_semana: number | null; dia_del_mes: number | null; fecha_inicio: string; fecha_fin: string | null;
   cuenta_id: string | null; categoria: string | null; activo: boolean; creado_at: string;
 }
 
-/* ─────────────── negocios, cuentas, clientes, proveedores ─────────────── */
-
-export function negocio(f: FilaNegocio, uid: string): Negocio {
-  return {
-    id: f.id, nombre: f.nombre, descripcion: '', rfc: f.rfc ?? '', moneda: f.moneda,
-    // 1 es lunes, que es lo que la API pone por omisión.
-    dia_conciliacion: f.dia_conciliacion ?? 1,
-    // La suite lleva la membresía en el D1, por empresa, no por negocio: aquí
-    // quien pregunta es miembro, y con eso basta para leer.
-    owner_uid: uid, miembros_uids: [uid], creado_at: ts(f.creado_at), creado_por: '',
-  };
-}
+/* ─────────────── cuentas, clientes, proveedores ─────────────── */
 
 /** `saldo_actual` era caché en Firestore. Desde el contrato 0.60.0 LO SUMA LA
  *  API en cada fila de `cuentas` (`saldo`, centavos, sobre TODOS sus
@@ -160,14 +148,14 @@ export function cuenta(f: FilaCuenta, movimientos: FilaMovimiento[]): Cuenta {
   return {
     id: f.id, nombre: f.nombre, tipo: (f.tipo as Cuenta['tipo']) ?? 'otro', banco: f.banco ?? '', numero: '',
     moneda: f.moneda, saldo_inicial: aPesos(f.saldo_inicial), saldo_actual: aPesos(saldo),
-    negocio_id: f.negocio_id, creado_at: ts(f.creado_at), creado_por: '',
+    creado_at: ts(f.creado_at), creado_por: '',
   };
 }
 
 export function cliente(f: FilaCliente): Cliente {
   return {
     id: f.id, nombre: f.nombre, rfc: f.rfc ?? '', email: f.correo ?? '', telefono: f.telefono ?? '', notas: f.notas ?? '',
-    negocio_id: f.negocio_id, uid: f.usuario_id, portal_email: f.portal_activo ? f.correo : null,
+    uid: f.usuario_id, portal_email: f.portal_activo ? f.correo : null,
     portal_activo: !!f.portal_activo, creado_at: ts(f.creado_at), creado_por: '',
   };
 }
@@ -208,7 +196,7 @@ export function item(f: FilaItem, movimientos: FilaMovimiento[]): ItemProyecto {
 
 export function proyecto(
   f: FilaProyecto,
-  partes: { partidas: FilaPartida[]; items: FilaItem[]; movimientos: FilaMovimiento[]; clientes: Map<string, FilaCliente>; negocios: Map<string, FilaNegocio> },
+  partes: { partidas: FilaPartida[]; items: FilaItem[]; movimientos: FilaMovimiento[]; clientes: Map<string, FilaCliente> },
 ): Proyecto {
   const cli = partes.clientes.get(f.cliente_id);
   const compromiso = aPesos(f.compromiso);
@@ -218,7 +206,6 @@ export function proyecto(
     id: f.id, nombre: f.nombre, descripcion: f.descripcion ?? '', cliente_id: f.cliente_id,
     cliente_nombre: cli?.nombre ?? '', cliente_uid: cli?.portal_activo ? cli.usuario_id : null,
     items: partes.items.filter((i) => i.proyecto_id === f.id && i.estado !== 'cancelado').map((i) => item(i, partes.movimientos)),
-    negocio_id: f.negocio_id, negocio_nombre: partes.negocios.get(f.negocio_id)?.nombre ?? '',
     precio_venta: aPesos(f.precio_venta), compromiso_total: compromiso, cobrado, pagado,
     // Las mismas fórmulas que recalcularProyecto() tenía en Firestore.
     disponible: cobrado - pagado, margen_proyectado: aPesos(f.precio_venta) - compromiso,
@@ -248,7 +235,7 @@ export function movimiento(
     contraparte_tipo: CONTRAPARTES[f.contraparte_tipo] ?? 'otro', contraparte_nombre: f.contraparte_nombre ?? '',
     producto_id: f.item_id, producto_nombre: f.item_id ? nombres.items.get(f.item_id)?.nombre ?? null : null,
     cliente_uid: f.tipo === 'ingreso' && cli?.portal_activo ? cli.usuario_id : null,
-    negocio_id: f.negocio_id, descripcion: f.descripcion ?? '', categoria: f.categoria ?? '',
+    descripcion: f.descripcion ?? '', categoria: f.categoria ?? '',
     facturado: Boolean(f.facturado), requiere_factura: Boolean(f.requiere_factura),
     creado_por: f.creado_por, creado_at: ts(f.creado_at),
   };
@@ -260,14 +247,14 @@ export function opex(f: FilaOpex, cuentas: Map<string, FilaCuenta>): Opex {
     frecuencia: (f.frecuencia as Opex['frecuencia']) ?? 'mensual', dia_semana: f.dia_semana, dia_del_mes: f.dia_del_mes,
     fecha_inicio: ts(f.fecha_inicio), fecha_fin: aTimestamp(f.fecha_fin),
     cuenta_id: f.cuenta_id, cuenta_nombre: f.cuenta_id ? cuentas.get(f.cuenta_id)?.nombre ?? null : null,
-    categoria: f.categoria ?? '', activo: !!f.activo, negocio_id: f.negocio_id, descripcion: '',
+    categoria: f.categoria ?? '', activo: !!f.activo, descripcion: '',
     creado_at: ts(f.creado_at), creado_por: '',
   };
 }
 
 /* ─────────────── la conciliación semanal ─────────────── */
 
-export interface FilaConciliacion { id: string; negocio_id: string; corte_at: string; hecha_por: string; creado_at: string }
+export interface FilaConciliacion { id: string; corte_at: string; hecha_por: string; creado_at: string }
 export interface FilaConciliacionCuenta {
   id: string; conciliacion_id: string; cuenta_id: string; saldo_registrado: number; saldo_real: number;
   diferencia: number; movimiento_id: string | null; creado_at: string;
@@ -284,7 +271,7 @@ export function conciliacionCuenta(f: FilaConciliacionCuenta, nombres?: Map<stri
 export function conciliacion(f: FilaConciliacion, cuentas: FilaConciliacionCuenta[], nombres?: Map<string, string>): Conciliacion {
   const mias = cuentas.filter((c) => c.conciliacion_id === f.id);
   return {
-    id: f.id, negocio_id: f.negocio_id, corte_at: ts(f.corte_at), hecha_por: f.hecha_por,
+    id: f.id, corte_at: ts(f.corte_at), hecha_por: f.hecha_por,
     cuentas: mias.map((c) => conciliacionCuenta(c, nombres)),
     diferencia_total: aPesos(mias.reduce((t, c) => t + c.diferencia, 0)),
   };
@@ -320,19 +307,15 @@ export function estadistica(
 const ROLES: Record<string, RolMiembro> = { owner: 'owner', admin: 'owner', socio: 'socio', staff: 'viewer' };
 
 export function usuario(
-  yo: { usuario: { correo: string; nombre: string | null; creado_at: string }; superadmin: boolean; orgs: Array<{ id: string; rol: string; negocios: string[] }> },
+  yo: { usuario: { correo: string; nombre: string | null; creado_at: string }; superadmin: boolean; orgs: Array<{ id: string; rol: string }> },
   orgId: string,
-  todosLosNegocios: string[],
 ): Usuario {
   // El superadmin manda en todas las empresas sin ser miembro de ninguna; la
   // API lo trata como owner (rutas/orgs.ts) y aquí igual.
-  const mia = yo.orgs.find((o) => o.id === orgId) ?? (yo.superadmin ? { id: orgId, rol: 'owner', negocios: [] } : undefined);
-  // En la suite, `negocios: []` en la membresía quiere decir «todos».
-  const acceso = mia ? (mia.negocios.length ? mia.negocios : todosLosNegocios) : [];
-  const memberships: Usuario['memberships'] = {};
-  for (const n of acceso) memberships[n] = { rol: ROLES[mia?.rol ?? 'staff'] ?? 'viewer', scope: 'all' };
+  const mia = yo.orgs.find((o) => o.id === orgId) ?? (yo.superadmin ? { id: orgId, rol: 'owner' } : undefined);
   return {
     email: yo.usuario.correo, nombre: yo.usuario.nombre ?? yo.usuario.correo.split('@')[0],
-    negocios_acceso: acceso, memberships, creado_at: ts(yo.usuario.creado_at),
+    membership: mia ? { rol: ROLES[mia.rol] ?? 'viewer', scope: 'all' } : null,
+    creado_at: ts(yo.usuario.creado_at),
   };
 }

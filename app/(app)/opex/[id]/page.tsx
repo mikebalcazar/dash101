@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import { listCuentas } from "@/lib/cuentas";
 import { getOpex, updateOpex, deleteOpex } from "@/lib/opex";
 import type { Opex, Cuenta, FrecuenciaOpex, TipoOpex, Moneda } from "@/types/schema";
@@ -15,7 +15,7 @@ export default function OpexDetallePage() {
   const router = useRouter();
   const params = useParams();
   const id = params?.id as string;
-  const { activo } = useNegocioActivo();
+  const { empresa } = useEmpresa();
 
   const [opex, setOpex] = useState<Opex | null>(null);
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
@@ -71,9 +71,9 @@ export default function OpexDetallePage() {
   }, [id]);
 
   useEffect(() => {
-    if (!activo?.id) return;
-    listCuentas(activo.id).then(setCuentas);
-  }, [activo]);
+    if (!empresa?.id) return;
+    listCuentas().then(setCuentas);
+  }, [empresa]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();

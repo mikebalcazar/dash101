@@ -2,34 +2,34 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import { listClientes } from "@/lib/clientes";
 import type { Cliente } from "@/types/schema";
 import { IconUsers, IconPlus, IconUser } from "@tabler/icons-react";
 
 export default function ClientesPage() {
-  const { activo, loading: loadingNegocio } = useNegocioActivo();
+  const { empresa, loading: loadingEmpresa } = useEmpresa();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (loadingNegocio) return;
-    if (!activo?.id) {
+    if (loadingEmpresa) return;
+    if (!empresa?.id) {
       setClientes([]);
       setLoading(false);
       return;
     }
     setLoading(true);
-    listClientes(activo.id)
+    listClientes()
       .then(setClientes)
       .catch((e) => setError(e instanceof Error ? e.message : "Error al cargar clientes"))
       .finally(() => setLoading(false));
-  }, [activo, loadingNegocio]);
+  }, [empresa, loadingEmpresa]);
 
-  if (loadingNegocio || loading) return <div className="text-sm text-ink-muted">Cargando…</div>;
+  if (loadingEmpresa || loading) return <div className="text-sm text-ink-muted">Cargando…</div>;
 
-  if (!activo) {
+  if (!empresa) {
     return (
       <div className="bg-white border border-black/5 rounded-2xl p-10 text-center">
         <p className="text-sm font-medium text-ink-dim mb-1">Cargando la empresa…</p>
@@ -43,7 +43,7 @@ export default function ClientesPage() {
         <div>
           <h2 className="text-lg font-medium text-ink-dim">Clientes</h2>
           <p className="text-xs text-ink-muted mt-0.5">
-            {activo.nombre} ·{" "}
+            {empresa.nombre} ·{" "}
             {clientes.length === 0
               ? "Sin clientes"
               : `${clientes.length} ${clientes.length === 1 ? "cliente" : "clientes"}`}

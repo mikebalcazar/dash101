@@ -19,7 +19,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { fuente } from "@/lib/fuente";
 import { entrarDePrueba, pedir } from "@/lib/api/cliente";
-import { createNegocio } from "@/lib/negocios";
 import { createCliente } from "@/lib/clientes";
 import { createCuenta } from "@/lib/cuentas";
 import { createProyecto } from "@/lib/proyectos";
@@ -31,7 +30,7 @@ const ORG = `ec-${(process.env.GITHUB_RUN_ID ?? Date.now().toString(36)).toStrin
 const ORG_ANTES = process.env.NEXT_PUBLIC_ORG;
 
 let uid = "";
-const ids = { negocio: "", cuenta: "", holcim: "", casa: "" };
+const ids = { cuenta: "", holcim: "", casa: "" };
 
 beforeAll(async () => {
   expect(fuente()).toBe("api");
@@ -41,12 +40,10 @@ beforeAll(async () => {
   process.env.NEXT_PUBLIC_ORG = ORG;
   try { await pedir(`/admin/orgs/${ORG}`, { method: "DELETE" }); } catch { /* no existía */ }
   await pedir("/admin/orgs", { method: "POST", body: { id: ORG, nombre: "Estado de cuenta" } });
-
-  ids.negocio = await createNegocio(uid, { nombre: "Taller", moneda: "MXN" });
-  ids.cuenta = await createCuenta(uid, { nombre: "Banco", tipo: "banco", saldo_inicial: 0, negocio_id: ids.negocio, moneda: "MXN" });
-  ids.holcim = await createCliente(uid, { nombre: "HOLCIM", negocio_id: ids.negocio, rfc: "HOL010101AAA" });
+  ids.cuenta = await createCuenta(uid, { nombre: "Banco", tipo: "banco", saldo_inicial: 0, moneda: "MXN" });
+  ids.holcim = await createCliente(uid, { nombre: "HOLCIM", rfc: "HOL010101AAA" });
   ids.casa = await createProyecto(uid, {
-    negocio_id: ids.negocio, negocio_nombre: "Taller",
+   
     cliente_id: ids.holcim, cliente_nombre: "HOLCIM",
     nombre: "Planta Norte", estado: "activo", precio_venta: 500_000,
     partidas: [], fecha_inicio: new Date(2026, 0, 15),
@@ -59,7 +56,6 @@ beforeAll(async () => {
       cuenta_id: ids.cuenta, cuenta_nombre: "Banco",
       proyecto_id, proyecto_nombre: proyecto_id ? "Planta Norte" : null,
       contraparte_id: ids.holcim, contraparte_tipo: "cliente", contraparte_nombre: "HOLCIM",
-      negocio_id: ids.negocio,
     });
   await cobrar(200_000, ids.casa, new Date(2026, 1, 1));
   await cobrar(80_000, null, new Date(2026, 0, 5)); // el anticipo suelto

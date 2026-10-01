@@ -20,7 +20,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { fuente } from "@/lib/fuente";
 import { entrarDePrueba, pedir, pedirCrudo } from "@/lib/api/cliente";
-import { createNegocio } from "@/lib/negocios";
 import { createCliente } from "@/lib/clientes";
 import { createProyecto, getProyecto, itemsSinPrecio } from "@/lib/proyectos";
 import { ligarObra, listObras, itemsDeLaObra, fusionarItemsDeLaObra } from "@/lib/obras";
@@ -35,7 +34,7 @@ const PNG = Uint8Array.from(
 );
 
 let uid = "";
-const ids = { negocio: "", cliente: "", proyecto: "", obra: "", plano: "" };
+const ids = { cliente: "", proyecto: "", obra: "", plano: "" };
 
 /** Una pieza en el plano, sin ítem: es la que hay que emparejar. */
 const pieza = async (name: string, type = "Mueble") =>
@@ -52,11 +51,9 @@ beforeAll(async () => {
   process.env.NEXT_PUBLIC_ORG = ORG;
   try { await pedir(`/admin/orgs/${ORG}`, { method: "DELETE" }); } catch { /* no existía */ }
   await pedir("/admin/orgs", { method: "POST", body: { id: ORG, nombre: "Ítems de la obra", apps: { dash: true, quell: true } } });
-
-  ids.negocio = await createNegocio(uid, { nombre: "Taller", moneda: "MXN" });
-  ids.cliente = await createCliente(uid, { nombre: "Familia", negocio_id: ids.negocio });
+  ids.cliente = await createCliente(uid, { nombre: "Familia"});
   ids.proyecto = await createProyecto(uid, {
-    negocio_id: ids.negocio, negocio_nombre: "Taller",
+   
     cliente_id: ids.cliente, cliente_nombre: "Familia",
     nombre: "Casa", estado: "activo", precio_venta: 60_000,
     partidas: [], fecha_inicio: new Date(2026, 2, 1),

@@ -23,7 +23,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { fuente } from "@/lib/fuente";
 import { bajar, entrarDePrueba, pedir } from "@/lib/api/cliente";
-import { createNegocio } from "@/lib/negocios";
 import { createCliente } from "@/lib/clientes";
 import { createCuenta } from "@/lib/cuentas";
 import { createMovimiento } from "@/lib/movimientos";
@@ -34,7 +33,7 @@ const ORG = `cm-${(process.env.GITHUB_RUN_ID ?? Date.now().toString(36)).toStrin
 const ORG_ANTES = process.env.NEXT_PUBLIC_ORG;
 
 let uid = "";
-const ids = { negocio: "", cuenta: "", cliente: "" };
+const ids = { cuenta: "", cliente: "" };
 
 /** Un PDF de verdad, chiquito: cabecera, un objeto y el cierre. Se manda un
  *  PDF y no un texto cualquiera a propósito, porque lo que Mike reportó es
@@ -59,7 +58,7 @@ const cobrar = (descripcion: string, extra: Record<string, unknown> = {}) =>
     tipo: "ingreso", monto: 5_000, fecha: new Date(2026, 2, 18),
     cuenta_id: ids.cuenta, cuenta_nombre: "Banco",
     contraparte_id: ids.cliente, contraparte_tipo: "cliente", contraparte_nombre: "HOLCIM",
-    negocio_id: ids.negocio, descripcion, ...extra,
+    descripcion, ...extra,
   });
 
 beforeAll(async () => {
@@ -70,10 +69,8 @@ beforeAll(async () => {
   process.env.NEXT_PUBLIC_ORG = ORG;
   try { await pedir(`/admin/orgs/${ORG}`, { method: "DELETE" }); } catch { /* no existía */ }
   await pedir("/admin/orgs", { method: "POST", body: { id: ORG, nombre: "Comprobantes" } });
-
-  ids.negocio = await createNegocio(uid, { nombre: "Taller", moneda: "MXN" });
-  ids.cuenta = await createCuenta(uid, { nombre: "Banco", tipo: "banco", saldo_inicial: 0, negocio_id: ids.negocio, moneda: "MXN" });
-  ids.cliente = await createCliente(uid, { nombre: "HOLCIM", negocio_id: ids.negocio });
+  ids.cuenta = await createCuenta(uid, { nombre: "Banco", tipo: "banco", saldo_inicial: 0, moneda: "MXN" });
+  ids.cliente = await createCliente(uid, { nombre: "HOLCIM"});
 }, 120000);
 
 afterAll(async () => {

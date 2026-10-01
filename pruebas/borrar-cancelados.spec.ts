@@ -24,7 +24,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { fuente } from "@/lib/fuente";
 import { entrarDePrueba, pedir } from "@/lib/api/cliente";
 import { fueraDeAlcance } from "@/lib/api/leer";
-import { createNegocio } from "@/lib/negocios";
 import { createCliente } from "@/lib/clientes";
 import { createCuenta } from "@/lib/cuentas";
 import { createMovimiento } from "@/lib/movimientos";
@@ -36,13 +35,13 @@ const ORG = `bc-${(process.env.GITHUB_RUN_ID ?? Date.now().toString(36)).toStrin
 const ORG_ANTES = process.env.NEXT_PUBLIC_ORG;
 
 let uid = "";
-const ids = { negocio: "", cliente: "", cuenta: "", proyecto: "" };
+const ids = { cliente: "", cuenta: "", proyecto: "" };
 
 const nuevoItem = async (nombre: string, pesos: number, estado: "vendido" | "cotizado" = "vendido") =>
   (await pedir<{ id: string }>(`/orgs/${ORG}/items`, {
     method: "POST",
     body: {
-      negocio_id: ids.negocio, cliente_id: ids.cliente, proyecto_id: ids.proyecto,
+      cliente_id: ids.cliente, proyecto_id: ids.proyecto,
       nombre, monto: Math.round(pesos * 100), cantidad: 1, estado,
     },
   })).id;
@@ -70,12 +69,10 @@ beforeAll(async () => {
   process.env.NEXT_PUBLIC_ORG = ORG;
   try { await pedir(`/admin/orgs/${ORG}`, { method: "DELETE" }); } catch { /* no existía */ }
   await pedir("/admin/orgs", { method: "POST", body: { id: ORG, nombre: "Borrar cancelados", apps: { dash: true } } });
-
-  ids.negocio = await createNegocio(uid, { nombre: "Taller", moneda: "MXN" });
-  ids.cliente = await createCliente(uid, { nombre: "HOLCIM", negocio_id: ids.negocio });
-  ids.cuenta = await createCuenta(uid, { nombre: "Banco", tipo: "banco", saldo_inicial: 0, negocio_id: ids.negocio, moneda: "MXN" });
+  ids.cliente = await createCliente(uid, { nombre: "HOLCIM"});
+  ids.cuenta = await createCuenta(uid, { nombre: "Banco", tipo: "banco", saldo_inicial: 0, moneda: "MXN" });
   ids.proyecto = await createProyecto(uid, {
-    negocio_id: ids.negocio, negocio_nombre: "Taller",
+   
     cliente_id: ids.cliente, cliente_nombre: "HOLCIM",
     nombre: "Obra", estado: "activo", precio_venta: 0,
     partidas: [], fecha_inicio: new Date(2026, 2, 1), items: [],
@@ -127,7 +124,7 @@ describe("lo que trae dinero se queda", () => {
       contraparte_id: ids.cliente, contraparte_tipo: "cliente", contraparte_nombre: "HOLCIM",
       /* `producto_id` en dash101 es el ÍTEM del proyecto: el nombre viene de
        * la época de Firestore y el adaptador lo manda como `item_id`. */
-      negocio_id: ids.negocio, proyecto_id: ids.proyecto, producto_id: conCobro,
+      proyecto_id: ids.proyecto, producto_id: conCobro,
       descripcion: "Anticipo de lo que luego se canceló",
     });
     limpio = await cancelado("Éste sí se puede ir", 4_000);

@@ -1,26 +1,24 @@
-import {
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-  getDocs,
-  collection,
-  query,
-  where,
-  serverTimestamp,
-  arrayUnion,
-} from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import type { User } from "firebase/auth";
 import { db } from "./firebase";
 import { fuente } from "./fuente";
 import * as leer from "./api/leer";
 import type { Usuario, MembershipInfo } from "@/types/schema";
 
-/**
- * Asegura que exista el doc del usuario. Si no, lo crea vacío.
- * Además, si el usuario es owner de negocios existentes sin membership,
- * los agrega (migración perezosa para usuarios anteriores al sistema de roles).
- */
+/** Lo que Firestore guardaba del usuario, con la forma de hoy. Los documentos
+ *  viejos traían la membresía en un mapa por registro; se toma la primera. */
+function desdeFirestore(d: Record<string, unknown>): Usuario {
+  const mapa = (d.memberships ?? {}) as Record<string, MembershipInfo>;
+  const membership = (d.membership as MembershipInfo | undefined) ?? Object.values(mapa)[0] ?? null;
+  return {
+    email: String(d.email ?? ""),
+    nombre: String(d.nombre ?? ""),
+    membership,
+    creado_at: d.creado_at as Usuario["creado_at"],
+  };
+}
+
+/** Asegura que exista el doc del usuario. Si no, lo crea vacío. */
 export async function ensureUserDoc(user: User): Promise<Usuario> {
   if (fuente() === 'api') {
     // En la suite el usuario ya existe: lo creó la API al entrar. Se lee, no se asegura.
@@ -30,69 +28,15 @@ export async function ensureUserDoc(user: User): Promise<Usuario> {
   }
   const ref = doc(db, "usuarios", user.uid);
   const snap = await getDoc(ref);
-
-  let userData: Usuario;
-
-  if (!snap.exists()) {
-    userData = {
-      email: (user.email ?? "").toLowerCase(),
-      nombre: user.displayName ?? user.email?.split("@")[0] ?? "Usuario",
-      negocios_acceso: [],
-      memberships: {},
-      creado_at: serverTimestamp(),
-    };
-    await setDoc(ref, userData);
-  } else {
-    userData = snap.data() as Usuario;
-    // Backfill memberships map si no existe (usuarios anteriores)
-    if (!userData.memberships) {
-      userData.memberships = {};
-      await updateDoc(ref, { memberships: {} });
-    }
-  }
-
-  // Migración perezosa: buscar negocios donde soy owner y no tengo membership
-  try {
-    // Query segura por rules: miembros_uids array-contains uid
-    // Luego filtro cliente-side por owner_uid == uid
-    const negociosQ = query(
-      collection(db, "negocios"),
-      where("miembros_uids", "array-contains", user.uid)
-    );
-    const negociosSnap = await getDocs(negociosQ);
-    const misNegocios = negociosSnap.docs.filter(
-      (d) => (d.data().owner_uid as string) === user.uid
-    );
-
-    const negociosSinMembership = misNegocios.filter(
-      (d) => !userData.memberships?.[d.id]
-    );
-
-    if (negociosSinMembership.length > 0) {
-      const updates: Record<string, unknown> = {};
-      const accesoNuevos: string[] = [];
-      negociosSinMembership.forEach((d) => {
-        updates[`memberships.${d.id}`] = {
-          rol: "owner",
-          scope: "all",
-        };
-        if (!userData.negocios_acceso?.includes(d.id)) {
-          accesoNuevos.push(d.id);
-        }
-      });
-      if (accesoNuevos.length > 0) {
-        updates.negocios_acceso = arrayUnion(...accesoNuevos);
-      }
-      await updateDoc(ref, updates);
-      // reload
-      const snap2 = await getDoc(ref);
-      userData = snap2.data() as Usuario;
-    }
-  } catch (e) {
-    console.warn("Migración de memberships falló (no bloqueante):", e);
-  }
-
-  return userData;
+  if (snap.exists()) return desdeFirestore(snap.data());
+  const nuevo = {
+    email: (user.email ?? "").toLowerCase(),
+    nombre: user.displayName ?? user.email?.split("@")[0] ?? "Usuario",
+    membership: null,
+    creado_at: serverTimestamp(),
+  };
+  await setDoc(ref, nuevo);
+  return nuevo;
 }
 
 export async function getUserDoc(uid: string): Promise<Usuario | null> {
@@ -101,30 +45,25 @@ export async function getUserDoc(uid: string): Promise<Usuario | null> {
   if (fuente() === 'api') return leer.getUserDoc();
   const snap = await getDoc(doc(db, "usuarios", uid));
   if (!snap.exists()) return null;
-  return snap.data() as Usuario;
+  return desdeFirestore(snap.data());
 }
 
-export function getMembership(user: Usuario | null, negocioId: string): MembershipInfo | null {
-  if (!user?.memberships) return null;
-  return user.memberships[negocioId] ?? null;
+export function getMembership(user: Usuario | null): MembershipInfo | null {
+  return user?.membership ?? null;
 }
 
-export function canWriteInNegocio(user: Usuario | null, negocioId: string): boolean {
-  const m = getMembership(user, negocioId);
+export function canWrite(user: Usuario | null): boolean {
+  const m = getMembership(user);
   if (!m) return false;
   return m.rol === "owner" || m.rol === "socio";
 }
 
-export function isOwnerOfNegocio(user: Usuario | null, negocioId: string): boolean {
-  return getMembership(user, negocioId)?.rol === "owner";
+export function isOwner(user: Usuario | null): boolean {
+  return getMembership(user)?.rol === "owner";
 }
 
-export function hasProyectoAccess(
-  user: Usuario | null,
-  negocioId: string,
-  proyectoId: string
-): boolean {
-  const m = getMembership(user, negocioId);
+export function hasProyectoAccess(user: Usuario | null, proyectoId: string): boolean {
+  const m = getMembership(user);
   if (!m) return false;
   if (m.scope === "all") return true;
   return (m.proyectos_acceso ?? []).includes(proyectoId);

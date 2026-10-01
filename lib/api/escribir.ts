@@ -28,7 +28,6 @@ import { ErrorApi, listar, listarCompleto, obtener, pedir } from './cliente';
 import { org } from '../fuente';
 import type { CuentaInput } from '../cuentas';
 import type { ClienteInput } from '../clientes';
-import type { NegocioInput } from '../negocios';
 import type { ProveedorInput } from '../proveedores';
 import type { ProyectoInput, PartidaProyectoInput, ItemProyectoInput } from '../proyectos';
 import type { MovimientoInput } from '../movimientos';
@@ -47,7 +46,7 @@ function limpio(datos: Record<string, unknown>): Record<string, unknown> {
 }
 
 const QUE: Record<string, string> = {
-  negocios: 'el negocio', cuentas: 'la cuenta', clientes: 'el cliente', proveedores: 'el proveedor',
+  cuentas: 'la cuenta', clientes: 'el cliente', proveedores: 'el proveedor',
   proyectos: 'el proyecto', items: 'el producto', partidas: 'la partida', movimientos: 'el movimiento', opex: 'el gasto fijo',
 };
 
@@ -102,29 +101,8 @@ async function borrar(tabla: string, id: string): Promise<void> {
 const dia = (d: Date | null | undefined): string | null => (d ? A.aDia(d) : null);
 const oNulo = (s: string | null | undefined): string | null => (s === undefined || s === null || s === '' ? null : s);
 
-/* ─────────────── negocios ─────────────── */
-
-/** `descripcion` no existe en la suite; se acepta y no se guarda. */
-export async function createNegocio(_uid: string, d: NegocioInput): Promise<string> {
-  const f = await crear<A.FilaNegocio>('negocios', { nombre: d.nombre, rfc: oNulo(d.rfc), moneda: d.moneda });
-  return f.id;
-}
-
-export async function updateNegocio(id: string, d: Partial<NegocioInput>): Promise<void> {
-  await cambiar('negocios', id, {
-    nombre: d.nombre, rfc: d.rfc === undefined ? undefined : oNulo(d.rfc), moneda: d.moneda,
-    dia_conciliacion: d.dia_conciliacion,
-  });
-}
-
-export async function deleteNegocio(id: string): Promise<void> {
-  await borrar('negocios', id);
-}
-
-/* NEGOCIO_ID YA NO VIAJA (1-oct-2026, contrato 0.61.0): la API cuelga sola
- * cada fila del registro de la empresa. Mike: «Elimina todas las lógicas que
- * involucran el concepto de "negocio"». Mandarlo dejará de ser posible cuando
- * la columna se vaya (fase D): un campo que no existe es 403. */
+/* Cada fila cuelga de LA EMPRESA, que es una (contrato 0.63.0): la API lo
+ * resuelve sola y aquí no se manda de cuál. */
 
 /* ─────────────── cuentas ─────────────── */
 
@@ -137,10 +115,7 @@ export async function createCuenta(_uid: string, d: CuentaInput): Promise<string
   return f.id;
 }
 
-/** El `negocio_id` sigue sin poderse cambiar: mover una cuenta de negocio
- *  se llevaría sus movimientos al otro lado y descuadraría los dos.
- *
- *  El SALDO INICIAL sí se puede corregir, desde el 20-sep. Estuvo prohibido
+/** El SALDO INICIAL sí se puede corregir, desde el 20-sep. Estuvo prohibido
  *  hasta hoy, y la intención era buena —cambiarlo recalcula el saldo entero
  *  de la cuenta—, pero dejaba sin salida el caso más común de todos: el
  *  número con el que se abre una cuenta el primer día, tecleado por alguien
@@ -150,7 +125,7 @@ export async function createCuenta(_uid: string, d: CuentaInput): Promise<string
  *
  *  No hace falta recalcular nada aquí: `saldo_actual` no se guarda, se suma
  *  al leer (`saldo_inicial` + ingresos − egresos). */
-export async function updateCuenta(id: string, d: Partial<Omit<CuentaInput, 'negocio_id'>>): Promise<void> {
+export async function updateCuenta(id: string, d: Partial<CuentaInput>): Promise<void> {
   await cambiar('cuentas', id, {
     nombre: d.nombre, tipo: d.tipo, banco: d.banco === undefined ? undefined : oNulo(d.banco), moneda: d.moneda,
     saldo_inicial: d.saldo_inicial === undefined ? undefined : A.aCentavos(d.saldo_inicial),
@@ -209,7 +184,7 @@ export async function fusionarProyectos(queda: string, seVa: string, seco = fals
   }
 }
 
-export async function updateCliente(id: string, d: Partial<Omit<ClienteInput, 'negocio_id'>>): Promise<void> {
+export async function updateCliente(id: string, d: Partial<ClienteInput>): Promise<void> {
   await cambiar('clientes', id, {
     nombre: d.nombre,
     correo: d.email === undefined ? undefined : oNulo(d.email),
@@ -507,7 +482,7 @@ export async function deleteMovimiento(id: string): Promise<void> {
   const m = await obtener<A.FilaMovimiento>('movimientos', id);
   if (!m) return;
   if (m.transfer_id) {
-    const par = (await listar<A.FilaMovimiento>('movimientos', { negocio_id: m.negocio_id })).filter((x) => x.transfer_id === m.transfer_id);
+    const par = (await listar<A.FilaMovimiento>('movimientos')).filter((x) => x.transfer_id === m.transfer_id);
     for (const x of par) await borrar('movimientos', x.id);
   } else {
     await borrar('movimientos', id);
@@ -527,7 +502,7 @@ export async function createOpex(_uid: string, d: OpexInput): Promise<string> {
   return f.id;
 }
 
-export async function updateOpex(id: string, d: Partial<Omit<OpexInput, 'negocio_id'>>): Promise<void> {
+export async function updateOpex(id: string, d: Partial<OpexInput>): Promise<void> {
   await cambiar('opex', id, {
     nombre: d.nombre, tipo: d.tipo, monto: d.monto === undefined ? undefined : A.aCentavos(d.monto), moneda: d.moneda, frecuencia: d.frecuencia,
     dia_semana: d.dia_semana, dia_del_mes: d.dia_del_mes,

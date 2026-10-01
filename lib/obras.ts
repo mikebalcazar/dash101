@@ -21,7 +21,6 @@ export interface Obra {
   /** `null` si la obra existe en quell101 y nadie le ha puesto precio aquí. */
   proyecto_id: string | null;
   proyecto_nombre: string | null;
-  proyecto_negocio_id: string | null;
   planos: number;
   /** Cuántos ítems están ya ubicados en un plano. */
   ubicados: number;

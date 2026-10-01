@@ -7,7 +7,6 @@ import {
   updateDoc,
   deleteDoc,
   query,
-  where,
   orderBy,
   serverTimestamp,
 } from "firebase/firestore";
@@ -23,14 +22,12 @@ export interface ClienteInput {
   email?: string;
   telefono?: string;
   notas?: string;
-  negocio_id: string;
 }
 
-export async function listClientes(negocioId: string): Promise<Cliente[]> {
-  if (fuente() === 'api') return leer.listClientes(negocioId);
+export async function listClientes(): Promise<Cliente[]> {
+  if (fuente() === 'api') return leer.listClientes();
   const q = query(
     collection(db, "clientes"),
-    where("negocio_id", "==", negocioId),
     orderBy("creado_at", "desc")
   );
   const snap = await getDocs(q);
@@ -52,7 +49,6 @@ export async function createCliente(uid: string, data: ClienteInput): Promise<st
     email: data.email ?? "",
     telefono: data.telefono ?? "",
     notas: data.notas ?? "",
-    negocio_id: data.negocio_id,
     creado_at: serverTimestamp(),
     creado_por: uid,
   };
@@ -62,7 +58,7 @@ export async function createCliente(uid: string, data: ClienteInput): Promise<st
 
 export async function updateCliente(
   id: string,
-  data: Partial<Omit<ClienteInput, "negocio_id">>
+  data: Partial<ClienteInput>
 ): Promise<void> {
   if (fuente() === 'api') return escribir.updateCliente(id, data);
   await updateDoc(doc(db, "clientes", id), data);
@@ -121,9 +117,8 @@ export function normalizarNombre(txt: string): string {
 export async function clientesParecidos(
   nombre: string,
   clientes: Cliente[],
-  negocioId?: string,
 ): Promise<Cliente[]> {
-  if (fuente() === 'api') return leer.clientesParecidos(nombre, negocioId);
+  if (fuente() === 'api') return leer.clientesParecidos(nombre);
   const n = normalizarNombre(nombre);
   if (n.length < 3) return [];
   return clientes.filter((c) => {

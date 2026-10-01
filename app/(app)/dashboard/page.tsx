@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import { listCuentas } from "@/lib/cuentas";
 import { listMovimientos } from "@/lib/movimientos";
 import { MarcaFiscal } from "@/components/marca-fiscal";
@@ -53,7 +53,7 @@ const MV_META = {
 } as const;
 
 export default function DashboardPage() {
-  const { activo, loading: loadingNegocio } = useNegocioActivo();
+  const { empresa, loading: loadingEmpresa } = useEmpresa();
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
@@ -65,21 +65,21 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (loadingNegocio) return;
-    if (!activo?.id) {
+    if (loadingEmpresa) return;
+    if (!empresa?.id) {
       setLoading(false);
       return;
     }
     setLoading(true);
     Promise.all([
-      listCuentas(activo.id),
-      listMovimientos(activo.id, { max: 5 }),
-      listProyectos(activo.id),
+      listCuentas(),
+      listMovimientos({ max: 5 }),
+      listProyectos(),
       // Los reembolsos pendientes (0.47.0). Si la API dice que no —una
       // cuenta que no ve dinero no llega aquí de todos modos—, se pintan
       // en cero y el tablero no se cae por eso.
-      getResumenOrdenes(activo.id).catch(() => null),
-      getBuzon(activo.id, null).catch(() => null),
+      getResumenOrdenes().catch(() => null),
+      getBuzon(null).catch(() => null),
     ])
       .then(([cs, ms, ps, re, bz]) => {
         setCuentas(cs);
@@ -90,18 +90,18 @@ export default function DashboardPage() {
       })
       .catch((e) => console.error(e))
       .finally(() => setLoading(false));
-  }, [activo, loadingNegocio]);
+  }, [empresa, loadingEmpresa]);
 
-  if (loadingNegocio || loading) {
+  if (loadingEmpresa || loading) {
     return <div className="text-sm text-ink-muted">Cargando…</div>;
   }
 
-  if (!activo) {
+  if (!empresa) {
     return (
       <div className="bg-white border border-black/5 rounded-2xl p-10 text-center">
         <p className="text-sm font-medium text-ink-dim mb-1">Bienvenido</p>
         <p className="text-xs text-ink-muted mb-5 max-w-xs mx-auto">
-          Para empezar, crea tu primer negocio.
+          Cargando la empresa…
         </p>
       </div>
     );
@@ -158,7 +158,7 @@ export default function DashboardPage() {
           30-sep-2026).
 
           EL NÚMERO GRANDE ES EL LÍQUIDO (Mike, 1-oct-2026): «el capital
-          líquido (real) que hay en el negocio como el principal número, y
+          líquido (real) que hay en la empresa como el principal número, y
           el capital total que toma en cuenta cuentas por cobrar y pagar en
           donde ahorita está el capital líquido». Lo que hay hoy en las
           cuentas es lo que se puede gastar; el total es una proyección. */}
@@ -169,7 +169,7 @@ export default function DashboardPage() {
               Capital líquido
             </p>
             <p className="text-3xl sm:text-4xl font-medium tracking-tight text-ink-dim leading-none">
-              {formatMonto(liquido, activo.moneda)}
+              {formatMonto(liquido, empresa.moneda)}
             </p>
             <p className="text-xs text-ink-muted mt-2">
               Lo que hay hoy en {cuentas.length} {cuentas.length === 1 ? "cuenta" : "cuentas"}
@@ -186,7 +186,7 @@ export default function DashboardPage() {
         <div className="bg-white border border-black/5 rounded-2xl p-3 sm:p-4" data-capital="total">
           <p className="text-xs text-ink-muted font-medium">Capital total</p>
           <p className="text-lg sm:text-xl font-medium text-ink-dim mt-1 tabular-nums">
-            {formatMonto(capitalTotal, activo.moneda)}
+            {formatMonto(capitalTotal, empresa.moneda)}
           </p>
           {/* Siempre visible, también en el teléfono: es la fórmula, y sin
               ella el total es un número que no se sabe de dónde salió. */}
@@ -197,7 +197,7 @@ export default function DashboardPage() {
         <div className="bg-mint-50 rounded-2xl p-3 sm:p-4">
           <p className="text-xs text-mint-label font-medium">Cuentas por cobrar</p>
           <p className="text-lg sm:text-xl font-medium text-mint-900 mt-1 tabular-nums">
-            {formatMonto(porCobrar, activo.moneda)}
+            {formatMonto(porCobrar, empresa.moneda)}
           </p>
           <p className="hidden sm:block text-[11px] text-mint-label mt-1 opacity-75">
             Vendido que el cliente no ha pagado
@@ -206,7 +206,7 @@ export default function DashboardPage() {
         <div className="bg-mauve-50 rounded-2xl p-3 sm:p-4">
           <p className="text-xs text-mauve-label font-medium">Cuentas por pagar</p>
           <p className="text-lg sm:text-xl font-medium text-mauve-900 mt-1 tabular-nums">
-            {formatMonto(porPagar, activo.moneda)}
+            {formatMonto(porPagar, empresa.moneda)}
           </p>
           <p className="hidden sm:block text-[11px] text-mauve-label mt-1 opacity-75">
             Comprometido con proveedores que no ha salido
@@ -221,7 +221,7 @@ export default function DashboardPage() {
             <IconReceiptRefund size={13} /> Reembolsos pendientes
           </p>
           <p className="text-lg sm:text-xl font-medium text-ink-dim mt-1 tabular-nums">
-            {formatMonto(reembolsosPendientes, activo.moneda)}
+            {formatMonto(reembolsosPendientes, empresa.moneda)}
           </p>
           <p className="text-[11px] text-ink-muted mt-1">
             {cuantosReembolsos === 0
@@ -279,19 +279,19 @@ export default function DashboardPage() {
                 <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 mt-2">
                   <div>
                     <p className="text-[11px] text-ink-muted">Líquido</p>
-                    <p className="text-sm tabular-nums text-ink-dim">{formatMonto(b.liquido, activo.moneda)}</p>
+                    <p className="text-sm tabular-nums text-ink-dim">{formatMonto(b.liquido, empresa.moneda)}</p>
                   </div>
                   <div>
                     <p className="text-[11px] text-ink-muted">Total</p>
-                    <p className="text-sm tabular-nums font-medium text-ink-dim">{formatMonto(b.total, activo.moneda)}</p>
+                    <p className="text-sm tabular-nums font-medium text-ink-dim">{formatMonto(b.total, empresa.moneda)}</p>
                   </div>
                   <div>
                     <p className="text-[11px] text-mint-label">Por cobrar</p>
-                    <p className="text-sm tabular-nums text-mint-900">{formatMonto(b.porCobrar, activo.moneda)}</p>
+                    <p className="text-sm tabular-nums text-mint-900">{formatMonto(b.porCobrar, empresa.moneda)}</p>
                   </div>
                   <div>
                     <p className="text-[11px] text-mauve-label">Por pagar</p>
-                    <p className="text-sm tabular-nums text-mauve-900">{formatMonto(b.porPagar, activo.moneda)}</p>
+                    <p className="text-sm tabular-nums text-mauve-900">{formatMonto(b.porPagar, empresa.moneda)}</p>
                   </div>
                 </div>
               </Link>
@@ -300,7 +300,7 @@ export default function DashboardPage() {
               <p className="text-xs text-ink-muted">
                 {balances.length} {balances.length === 1 ? "proyecto abierto" : "proyectos abiertos"}
               </p>
-              <p className="text-sm tabular-nums font-medium text-ink-dim">{formatMonto(sumaProyectos.total, activo.moneda)}</p>
+              <p className="text-sm tabular-nums font-medium text-ink-dim">{formatMonto(sumaProyectos.total, empresa.moneda)}</p>
             </div>
           </div>
           <div className="hidden sm:block bg-white border border-black/5 rounded-2xl overflow-x-auto">
@@ -324,16 +324,16 @@ export default function DashboardPage() {
                       <p className="text-xs text-ink-muted truncate">{b.proyecto.cliente_nombre}</p>
                     </td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-ink-dim">
-                      {formatMonto(b.liquido, activo.moneda)}
+                      {formatMonto(b.liquido, empresa.moneda)}
                     </td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-mint-900">
-                      {formatMonto(b.porCobrar, activo.moneda)}
+                      {formatMonto(b.porCobrar, empresa.moneda)}
                     </td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-mauve-900">
-                      {formatMonto(b.porPagar, activo.moneda)}
+                      {formatMonto(b.porPagar, empresa.moneda)}
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums font-medium text-ink-dim">
-                      {formatMonto(b.total, activo.moneda)}
+                      {formatMonto(b.total, empresa.moneda)}
                     </td>
                   </tr>
                 ))}
@@ -342,16 +342,16 @@ export default function DashboardPage() {
                     {balances.length} {balances.length === 1 ? "proyecto abierto" : "proyectos abiertos"}
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-ink-dim">
-                    {formatMonto(sumaProyectos.liquido, activo.moneda)}
+                    {formatMonto(sumaProyectos.liquido, empresa.moneda)}
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-ink-dim">
-                    {formatMonto(sumaProyectos.porCobrar, activo.moneda)}
+                    {formatMonto(sumaProyectos.porCobrar, empresa.moneda)}
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-ink-dim">
-                    {formatMonto(sumaProyectos.porPagar, activo.moneda)}
+                    {formatMonto(sumaProyectos.porPagar, empresa.moneda)}
                   </td>
                   <td className="px-4 py-2.5 text-right tabular-nums font-medium text-ink-dim">
-                    {formatMonto(sumaProyectos.total, activo.moneda)}
+                    {formatMonto(sumaProyectos.total, empresa.moneda)}
                   </td>
                 </tr>
               </tbody>
@@ -492,7 +492,7 @@ export default function DashboardPage() {
                   </div>
                   <p className={`text-sm font-medium whitespace-nowrap ${meta.montoColor}`}>
                     {meta.prefix}
-                    {formatMonto(m.monto, activo.moneda)}
+                    {formatMonto(m.monto, empresa.moneda)}
                   </p>
                 </div>
               );

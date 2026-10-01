@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useNegocioActivo } from "@/lib/negocio-activo-context";
+import { useEmpresa } from "@/lib/empresa-context";
 import { listCuentas } from "@/lib/cuentas";
 import type { Cuenta } from "@/types/schema";
 import { TIPO_CUENTA_LABELS } from "@/types/schema";
@@ -30,28 +30,28 @@ function formatMonto(n: number, moneda: string) {
 }
 
 export default function CuentasPage() {
-  const { activo, loading: loadingNegocio } = useNegocioActivo();
+  const { empresa, loading: loadingEmpresa } = useEmpresa();
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (loadingNegocio) return;
-    if (!activo?.id) {
+    if (loadingEmpresa) return;
+    if (!empresa?.id) {
       setCuentas([]);
       setLoading(false);
       return;
     }
     setLoading(true);
-    listCuentas(activo.id)
+    listCuentas()
       .then(setCuentas)
       .catch((e) => setError(e instanceof Error ? e.message : "Error al cargar cuentas"))
       .finally(() => setLoading(false));
-  }, [activo, loadingNegocio]);
+  }, [empresa, loadingEmpresa]);
 
-  if (loadingNegocio || loading) return <div className="text-sm text-ink-muted">Cargando…</div>;
+  if (loadingEmpresa || loading) return <div className="text-sm text-ink-muted">Cargando…</div>;
 
-  if (!activo) {
+  if (!empresa) {
     return (
       <div className="bg-white border border-black/5 rounded-2xl p-10 text-center">
         <p className="text-sm font-medium text-ink-dim mb-1">Cargando la empresa…</p>
@@ -67,10 +67,10 @@ export default function CuentasPage() {
         <div>
           <h2 className="text-lg font-medium text-ink-dim">Cuentas</h2>
           <p className="text-xs text-ink-muted mt-0.5">
-            {activo.nombre} ·{" "}
+            {empresa.nombre} ·{" "}
             {cuentas.length === 0
               ? "Sin cuentas"
-              : `${cuentas.length} ${cuentas.length === 1 ? "cuenta" : "cuentas"} · Saldo total ${formatMonto(total, activo.moneda)}`}
+              : `${cuentas.length} ${cuentas.length === 1 ? "cuenta" : "cuentas"} · Saldo total ${formatMonto(total, empresa.moneda)}`}
           </p>
         </div>
         <Link
@@ -93,7 +93,7 @@ export default function CuentasPage() {
           </div>
           <p className="text-sm font-medium text-ink-dim mb-1">Sin cuentas todavía</p>
           <p className="text-xs text-ink-muted mb-5 max-w-xs mx-auto">
-            Registra bancos, caja, tarjetas o cualquier lugar donde entra o sale dinero de {activo.nombre}.
+            Registra bancos, caja, tarjetas o cualquier lugar donde entra o sale dinero de {empresa.nombre}.
           </p>
           <Link
             href="/cuentas/nueva"

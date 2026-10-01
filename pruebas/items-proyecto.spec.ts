@@ -12,7 +12,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { fuente } from "@/lib/fuente";
 import { entrarDePrueba, pedir } from "@/lib/api/cliente";
-import { createNegocio } from "@/lib/negocios";
 import { createCliente } from "@/lib/clientes";
 import { createProyecto, getProyecto, updateProyecto } from "@/lib/proyectos";
 
@@ -21,7 +20,7 @@ const ORG = `it-${(process.env.GITHUB_RUN_ID ?? Date.now().toString(36)).toStrin
 const ORG_ANTES = process.env.NEXT_PUBLIC_ORG;
 
 let uid = "";
-const ids = { negocio: "", cliente: "", proyecto: "" };
+const ids = { cliente: "", proyecto: "" };
 
 beforeAll(async () => {
   expect(fuente()).toBe("api");
@@ -31,12 +30,10 @@ beforeAll(async () => {
   process.env.NEXT_PUBLIC_ORG = ORG;
   try { await pedir(`/admin/orgs/${ORG}`, { method: "DELETE" }); } catch { /* no existía */ }
   await pedir("/admin/orgs", { method: "POST", body: { id: ORG, nombre: "Prueba de ítems" } });
-
-  ids.negocio = await createNegocio(uid, { nombre: "Taller", moneda: "MXN" });
-  ids.cliente = await createCliente(uid, { nombre: "Cliente Uno", negocio_id: ids.negocio });
+  ids.cliente = await createCliente(uid, { nombre: "Cliente Uno"});
   ids.proyecto = await createProyecto(uid, {
     nombre: "Casa Uno", cliente_id: ids.cliente, cliente_nombre: "Cliente Uno",
-    negocio_id: ids.negocio, negocio_nombre: "Taller",
+   
     precio_venta: 0, estado: "activo", fecha_inicio: new Date(2026, 8, 1), partidas: [],
     items: [
       { nombre: "Cocina", monto: 100 },
@@ -273,7 +270,7 @@ describe("la partida (pestaña) del ítem viaja al crear y al editar (29-sep)", 
   it("un ítem nuevo nace en la partida que se le dijo", async () => {
     proyecto = await createProyecto(uid, {
       nombre: "Casa con partidas", cliente_id: ids.cliente, cliente_nombre: "Cliente Uno",
-      negocio_id: ids.negocio, negocio_nombre: "Taller",
+     
       precio_venta: 0, estado: "activo", fecha_inicio: new Date(2026, 8, 1), partidas: [],
       items: [{ nombre: "Barra", monto: 100, partida: "Cocina" }, { nombre: "Puerta", monto: 50 }],
     });

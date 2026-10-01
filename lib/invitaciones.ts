@@ -6,12 +6,10 @@ import {
   updateDoc,
   getDocs,
   query,
-  where,
   orderBy,
   serverTimestamp,
   Timestamp,
   runTransaction,
-  arrayUnion,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { fuente, noEscribeTodavia } from "./fuente";
@@ -19,15 +17,12 @@ import type {
   Invitacion,
   RolMiembro,
   ScopeMiembro,
-  Usuario,
-  Negocio,
   MembershipInfo,
 } from "@/types/schema";
 
 export interface InvitacionInput {
   email: string;
-  negocio_id: string;
-  negocio_nombre: string;
+  empresa_nombre: string;
   invited_by_uid: string;
   invited_by_nombre: string;
   invited_by_email: string;
@@ -46,8 +41,7 @@ export async function createInvitacion(data: InvitacionInput): Promise<string> {
 
   const payload = {
     email: data.email.trim().toLowerCase(),
-    negocio_id: data.negocio_id,
-    negocio_nombre: data.negocio_nombre,
+    empresa_nombre: data.empresa_nombre,
     invited_by_uid: data.invited_by_uid,
     invited_by_nombre: data.invited_by_nombre,
     invited_by_email: data.invited_by_email,
@@ -64,12 +58,11 @@ export async function createInvitacion(data: InvitacionInput): Promise<string> {
   return ref.id;
 }
 
-export async function listInvitacionesByNegocio(negocioId: string): Promise<Invitacion[]> {
+export async function listInvitaciones(): Promise<Invitacion[]> {
   // No existen en la suite (arranque §7: el importador no las trae). Vacío, no inventado.
   if (fuente() === 'api') return [];
   const q = query(
     collection(db, "invitaciones"),
-    where("negocio_id", "==", negocioId),
     orderBy("creado_at", "desc")
   );
   const snap = await getDocs(q);
@@ -91,8 +84,7 @@ export async function revocarInvitacion(id: string): Promise<void> {
 /**
  * Acepta una invitación:
  * - Valida email match, estado pendiente, no expirada
- * - Agrega uid a negocio.miembros_uids
- * - Setea usuario.memberships[negocio_id] con rol/scope
+ * - Setea usuario.membership con rol/scope
  * - Marca invitación como aceptada
  * Todo en transacción atómica.
  */
@@ -100,7 +92,7 @@ export async function aceptarInvitacion(
   invitacionId: string,
   uid: string,
   userEmail: string
-): Promise<{ negocio_id: string; negocio_nombre: string }> {
+): Promise<{ empresa_nombre: string }> {
   if (fuente() === 'api') throw noEscribeTodavia('invitaciones');
   const invRef = doc(db, "invitaciones", invitacionId);
   const userRef = doc(db, "usuarios", uid);
@@ -127,10 +119,6 @@ export async function aceptarInvitacion(
       );
     }
 
-    const negocioRef = doc(db, "negocios", inv.negocio_id);
-    const negocioSnap = await tx.get(negocioRef);
-    if (!negocioSnap.exists()) throw new Error("El negocio ya no existe");
-
     const userSnap = await tx.get(userRef);
     if (!userSnap.exists()) throw new Error("Usuario no encontrado");
 
@@ -141,16 +129,8 @@ export async function aceptarInvitacion(
       invited_by_uid: inv.invited_by_uid,
     };
 
-    // negocio: agregar uid a miembros_uids
-    tx.update(negocioRef, {
-      miembros_uids: arrayUnion(uid),
-    });
-
-    // usuario: agregar acceso + membership
-    tx.update(userRef, {
-      negocios_acceso: arrayUnion(inv.negocio_id),
-      [`memberships.${inv.negocio_id}`]: membership,
-    });
+    // usuario: su membresía en la empresa
+    tx.update(userRef, { membership });
 
     // invitación: marcar aceptada
     tx.update(invRef, {
@@ -159,24 +139,20 @@ export async function aceptarInvitacion(
       aceptada_por_uid: uid,
     });
 
-    return { negocio_id: inv.negocio_id, negocio_nombre: inv.negocio_nombre };
+    return { empresa_nombre: inv.empresa_nombre };
   });
 }
 
 export async function updateMembership(
   uid: string,
-  negocioId: string,
   patch: Partial<MembershipInfo>
 ): Promise<void> {
   if (fuente() === 'api') throw noEscribeTodavia('la membresía (en la suite vive en el D1, por empresa)');
   const userRef = doc(db, "usuarios", uid);
   const snap = await getDoc(userRef);
   if (!snap.exists()) throw new Error("Usuario no encontrado");
-  const user = snap.data() as Usuario;
-  const current = user.memberships?.[negocioId];
-  if (!current) throw new Error("Este usuario no tiene acceso al negocio");
+  const current = snap.data().membership as MembershipInfo | null | undefined;
+  if (!current) throw new Error("Este usuario no tiene acceso a la empresa");
   const merged: MembershipInfo = { ...current, ...patch };
-  await updateDoc(userRef, {
-    [`memberships.${negocioId}`]: merged,
-  });
+  await updateDoc(userRef, { membership: merged });
 }

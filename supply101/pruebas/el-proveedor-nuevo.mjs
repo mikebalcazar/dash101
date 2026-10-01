@@ -71,7 +71,6 @@ await p.route('**/s101/**', async (route) => {
   let cuerpo = {};
   try { cuerpo = route.request().postDataJSON?.() ?? {}; } catch { cuerpo = {}; }  // multipart (los documentos) no es JSON
   if (r === '/yo') return route.fulfill(ok({ usuario: { correo: 'ana@ejemplo.mx' }, orgs: [{ id: 'demo', nombre: 'Demo', apps: ['dash', 'supply'] }] }));
-  if (r === '/orgs/demo/negocios') return route.fulfill(ok({ filas: [{ id: 'n-1', nombre: 'Taller' }] }));
   if (r === '/orgs/demo/ordenes/permisos') return route.fulfill(ok({ puede_comprar: true }));
   if (r === '/orgs/demo/ordenes') return route.fulfill(ok({ ordenes: [], filas: [] }));
   if (r === '/orgs/demo/proyectos') return route.fulfill(ok({ filas: [] }));
