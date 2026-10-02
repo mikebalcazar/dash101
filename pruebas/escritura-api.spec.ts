@@ -11,6 +11,7 @@
  * producción). La org `demo` no se toca: es la que ven peek101 y las capturas. */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { sembrarItems } from "./sembrar";
 import type { Timestamp } from "firebase/firestore";
 import { apiBase, fuente } from "@/lib/fuente";
 import { entrarDePrueba, pedir } from "@/lib/api/cliente";
@@ -118,12 +119,14 @@ describe("la empresa, cuentas, cliente, proveedor", () => {
 });
 
 describe("el proyecto: precio, ítems, partidas y los cachés que la API recalcula", () => {
-  it("sin ítems, el precio se guarda como un solo ítem con el nombre del proyecto", async () => {
+  it("el proyecto nace sin ítems (dash101 no los genera, 2-oct); sembrado uno por la API, el precio es su suma", async () => {
     ids.proyecto = await createProyecto(uid, {
       nombre: "Cocina de prueba", cliente_id: ids.cliente, cliente_nombre: "Cliente de Prueba",
       precio_venta: 5000, partidas: [{ proveedor_id: ids.proveedor, proveedor_nombre: "Maderas de Prueba", concepto: "Tablero", monto_acordado: 1200.75 }],
       estado: "activo", fecha_inicio: new Date(2026, 8, 1),
     });
+    expect((await getProyecto(ids.proyecto))!.items, "el precio_venta ya no fabrica el ítem de la regla 1").toHaveLength(0);
+    await sembrarItems(ORG, ids.proyecto, ids.cliente, [{ nombre: "Cocina de prueba", monto: 5000 }]);
     const p = (await getProyecto(ids.proyecto))!;
     expect(p.precio_venta).toBe(5000);
     expect(p.items).toHaveLength(1);
@@ -171,10 +174,12 @@ describe("el proyecto: precio, ítems, partidas y los cachés que la API recalcu
   it("editar: ítems por id, partidas por proveedor; el precio es la suma de los ítems", async () => {
     const antes = (await getProyecto(ids.proyecto))!;
     const cocina = antes.items![0].id;
+    // La isla entra por la API (como desde quote101); dash101 sólo la edita.
+    const [isla] = await sembrarItems(ORG, ids.proyecto, ids.cliente, [{ nombre: "Isla", monto: 1 }]);
     await updateProyecto(ids.proyecto, {
       nombre: "Cocina de prueba II",
-      precio_venta: 999, // se ignora: hay ítems
-      items: [{ id: cocina, nombre: "Cocina", monto: 6000, fecha_entrega: new Date(2026, 9, 15) }, { nombre: "Isla", monto: 1500 }],
+      precio_venta: 999, // se ignora siempre: el precio es la suma de los ítems
+      items: [{ id: cocina, nombre: "Cocina", monto: 6000, fecha_entrega: new Date(2026, 9, 15) }, { id: isla, nombre: "Isla", monto: 1500 }],
       partidas: [{ proveedor_id: ids.proveedor, proveedor_nombre: "Maderas de Prueba", concepto: "Tablero y chapa", monto_acordado: 700.25 }],
       estado: "pausado",
     });

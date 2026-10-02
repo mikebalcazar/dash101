@@ -805,13 +805,20 @@ test('la cantidad: 20 puertas a $1,500 son $30,000 de línea, no $600,000', asyn
     method: 'POST',
     body: { nombre: `Cantidad ${Date.now().toString(36).slice(-5)}`, cliente_id: cliente.id, estado: 'activo' },
   });
+  /* Mike, 2-oct (con botones): dash101 no genera ítems. La puerta entra por
+   * la API —como lo haría quote101— y aquí sólo se le cambia la cantidad y
+   * el precio por pieza. Y se mide que el «Agregar» de antes ya no está. */
+  await api(pag, `/orgs/${ORG}/items`, {
+    method: 'POST',
+    body: { nombre: 'Puerta de clóset', monto: 1500_00, cantidad: 1, estado: 'vendido', proyecto_id: proyecto.id, cliente_id: cliente.id },
+  });
 
   await pag.goto(`${URL}/proyectos/${proyecto.id}`, { waitUntil: 'load' });
   await pag.getByText('Ítems del proyecto').first().waitFor({ timeout: 20000 });
   await pag.getByRole('button', { name: /Editar la lista/ }).first().click();
-  await pag.getByRole('button', { name: 'Agregar' }).first().click();
+  await pag.locator('input[placeholder^="Ítem ("]').first().waitFor({ timeout: 15000 });
+  assert.equal(await pag.getByRole('button', { name: 'Agregar' }).count(), 0, 'ya no hay «Agregar»: dash101 no genera ítems');
 
-  await pag.locator('input[placeholder^="Ítem ("]').first().fill('Puerta de clóset');
   await pag.getByLabel('Cantidad').first().fill('20');
   await pag.getByLabel('Precio por pieza').first().fill('1500');
 
@@ -1329,7 +1336,7 @@ test('las partidas son pestañas: se crea una con «+», se mueve un ítem, se r
   const etapa2 = pag.getByRole('tab', { name: /^Etapa 2 \(0\)/ });
   await etapa2.waitFor({ timeout: 5000 });
   assert.equal(await etapa2.getAttribute('aria-selected'), 'true', 'la pestaña nueva queda abierta');
-  assert.ok(await pag.locator('[data-partida-abierta="Etapa 2"]').isVisible(), 'con sus botones de renombrar y de ítem nuevo');
+  assert.ok(await pag.locator('[data-partida-abierta="Etapa 2"]').isVisible(), 'con su botón de renombrar');
 
   // 3 · Mover un ítem a la pestaña, desde su «+».
   await pag.getByRole('tab', { name: /^Todas/ }).click();
@@ -1348,24 +1355,21 @@ test('las partidas son pestañas: se crea una con «+», se mueve un ítem, se r
   assert.equal(await partidaDe('Isla'), 'Etapa dos', 'el nombre nuevo llegó al ítem');
   assert.equal(await pag.getByRole('tab', { name: /^Etapa 2/ }).count(), 0, 'y la vieja ya no está');
 
-  // 5 · Un ítem nuevo directo en la pestaña: el editor abre con el renglón ya
-  //     en «Etapa dos», y al guardar el ítem nace ahí.
-  await pag.locator('[data-nuevo-item-en-partida]').click();
+  // 5 · Hasta el 2-oct aquí había «Ítem en esta partida». Mike decidió (con
+  //     botones) que dash101 no genera ítems: el botón ya no está, y lo que
+  //     sí se mide es que guardar la lista no le borre la partida a nadie.
+  assert.equal(await pag.locator('[data-nuevo-item-en-partida]').count(), 0, 'ya no hay «Ítem en esta partida»');
+  await pag.getByRole('button', { name: /Editar la lista/ }).first().click();
   const renglones = pag.locator('input[placeholder^="Ítem ("]');
   await renglones.first().waitFor({ timeout: 15000 });
-  assert.equal(await renglones.count(), 4, 'los tres que hay más el nuevo');
-  const partidas = pag.getByLabel('Partida', { exact: true });
-  assert.equal(await partidas.nth(3).inputValue(), 'Etapa dos', 'el renglón nuevo ya trae la partida');
-  await renglones.nth(3).fill('Zoclo');
-  await pag.getByLabel('Precio por pieza').nth(3).fill('10');
+  assert.equal(await renglones.count(), 3, 'los tres que hay, y ninguno de más');
   await pag.getByRole('button', { name: /Guardar cambios/ }).click();
   await pag.getByRole('button', { name: /Editar el proyecto/ }).first().waitFor({ timeout: 30000 });
   await pag.waitForTimeout(1000);
-  assert.equal(await partidaDe('Zoclo'), 'Etapa dos', 'nació en su pestaña');
-  assert.equal(await partidaDe('Isla'), 'Etapa dos', 'y guardar la lista no le borró la partida a nadie');
-  await pag.getByRole('tab', { name: /^Etapa dos \(2\)/ }).waitFor({ timeout: 15000 });
+  assert.equal(await partidaDe('Isla'), 'Etapa dos', 'guardar la lista no le borró la partida a nadie');
+  await pag.getByRole('tab', { name: /^Etapa dos \(1\)/ }).waitFor({ timeout: 15000 });
 
-  console.log(`    partidas: Etapa 2 → Etapa dos, con Isla movida y Zoclo capturado en ella`);
+  console.log(`    partidas: Etapa 2 → Etapa dos, con Isla movida; sin alta de ítems desde dash101`);
   assert.deepEqual(errores, [], 'cero errores de JavaScript');
   await ctx.close();
 });

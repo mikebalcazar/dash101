@@ -12,6 +12,7 @@
  * que se borra al terminar. Nunca contra producción. */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { sembrarItems } from "./sembrar";
 import { fuente } from "@/lib/fuente";
 import { entrarDePrueba, pedir } from "@/lib/api/cliente";
 import { createCuenta } from "@/lib/cuentas";
@@ -38,8 +39,11 @@ beforeAll(async () => {
   ids.cuenta = await createCuenta(uid, { nombre: "Banco", tipo: "banco", moneda: "MXN", saldo_inicial: 0});
   ids.cliente = await createCliente(uid, { nombre: "Sanje"});
   const base = { cliente_id: ids.cliente, cliente_nombre: "Sanje", partidas: [], estado: "activo" as const, fecha_inicio: new Date("2026-09-01T12:00:00") };
-  ids.queda = await createProyecto(uid, { ...base, nombre: "Sanje CC37", precio_venta: 20000, items: [{ nombre: "Barra", monto: 20000 }] });
-  ids.seVa = await createProyecto(uid, { ...base, nombre: "Sanje CC37 NEW", precio_venta: 30000, items: [{ nombre: "Cocina", monto: 10000, partida: "Planta baja" }, { nombre: "Clóset", monto: 20000, partida: "Planta baja" }] });
+  ids.queda = await createProyecto(uid, { ...base, nombre: "Sanje CC37" });
+  ids.seVa = await createProyecto(uid, { ...base, nombre: "Sanje CC37 NEW" });
+  // Los ítems entran por la API, como desde quell101 o quote101 (2-oct).
+  await sembrarItems(ORG, ids.queda, ids.cliente, [{ nombre: "Barra", monto: 20000 }]);
+  await sembrarItems(ORG, ids.seVa, ids.cliente, [{ nombre: "Cocina", monto: 10000, partida: "Planta baja" }, { nombre: "Clóset", monto: 20000, partida: "Planta baja" }]);
   await createMovimiento(uid, { tipo: "ingreso", monto: 15000, fecha: new Date("2026-09-10T12:00:00"), cuenta_id: ids.cuenta, cuenta_nombre: "Banco", proyecto_id: ids.seVa, proyecto_nombre: "Sanje CC37 NEW", contraparte_id: ids.cliente, contraparte_tipo: "cliente", contraparte_nombre: "Sanje", descripcion: "Anticipo" });
 }, 60000);
 

@@ -89,7 +89,8 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
    *
    *  Con `partida` (29-sep), se abre con un renglón nuevo ya puesto en esa
    *  pestaña: «+ Ítem en esta partida». */
-  alEditarLista?: (partida?: string) => void;
+  /** Abre el editor de la lista: SÓLO para editar los que ya existen (2-oct). */
+  alEditarLista?: () => void;
 }) {
   const items: ItemProyecto[] = useMemo(() => proyecto.items ?? [], [proyecto.items]);
   const [pestana, setPestana] = useState<string>("");
@@ -308,19 +309,11 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
           <p className="text-xs text-ink-muted">
             Sin ítems todavía. Son los que el cliente ve en su portal.
           </p>
-          {/* El botón va TAMBIÉN aquí, y es el caso donde más falta hace: sin
-              ítems no se dibuja la tabla, y con ella se iba el único camino
-              para capturar el primero. Lo cachó la puerta de despliegue el
-              20-sep, no un usuario. */}
-          {alEditarLista && (
-            <button
-              type="button"
-              onClick={() => alEditarLista()}
-              className="mt-3 text-xs px-3 py-1.5 rounded-xl border border-black/10 bg-white text-ink-dim inline-flex items-center gap-1 hover:border-black/25"
-            >
-              <IconEdit size={13} /> Editar la lista
-            </button>
-          )}
+          {/* Mike, 2-oct: dash101 no genera ítems. Aquí no hay nada que
+              editar; se dice de dónde llegan. */}
+          <p className="mt-2 text-[11px] text-ink-muted" data-de-donde-llegan>
+            Nacen como requerimientos en quell101 o en una cotización aprobada de quote101.
+          </p>
         </div>
       </div>
     );
@@ -439,19 +432,12 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
               <IconEdit size={13} /> Renombrar «{pestana}»
             </button>
           )}
-          {alEditarLista && (
-            <button
-              type="button"
-              data-nuevo-item-en-partida
-              onClick={() => alEditarLista(pestana)}
-              className="text-xs px-2.5 py-1.5 rounded-xl border border-black/10 bg-white text-ink-dim inline-flex items-center gap-1"
-            >
-              <IconPlus size={13} /> Ítem en esta partida
-            </button>
-          )}
+          {/* Hasta el 2-oct aquí había «Ítem en esta partida». Se fue por
+              decisión de Mike (con botones): dash101 no genera ítems; se
+              levantan en quell101 o se cotizan en quote101. */}
           {!filas.some((f) => f.partida === pestana) && (
             <span className="text-[11px] text-ink-muted">
-              Pestaña vacía: mueve un ítem aquí desde su «+», o crea uno en ella. Si la dejas vacía, no se guarda.
+              Pestaña vacía: mueve un ítem aquí desde su «+». Si la dejas vacía, no se guarda.
             </span>
           )}
         </div>

@@ -44,7 +44,6 @@ export default function NuevoProyectoPage() {
   const [errorCliente, setErrorCliente] = useState("");
   const [parecidos, setParecidos] = useState<Cliente[]>([]);
   const [insistir, setInsistir] = useState(false);
-  const [precioVenta, setPrecioVenta] = useState("0");
   const [estado, setEstado] = useState<EstadoProyecto>("planeando");
   const [fechaInicio, setFechaInicio] = useState(new Date().toISOString().slice(0, 10));
   const [partidas, setPartidas] = useState<Partida[]>([]);
@@ -126,8 +125,6 @@ export default function NuevoProyectoPage() {
   };
 
   const compromiso = partidas.reduce((s, p) => s + (parseFloat(p.monto_acordado) || 0), 0);
-  const precioNum = parseFloat(precioVenta) || 0;
-  const margen = precioNum - compromiso;
 
   /** Guarda el cliente nuevo y lo deja escogido. Antes de guardar avisa si
    *  ya hay uno que se parece: capturar dos veces al mismo cliente con el
@@ -193,7 +190,6 @@ export default function NuevoProyectoPage() {
         descripcion: descripcion.trim() || undefined,
         cliente_id: cliente.id!,
         cliente_nombre: cliente.nombre,
-        precio_venta: precioNum,
         partidas: partidasValidas.map((p) => ({
           proveedor_id: p.proveedor_id,
           proveedor_nombre: p.proveedor_nombre,
@@ -446,6 +442,11 @@ export default function NuevoProyectoPage() {
         )}
         </div>
 
+        {/* Hasta el 2-oct aquí se capturaba un «Precio de venta» que nacía
+            como un ítem con el nombre del proyecto. Mike decidió (con
+            botones) que dash101 no genera ítems: el precio del proyecto es
+            la suma de lo que se levante en quell101 o se apruebe en
+            quote101, y arranca en cero. */}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs font-medium text-ink-dim block mb-1.5">Fecha inicio</label>
@@ -457,17 +458,10 @@ export default function NuevoProyectoPage() {
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-ink-dim block mb-1.5">
-              Precio de venta ({empresa.moneda})
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={precioVenta}
-              onChange={(e) => setPrecioVenta(e.target.value)}
-              className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
-            />
+            <label className="text-xs font-medium text-ink-dim block mb-1.5">Precio de venta</label>
+            <p className="text-[11px] text-ink-muted pt-2" data-precio-de-donde>
+              Arranca en cero: lo suman los ítems que se levanten en quell101 o se aprueben en quote101.
+            </p>
           </div>
         </div>
 
@@ -487,7 +481,7 @@ export default function NuevoProyectoPage() {
 
           {partidas.length === 0 ? (
             <div className="bg-cream/60 rounded-xl p-4 text-center text-xs text-ink-muted">
-              Sin partidas. Agrega proveedores con montos acordados para calcular margen.
+              Sin partidas. Agrega proveedores con montos acordados.
             </div>
           ) : (
             <div className="space-y-2">
@@ -539,22 +533,10 @@ export default function NuevoProyectoPage() {
             </div>
           )}
 
-          {(partidas.length > 0 || precioNum > 0) && (
-            <div className="mt-3 bg-cream rounded-xl p-3 grid grid-cols-3 gap-3 text-xs">
-              <div>
-                <p className="text-ink-muted">Compromiso total</p>
-                <p className="font-medium text-mauve-900">{formatMonto(compromiso, empresa.moneda)}</p>
-              </div>
-              <div>
-                <p className="text-ink-muted">Precio venta</p>
-                <p className="font-medium text-ink-dim">{formatMonto(precioNum, empresa.moneda)}</p>
-              </div>
-              <div>
-                <p className="text-ink-muted">Margen proyectado</p>
-                <p className={`font-medium ${margen >= 0 ? "text-mint-900" : "text-mauve-900"}`}>
-                  {formatMonto(margen, empresa.moneda)}
-                </p>
-              </div>
+          {partidas.length > 0 && (
+            <div className="mt-3 bg-cream rounded-xl p-3 text-xs">
+              <p className="text-ink-muted">Compromiso total</p>
+              <p className="font-medium text-mauve-900">{formatMonto(compromiso, empresa.moneda)}</p>
             </div>
           )}
         </div>
