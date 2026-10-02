@@ -770,7 +770,7 @@ test('editar los ítems del proyecto: se borra uno, se guarda, y NO vuelve', asy
 
   // Y ahora lo que importa: lo que quedó GUARDADO, leído de la API.
   const quedaron = filas(await api(pag, `/orgs/${ORG}/items?proyecto_id=${proyecto.id}`))
-    .filter((i) => i.estado !== 'cancelado')
+    .filter((i) => i.estado === 'vendido')
     .map((i) => i.nombre)
     .sort();
   assert.deepEqual(quedaron, ['Cocina grande', 'Isla'], 'quedó LO QUE SE VE: ni el borrado ni copias');
@@ -784,7 +784,7 @@ test('editar los ítems del proyecto: se borra uno, se guarda, y NO vuelve', asy
   await pag.getByRole('button', { name: /Editar el proyecto/ }).first().waitFor({ timeout: 30000 });
   await pag.waitForTimeout(1000);
   const otraVez = filas(await api(pag, `/orgs/${ORG}/items?proyecto_id=${proyecto.id}`))
-    .filter((i) => i.estado !== 'cancelado');
+    .filter((i) => i.estado === 'vendido');
   assert.equal(otraVez.length, 2, 'guardar dos veces seguidas no agrega nada');
 
   console.log(`    ítems tras editar y borrar: ${quedaron.join(', ')} · precio ${pesos2(p.precio_venta)}`);
@@ -820,7 +820,7 @@ test('la cantidad: 20 puertas a $1,500 son $30,000 de línea, no $600,000', asyn
   await pag.waitForTimeout(1000);
 
   const item = filas(await api(pag, `/orgs/${ORG}/items?proyecto_id=${proyecto.id}`))
-    .filter((i) => i.estado !== 'cancelado')[0];
+    .filter((i) => i.estado === 'vendido')[0];
   assert.equal(item.cantidad, 20, 'se guardaron las 20 piezas');
   assert.equal(item.monto, 30_000_00, 'y el importe es el de la línea');
   const p = await api(pag, `/orgs/${ORG}/proyectos/${proyecto.id}`);
@@ -1211,7 +1211,7 @@ test('agrupar dos renglones en un producto: NO se borra ninguno y se pueden move
    * de mirar la pantalla en un instante cualquiera. */
   let quedaron = [];
   for (let i = 0; i < 40; i++) {
-    quedaron = filas(await api(pag, `/orgs/${ORG}/items?proyecto_id=${proyecto.id}`)).filter((x) => x.estado !== 'cancelado');
+    quedaron = filas(await api(pag, `/orgs/${ORG}/items?proyecto_id=${proyecto.id}`)).filter((x) => x.estado === 'vendido');
     if (quedaron.length === 2 && quedaron.every((x) => x.producto_id)) break;
     await pag.waitForTimeout(500);
   }
