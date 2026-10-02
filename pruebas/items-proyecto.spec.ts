@@ -159,11 +159,16 @@ describe("editar la lista de ítems de un proyecto", () => {
     expect(d.items!.map((p) => p.nombre)).toEqual(["Se queda"]);
     expect(d.precio_venta).toBe(100);
 
-    // Sigue existiendo, cancelado: el rastro no se pierde.
-    const todos = await pedir<{ filas: Array<{ id: string; estado: string }> }>(
+    // Sigue existiendo, fuera del alcance: el rastro no se pierde. Desde la
+    // 0.64.0 ya no hay 'cancelado': queda cotizado, con la fecha en que lo
+    // sacaron.
+    const todos = await pedir<{ filas: Array<{ id: string; estado: string; alcance?: string; cancelado_at?: string | null }> }>(
       `/orgs/${ORG}/items?proyecto_id=${encodeURIComponent(ids.proyecto)}`,
     );
-    expect(todos.filas.find((i) => i.id === seVa.id)?.estado).toBe("cancelado");
+    const fuera = todos.filas.find((i) => i.id === seVa.id);
+    expect(fuera?.estado).toBe("cotizado");
+    expect(fuera?.alcance).toBe("fuera");
+    expect(fuera?.cancelado_at, "y quedó dicho que lo sacaron").toBeTruthy();
 
     // Y guardar otra vez no lo revive ni agrega copias.
     await updateProyecto(ids.proyecto, { items: sobreviven });

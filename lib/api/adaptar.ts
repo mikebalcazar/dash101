@@ -93,13 +93,14 @@ export interface FilaProyecto {
   creado_at: string; actualizado_at: string | null;
 }
 export interface FilaItem { id: string; proyecto_id: string | null; nombre: string; descripcion: string | null; monto: number; cantidad: number; estado: string; etapa: number; clave: string | null; tipo: string | null; fecha_entrega: string | null; origen: { quell_id?: string } | null; partida?: string; orden?: number;
-  /* 0.31.0 · en qué parte del alcance está, ya resuelto por la API: dentro,
-   * no_aprobado, cancelado o descartado. Viene calculado y no deducido aquí
-   * a propósito: la regla —«para que se considere cancelado tiene que haber
-   * estado aprobado primero»— vive en un solo lugar, el contrato, y las tres
-   * apps la leen en vez de reescribirla cada una. */
-  alcance?: 'dentro' | 'no_aprobado' | 'cancelado' | 'descartado';
-  cancelado_motivo?: string | null; aprobado_at?: string | null;
+  /* 0.64.0 · en qué parte del alcance está, ya resuelto por la API: dentro
+   * o fuera. Mike, 2-oct: «solo existirá "en alcance" o "fuera de alcance"».
+   * Viene calculado y no deducido aquí a propósito: la regla vive en un
+   * solo lugar, el contrato, y las tres apps la leen. `cancelado_at` dice
+   * que a éste lo SACARON (no es lo mismo que un requerimiento que nadie ha
+   * decidido); la historia completa está en GET /items/:id/alcance. */
+  alcance?: 'dentro' | 'fuera';
+  cancelado_motivo?: string | null; aprobado_at?: string | null; cancelado_at?: string | null;
   /* 0.35.0 · a qué modelo del catálogo pertenece la pieza. NULL = es su
    * propio producto único. */
   producto_id?: string | null;

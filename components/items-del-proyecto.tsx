@@ -44,9 +44,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { IconArrowUp, IconArrowDown, IconCheck, IconX, IconArrowsSort, IconLayersSubtract, IconThumbUp, IconBan, IconChevronDown, IconChevronRight, IconArrowsSplit, IconEdit, IconPlus, IconMinus, IconTrash, IconAlertTriangle } from "@tabler/icons-react";
 import {
-  acomodar, agrupables, agrupar, aprobarItem, asignarProducto, borrarCancelados, cancelarItem,
-  productosDelProyecto, revisarCancelados, separarItem, separarProducto,
-  type CensoDeCancelados, type GrupoDeItems, type ItemUnico, type Producto,
+  acomodar, agrupables, agrupar, aprobarItem, asignarProducto, bitacoraAlcance, borrarCancelados,
+  NOMBRE_MOVIMIENTO_ALCANCE, productosDelProyecto, revisarCancelados, sacarItem, separarItem, separarProducto,
+  type CensoDeCancelados, type GrupoDeItems, type ItemUnico, type MovimientoAlcance, type Producto,
 } from "@/lib/items-grupo";
 import { fueraDeAlcance } from "@/lib/api/leer";
 import type { ItemFuera } from "@/lib/api/leer";
@@ -55,13 +55,12 @@ import type { ItemProyecto, Proyecto } from "@/types/schema";
 import type { Timestamp } from "firebase/firestore";
 
 const SIN = "__sin__";
-/* Las dos pestañas que no son partidas: lo que está fuera del alcance.
- * Mike, 20-sep: «en la pestaña de partida de ítems fuera de alcance,
- * dividirlos entre "no aprobados" y "Cancelados"». Van al final y separadas
- * de las partidas porque no son un capítulo de la venta: son lo que no se
- * está cobrando. */
-const NO_APROBADOS = "__no_aprobados__";
-const CANCELADOS = "__cancelados__";
+/* La pestaña que no es partida: lo que está fuera del alcance. Mike, 2-oct:
+ * «solo existirá "en alcance" o "fuera de alcance" (…) una lista unificada de
+ * las cosas que están requeridas pero aún no se confirman, o se confirmaron y
+ * se cancelaron». Va al final y separada de las partidas porque no es un
+ * capítulo de la venta: es lo que no se está cobrando. */
+const FUERA = "__fuera__";
 /** Lo que vale el dropdown cuando el ítem no es de ningún producto: es su
  *  propio producto único, que es como nacen todos. */
 const SOLO = "__solo__";
@@ -111,14 +110,14 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
   const [modo, setModo] = useState<"ver" | "acomodar" | "juntar">("ver");
   const [error, setError] = useState("");
   const [hecho, setHecho] = useState("");
-  const [fuera, setFuera] = useState<{ no_aprobados: ItemFuera[]; cancelados: ItemFuera[] }>({ no_aprobados: [], cancelados: [] });
+  const [fuera, setFuera] = useState<ItemFuera[]>([]);
   const [moviendo, setMoviendo] = useState("");
   const [opciones, setOpciones] = useState<Opciones>({ productos: [], unicos: [] });
   const [abiertos, setAbiertos] = useState<Record<string, boolean>>({});
 
   const traerFuera = async () => {
     try { setFuera(await fueraDeAlcance(proyecto.id!)); }
-    catch { setFuera({ no_aprobados: [], cancelados: [] }); }
+    catch { setFuera([]); }
   };
   useEffect(() => { void traerFuera(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [proyecto.id, proyecto.items]);
 
@@ -193,19 +192,15 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
     }
   };
 
-  /** Aprobar, cancelar o reactivar. Se recarga todo después: cambiar el
+  /** Agregar al alcance o sacar. Se recarga todo después: cambiar el
    *  alcance mueve el precio de venta del proyecto, y enseñar la lista nueva
-   *  junto al total viejo es enseñar dos verdades. */
-  const mover = async (id: string, que: "aprobar" | "cancelar", motivo?: string) => {
+   *  junto al total viejo es enseñar dos verdades. Las palabras son las de
+   *  Mike (2-oct): «se agregó al alcance», «se sacó del alcance». */
+  const mover = async (id: string, que: "aprobar" | "sacar", motivo?: string) => {
     setMoviendo(id); setError(""); setHecho("");
     try {
-      if (que === "aprobar") { await aprobarItem(id); setHecho("Aprobado: ya cuenta en el precio de venta."); }
-      else {
-        const como = await cancelarItem(id, motivo);
-        setHecho(como === "cancelado"
-          ? "Cancelado: estaba aprobado, así que sale de la venta y queda en Cancelados."
-          : "Descartado: nunca estuvo aprobado, así que no cuenta como cancelado.");
-      }
+      if (que === "aprobar") { await aprobarItem(id); setHecho("Se agregó al alcance: ya cuenta en el precio de venta."); }
+      else { await sacarItem(id, motivo); setHecho("Se sacó del alcance: ya no cuenta en el precio de venta. Queda en «Fuera de alcance»."); }
       await traerFuera();
       alCambiar();
     } catch (e) {
@@ -241,7 +236,7 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
   const visibles = pestana === "" ? filas : filas.filter((f) => f.partida === (pestana === SIN ? "" : pestana));
   /** La pestaña abierta es una partida de verdad (no «Todas», ni «Sin
    *  partida», ni las de fuera del alcance). */
-  const enPartida = pestana !== "" && pestana !== SIN && pestana !== NO_APROBADOS && pestana !== CANCELADOS;
+  const enPartida = pestana !== "" && pestana !== SIN && pestana !== FUERA;
 
   const crearPartida = () => {
     const nombre = nombreNueva.trim().slice(0, 80);
@@ -304,7 +299,7 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
   const suma = visibles.reduce((s, f) => s + f.monto, 0);
   const sumaTodo = filas.reduce((s, f) => s + f.monto, 0);
 
-  const hayFuera = fuera.no_aprobados.length + fuera.cancelados.length > 0;
+  const hayFuera = fuera.length > 0;
   if (filas.length === 0 && !hayFuera) {
     return (
       <div className="mb-4">
@@ -400,10 +395,7 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
             <IconPlus size={12} /> Partida
           </button>
         )}
-        {[
-          ...(fuera.no_aprobados.length ? [{ v: NO_APROBADOS, t: `No aprobados (${fuera.no_aprobados.length})` }] : []),
-          ...(fuera.cancelados.length ? [{ v: CANCELADOS, t: `Cancelados (${fuera.cancelados.length})` }] : []),
-        ].map((op) => (
+        {(fuera.length ? [{ v: FUERA, t: `Fuera de alcance (${fuera.length})` }] : []).map((op) => (
           <button
             key={op.v}
             type="button"
@@ -509,18 +501,17 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
         />
       )}
 
-      {modo === "ver" && (pestana === NO_APROBADOS || pestana === CANCELADOS) && (
+      {modo === "ver" && pestana === FUERA && (
         <FueraDelAlcance
           proyectoId={proyecto.id!}
-          filas={pestana === NO_APROBADOS ? fuera.no_aprobados : fuera.cancelados}
-          cual={pestana === NO_APROBADOS ? "no_aprobados" : "cancelados"}
+          filas={fuera}
           moviendo={moviendo}
           alMover={mover}
           alLimpiar={alCambiar}
         />
       )}
 
-      {modo === "ver" && pestana !== NO_APROBADOS && pestana !== CANCELADOS && (
+      {modo === "ver" && pestana !== FUERA && (
         <div className="bg-white border border-black/5 rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-cream/50 text-xs text-ink-muted uppercase tracking-wide">
@@ -597,7 +588,7 @@ function FilaDeItem({
   opciones: Opciones;
   pestana: string;
   moviendo: string;
-  alMover: (id: string, que: "aprobar" | "cancelar", motivo?: string) => void;
+  alMover: (id: string, que: "aprobar" | "sacar", motivo?: string) => void;
   alCambiarProducto: (id: string, escogido: string) => void;
   alSeparar: (que: { producto: string } | { item: string }) => void;
   /** Las pestañas con nombre, para moverlo de una a otra. */
@@ -676,6 +667,10 @@ function FilaDeItem({
                 </div>
               </div>
               <div className="sm:col-span-3">
+                <p className="text-[10px] text-ink-muted uppercase tracking-wide mb-1">Bitácora del alcance</p>
+                <HistorialAlcance id={fila.id} />
+              </div>
+              <div className="sm:col-span-3">
                 <p className="text-[10px] text-ink-muted uppercase tracking-wide mb-1">En qué partida (pestaña) va</p>
                 <SelectorDePartida
                   valor={fila.partida}
@@ -738,7 +733,7 @@ function ProductoEnLaLista({
   opciones: Opciones;
   pestana: string;
   moviendo: string;
-  alMover: (id: string, que: "aprobar" | "cancelar", motivo?: string) => void;
+  alMover: (id: string, que: "aprobar" | "sacar", motivo?: string) => void;
   alCambiarProducto: (id: string, escogido: string) => void;
   alSeparar: (que: { producto: string } | { item: string }) => void;
   partidas: string[];
@@ -1236,54 +1231,56 @@ function Juntador({
 
 /* ─────────────── fuera del alcance ───────────────
  *
- * Mike, 20-sep: «en la pestaña de partida de ítems fuera de alcance,
- * dividirlos entre "no aprobados" y "Cancelados"». Son dos listas y no una
- * con etiquetas porque significan cosas distintas: de una hay que decidir
- * —entra o no entra—, y la otra es historia, para consultarse.
+ * Mike, 2-oct: «solo existirá "en alcance" o "fuera de alcance". Así hay una
+ * lista unificada de las cosas que están requeridas pero aún no se
+ * confirman, o se confirmaron y se cancelaron, pero no pasan a otra lista,
+ * regresan a fuera de alcance; solo en la bitácora sí aparecerá como "se sacó
+ * del alcance" y si se agrega de nuevo aparecerá después "se agregó al
+ * alcance" con su fecha y quién la agregó».
  *
- * Los DESCARTADOS —lo que se quitó sin haber estado aprobado nunca— no salen
- * en «Cancelados»: nunca fueron una venta, y meterlos ahí diría que se echó
- * para atrás algo que jamás se cerró. Esa es la regla de Mike, y la contesta
- * la API.
+ * Una sola lista. Cada renglón dice si lo SACARON (con fecha y motivo) o si
+ * nadie lo ha decidido, y abre su bitácora completa, que la contesta la API.
  */
 function FueraDelAlcance({
-  proyectoId, filas, cual, moviendo, alMover, alLimpiar,
+  proyectoId, filas, moviendo, alMover, alLimpiar,
 }: {
   proyectoId: string;
   filas: ItemFuera[];
-  cual: "no_aprobados" | "cancelados";
   moviendo: string;
-  alMover: (id: string, que: "aprobar" | "cancelar", motivo?: string) => void;
+  alMover: (id: string, que: "aprobar" | "sacar", motivo?: string) => void;
   alLimpiar: () => void;
 }) {
+  const [historial, setHistorial] = useState<Record<string, boolean>>({});
   const suma = filas.reduce((s, f) => s + f.monto, 0);
+  const sacados = filas.filter((f) => f.sacado).length;
   return (
     <div className="bg-white border border-black/5 rounded-2xl p-3">
       <p className="text-xs text-ink-muted mb-2">
-        {cual === "no_aprobados" ? (
-          <>Tienen precio y toda su información, pero <b>no cuentan</b> en el precio de venta hasta
-          que los apruebes. Suman {formatMonto(suma, "MXN")} si entraran todos. Los requerimientos
-          levantados en la obra están también en el borrador «Requerimientos» del proyecto en
-          quote101: ahí se les pone precio y tipo y se mandan al cliente; al aprobarse esa cotización
-          caen en su pestaña.</>
-        ) : (
-          <>Estuvieron aprobados y se cancelaron, así que ya no cuentan. Se quedan aquí para
-          poder consultarlos; si alguno se revive, vuelve a sumar.</>
-        )}
+        Tienen precio y toda su información, pero <b>no cuentan</b> en el precio de venta.
+        Suman {formatMonto(suma, "MXN")} si entraran todos. Aquí están los requerimientos que
+        nadie ha agregado todavía y lo que se sacó del alcance{sacados ? ` (${sacados})` : ""}: es
+        una sola lista. Los requerimientos de la obra están también en el borrador «Requerimientos»
+        del proyecto en quote101.
       </p>
 
       <ul className="divide-y divide-black/5">
         {filas.map((f) => (
-          <li key={f.id} className="py-2 flex flex-wrap items-center gap-2">
-            <span className="text-sm text-ink-dim flex-1 min-w-[10rem]">
-              {f.clave ? <span className="text-ink-muted">{f.clave} · </span> : null}
-              {f.nombre}
-              {f.cantidad > 1 ? <span className="text-ink-muted"> · {f.cantidad} piezas</span> : null}
-              {f.descripcion ? <span className="block text-[11px] text-ink-muted">{f.descripcion}</span> : null}
-              {f.motivo ? <span className="block text-[11px] text-ink-muted">Motivo: {f.motivo}</span> : null}
-            </span>
-            <span className="text-sm text-ink-dim tabular-nums">{formatMonto(f.monto, "MXN")}</span>
-            {cual === "no_aprobados" ? (
+          <li key={f.id} className="py-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-ink-dim flex-1 min-w-[10rem]">
+                {f.clave ? <span className="text-ink-muted">{f.clave} · </span> : null}
+                {f.nombre}
+                {f.cantidad > 1 ? <span className="text-ink-muted"> · {f.cantidad} piezas</span> : null}
+                {f.descripcion ? <span className="block text-[11px] text-ink-muted">{f.descripcion}</span> : null}
+                <span className="block text-[11px] text-ink-muted">
+                  {f.sacado ? (
+                    <>Se sacó del alcance{f.cancelado_at ? ` el ${formatDateShort(new Date(f.cancelado_at))}` : ""}{f.motivo ? ` · «${f.motivo}»` : ""}</>
+                  ) : (
+                    <>Nadie lo ha agregado al alcance todavía</>
+                  )}
+                </span>
+              </span>
+              <span className="text-sm text-ink-dim tabular-nums">{formatMonto(f.monto, "MXN")}</span>
               <span className="flex gap-1.5">
                 <button
                   type="button"
@@ -1291,32 +1288,70 @@ function FueraDelAlcance({
                   disabled={moviendo === f.id}
                   className="bg-ink text-white text-[11px] px-2 py-1 rounded-lg inline-flex items-center gap-1 disabled:opacity-40"
                 >
-                  <IconThumbUp size={12} /> Aprobar
+                  <IconThumbUp size={12} /> Agregar al alcance
                 </button>
-                <Cancelador id={f.id} nombre={f.nombre} ocupado={moviendo === f.id} alCancelar={alMover} etiqueta="Descartar" />
+                {!f.sacado && (
+                  <Cancelador id={f.id} nombre={f.nombre} ocupado={moviendo === f.id} alCancelar={alMover} etiqueta="Sacar" />
+                )}
+                <button
+                  type="button"
+                  onClick={() => setHistorial((h) => ({ ...h, [f.id]: !h[f.id] }))}
+                  className="text-[11px] px-2 py-1 rounded-lg border border-black/10 text-ink-dim"
+                  aria-expanded={!!historial[f.id]}
+                >
+                  {historial[f.id] ? "Cerrar bitácora" : "Bitácora"}
+                </button>
               </span>
-            ) : (
-              <button
-                type="button"
-                onClick={() => alMover(f.id, "aprobar")}
-                disabled={moviendo === f.id}
-                className="text-[11px] px-2 py-1 rounded-lg border border-black/10 text-ink-dim disabled:opacity-40"
-              >
-                Revivir
-              </button>
-            )}
+            </div>
+            {historial[f.id] && <div className="mt-2 pl-2"><HistorialAlcance id={f.id} /></div>}
           </li>
         ))}
       </ul>
 
-      {cual === "cancelados" && <LimpiarCancelados proyectoId={proyectoId} alLimpiar={alLimpiar} />}
+      {sacados > 0 && <LimpiarCancelados proyectoId={proyectoId} alLimpiar={alLimpiar} />}
     </div>
   );
 }
 
-/* ─────────────── borrar lo cancelado, con el número enfrente ───────────────
+/* ─────────────── la bitácora del alcance de un ítem ───────────────
  *
- * Mike, 21-sep: «ya todo lo cancelado lo puedes eliminar por completo».
+ * La contesta la API (GET /items/:id/alcance): cada entrada y salida con
+ * fecha, quién, desde qué app y por qué. Lo sembrado por la migración 0028
+ * viene sin quién, y se dice así en vez de inventar un nombre. */
+function HistorialAlcance({ id }: { id: string }) {
+  const [movs, setMovs] = useState<MovimientoAlcance[] | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let vivo = true;
+    bitacoraAlcance(id)
+      .then((m) => { if (vivo) setMovs(m); })
+      .catch((e) => { if (vivo) setError(e instanceof Error ? e.message : "No se pudo leer la bitácora."); });
+    return () => { vivo = false; };
+  }, [id]);
+  if (error) return <p className="text-[11px] text-mauve-900">{error}</p>;
+  if (!movs) return <p className="text-[11px] text-ink-muted">Leyendo…</p>;
+  if (!movs.length) return <p className="text-[11px] text-ink-muted">Sin movimientos: nadie lo ha agregado ni sacado del alcance.</p>;
+  return (
+    <ul className="text-[11px] text-ink-dim space-y-0.5" aria-label="Bitácora del alcance">
+      {[...movs].reverse().map((m) => (
+        <li key={m.id}>
+          <b className={m.accion === "sale" ? "text-mauve-900" : "text-mint-900"}>{NOMBRE_MOVIMIENTO_ALCANCE[m.accion] ?? m.accion}</b>
+          {" · "}{new Date(m.at).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}
+          {" · "}{m.quien ?? <i className="text-ink-muted">sin registro de quién</i>}
+          {m.app ? <span className="text-ink-muted"> · desde {m.app}</span> : null}
+          {m.motivo ? <span className="block text-ink-muted">«{m.motivo}»</span> : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/* ─────────────── borrar lo que se sacó del alcance, con el número enfrente ───────────────
+ *
+ * Mike, 21-sep: «ya todo lo cancelado lo puedes eliminar por completo». Desde
+ * el 2-oct ya no hay «cancelado»: lo que se borra es lo que se SACÓ del
+ * alcance (la API lo censa por `cancelado_at`), nunca un requerimiento que
+ * nadie ha decidido.
  *
  * Tres pasos y no dos, porque esto NO SE DESHACE. Primero se REVISA —la API
  * contesta el censo sin escribir nada—, después se lee lo que va a pasar, y
@@ -1380,14 +1415,14 @@ function LimpiarCancelados({ proyectoId, alLimpiar }: { proyectoId: string; alLi
           type="button" onClick={revisar} disabled={ocupado}
           className="text-[11px] px-2 py-1 rounded-lg border border-black/10 text-ink-dim disabled:opacity-40 inline-flex items-center gap-1"
         >
-          <IconTrash size={12} /> {ocupado ? "Revisando…" : "Revisar y borrar los cancelados"}
+          <IconTrash size={12} /> {ocupado ? "Revisando…" : "Revisar y borrar los que se sacaron del alcance"}
         </button>
       ) : (
         <>
           <p className="text-xs text-ink-dim">
-            Se van <b>{censo.se_van.length}</b> de {censo.total}
+            Se van <b>{censo.se_van.length}</b> de {censo.total} que se sacaron del alcance
             {censo.descartados > 0 && (
-              <> —{censo.cancelados} cancelados y {censo.descartados} descartados, que no salen en esta lista—</>
+              <> —{censo.cancelados} habían estado en alcance y {censo.descartados} nunca entraron—</>
             )}
             . Esto no se deshace.
           </p>
@@ -1415,7 +1450,7 @@ function LimpiarCancelados({ proyectoId, alLimpiar }: { proyectoId: string; alLi
           )}
 
           <p className="text-[11px] text-ink-muted">
-            El precio de venta del proyecto no se mueve: un cancelado nunca sumó.
+            El precio de venta del proyecto no se mueve: lo que está fuera del alcance no suma.
           </p>
 
           <div className="flex items-center gap-2">
@@ -1436,19 +1471,19 @@ function LimpiarCancelados({ proyectoId, alLimpiar }: { proyectoId: string; alLi
   );
 }
 
-/** Cancelar en dos pasos, con su motivo.
+/** Sacar del alcance en dos pasos, con su motivo.
  *
- *  Dos pasos porque no se puede deshacer solo: cancelar saca el ítem del
+ *  Dos pasos porque no se deshace solo: sacar quita el ítem del
  *  precio de venta. Y con motivo porque tres meses después «por qué se cayó
  *  esto» no tiene otra respuesta; se guarda en el ítem, no en la cabeza de
  *  quien lo canceló. */
 function Cancelador({
-  id, nombre, ocupado, alCancelar, etiqueta = "Cancelar",
+  id, nombre, ocupado, alCancelar, etiqueta = "Sacar del alcance",
 }: {
   id: string;
   nombre: string;
   ocupado: boolean;
-  alCancelar: (id: string, que: "aprobar" | "cancelar", motivo?: string) => void;
+  alCancelar: (id: string, que: "aprobar" | "sacar", motivo?: string) => void;
   etiqueta?: string;
 }) {
   const [abierto, setAbierto] = useState(false);
@@ -1479,7 +1514,7 @@ function Cancelador({
       />
       <button
         type="button"
-        onClick={() => { alCancelar(id, "cancelar", motivo); setAbierto(false); setMotivo(""); }}
+        onClick={() => { alCancelar(id, "sacar", motivo); setAbierto(false); setMotivo(""); }}
         disabled={ocupado}
         className="bg-mauve-900 text-white text-[11px] px-2 py-1 rounded-lg disabled:opacity-40"
       >

@@ -28,7 +28,7 @@ import { createCliente } from "@/lib/clientes";
 import { createCuenta } from "@/lib/cuentas";
 import { createMovimiento } from "@/lib/movimientos";
 import { createProyecto, getProyecto } from "@/lib/proyectos";
-import { aprobarItem, borrarCancelados, cancelarItem, revisarCancelados } from "@/lib/items-grupo";
+import { aprobarItem, borrarCancelados, sacarItem, revisarCancelados } from "@/lib/items-grupo";
 
 const CORREO = process.env.CORREO_SUPERADMIN ?? "mike@forespot.com";
 const ORG = `bc-${(process.env.GITHUB_RUN_ID ?? Date.now().toString(36)).toString().toLowerCase().slice(-12)}`;
@@ -46,11 +46,11 @@ const nuevoItem = async (nombre: string, pesos: number, estado: "vendido" | "cot
     },
   })).id;
 
-/** Aprobado y luego cancelado: un cancelado de verdad. */
+/** Estuvo en alcance y lo sacaron: lo que el censo borra (0.64.0). */
 const cancelado = async (nombre: string, pesos: number) => {
   const id = await nuevoItem(nombre, pesos);
   await aprobarItem(id);
-  expect(await cancelarItem(id, "el cliente lo quitó")).toBe("cancelado");
+  await sacarItem(id, "el cliente lo quitó");
   return id;
 };
 
@@ -158,8 +158,8 @@ describe("lo que trae dinero se queda", () => {
     expect(await venta()).toBe(12_000);
   });
 
-  it("la pestaña «Cancelados» ya sólo tiene el que no se pudo borrar", async () => {
-    const { cancelados } = await fueraDeAlcance(ids.proyecto);
-    expect(cancelados.map((x) => x.id)).toEqual([conCobro]);
+  it("en «Fuera de alcance» ya sólo queda, de los sacados, el que no se pudo borrar", async () => {
+    const fuera = await fueraDeAlcance(ids.proyecto);
+    expect(fuera.filter((x) => x.sacado).map((x) => x.id)).toEqual([conCobro]);
   });
 });
