@@ -142,51 +142,40 @@ export async function itemsSinPrecio(proyecto_id: string): Promise<Array<{ id: s
   }));
 }
 
-/** Lo que está FUERA DEL ALCANCE del proyecto, en sus dos montones
- *  (contrato 0.31.0).
+/** Lo que está FUERA DEL ALCANCE del proyecto, en UNA lista (contrato 0.64.0).
  *
- *  Mike, 20-sep: «hay ítems nuevos no aprobados e ítems cancelados. Para que
- *  un ítem se considere cancelado tiene que haber estado aprobado primero y
- *  luego cancelado. (…) Los no aprobados, a pesar de que tienen precio y toda
- *  la info, NO SUMAN en dash».
+ *  Mike, 2-oct: «solo existirá "en alcance" o "fuera de alcance". Así hay una
+ *  lista unificada de las cosas que están requeridas pero aún no se
+ *  confirman, o se confirmaron y se cancelaron, pero no pasan a otra lista,
+ *  regresan a fuera de alcance».
  *
  *  Se pide aparte de `items` por lo mismo que `itemsSinPrecio`: el
- *  formulario del proyecto marca VENDIDO todo lo que le llega, así que un no
- *  aprobado metido ahí se volvería venta al primer guardado.
+ *  formulario del proyecto marca VENDIDO todo lo que le llega, así que un
+ *  fuera metido ahí se volvería venta al primer guardado.
  *
- *  Quién es qué NO se decide aquí: lo dice `alcanceDeItem`, del contrato, que
- *  es el mismo archivo que leen la API y quell101. Tres pantallas con tres
- *  ideas de qué es un cancelado son tres reglas. */
-export async function fueraDeAlcance(proyecto_id: string): Promise<{
-  no_aprobados: ItemFuera[];
-  cancelados: ItemFuera[];
-}> {
-  const [cotizados, cancelados] = await Promise.all([
-    listarCompleto<A.FilaItem>('items', { proyecto_id, estado: 'cotizado' }),
-    listarCompleto<A.FilaItem>('items', { proyecto_id, estado: 'cancelado' }),
-  ]);
-  const fuera = [...cotizados, ...cancelados].map((i) => ({
+ *  Desde la 0.64.0 fuera es `estado = 'cotizado'` y nada más: la API ya no
+ *  escribe 'cancelado'. `sacado` dice si a ése lo SACARON (trae
+ *  `cancelado_at`) o si nadie lo ha decidido; la historia completa —quién,
+ *  cuándo, por qué— se lee con `bitacoraAlcance`. */
+export async function fueraDeAlcance(proyecto_id: string): Promise<ItemFuera[]> {
+  const fuera = await listarCompleto<A.FilaItem>('items', { proyecto_id, estado: 'cotizado' });
+  return fuera.map((i) => ({
     id: i.id, nombre: i.nombre, clave: i.clave ?? null, tipo: i.tipo ?? '',
     descripcion: i.descripcion ?? '', monto: A.aPesos(i.monto), cantidad: Number(i.cantidad ?? 1),
     partida: String(i.partida ?? ''), motivo: i.cancelado_motivo ?? null,
-    /* El alcance lo dice la API, resuelto. Aquí no se deduce de `estado` y
-     * `aprobado_at`: esa cuenta vive en un solo lugar (el contrato), y la
-     * pantalla la lee. */
-    alcance: i.alcance ?? 'no_aprobado',
+    sacado: !!i.cancelado_at, cancelado_at: i.cancelado_at ?? null,
+    /* El alcance lo dice la API, resuelto. Aquí no se deduce. */
+    alcance: i.alcance ?? 'fuera',
   }));
-  return {
-    no_aprobados: fuera.filter((i) => i.alcance === 'no_aprobado'),
-    /* Los descartados —los que se quitaron SIN haber estado aprobados— no
-     * son cancelados y no salen aquí: meterlos diría que se echó para atrás
-     * una venta que nunca existió. Es la regla textual de Mike. */
-    cancelados: fuera.filter((i) => i.alcance === 'cancelado'),
-  };
 }
 
 export interface ItemFuera {
   id: string; nombre: string; clave: string | null; tipo: string; descripcion: string;
   monto: number; cantidad: number; partida: string; motivo: string | null;
-  alcance: 'dentro' | 'no_aprobado' | 'cancelado' | 'descartado';
+  /** Lo SACARON del alcance (estuvo dentro o era un requerimiento que se
+   *  descartó). `false` = nadie lo ha decidido todavía. */
+  sacado: boolean; cancelado_at: string | null;
+  alcance: 'dentro' | 'fuera';
 }
 
 /* ─────────────── movimientos ─────────────── */

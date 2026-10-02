@@ -219,29 +219,46 @@ export async function acomodar(
   return r.acomodados;
 }
 
-/* ─────────────── aprobar y cancelar (contrato 0.31.0) ───────────────
+/* ─────────────── agregar al alcance y sacar del alcance (contrato 0.64.0) ───────────────
  *
  * Mike, 20-sep: «se debe poder cancelar algún ítem ya sea desde quell o
- * desde dash, y se refleja en los 2. (…) Para que un ítem se considere
- * cancelado tiene que haber estado aprobado primero y luego cancelado.»
+ * desde dash, y se refleja en los 2». Mike, 2-oct: «solo existirá "en
+ * alcance" o "fuera de alcance" (…) solo en la bitácora sí aparecerá como
+ * "se sacó del alcance" y si se agrega de nuevo aparecerá después "se agregó
+ * al alcance" con su fecha y quién la agregó».
  *
- * La clasificación la contesta la API: `cancelar` devuelve si quedó
- * CANCELADO —estuvo aprobado— o DESCARTADO —nunca lo estuvo—, y la pantalla
- * dice esa palabra en vez de volver a sacar la cuenta.
+ * Ya no hay cancelado ni descartado que clasificar: sacar deja el ítem
+ * fuera, y la historia la cuenta la bitácora que guarda la API.
  */
 
-/** Aprobar: entra al alcance y desde ahí suma en el proyecto. */
+/** Agregar al alcance: entra y desde ahí suma en el proyecto. */
 export async function aprobarItem(id: string): Promise<void> {
   await pedir(`/orgs/${org()}/items/${encodeURIComponent(id)}/aprobar`, { method: 'POST' });
 }
 
-/** Cancelar. Devuelve cómo quedó, para poder decirlo con su nombre. */
-export async function cancelarItem(id: string, motivo?: string): Promise<'cancelado' | 'descartado'> {
-  const r = await pedir<{ alcance: 'cancelado' | 'descartado' }>(
-    `/orgs/${org()}/items/${encodeURIComponent(id)}/cancelar`,
-    { method: 'POST', body: { motivo } },
-  );
-  return r.alcance;
+/** Sacar del alcance, con su motivo. Queda fuera; no hay otra respuesta. */
+export async function sacarItem(id: string, motivo?: string): Promise<void> {
+  await pedir(`/orgs/${org()}/items/${encodeURIComponent(id)}/sacar`, { method: 'POST', body: { motivo } });
+}
+
+/** Un renglón de la bitácora del alcance, tal como lo manda la API. */
+export interface MovimientoAlcance {
+  id: string; item_id: string; proyecto_id: string | null;
+  accion: 'entra' | 'sale';
+  /** Correo de quien lo movió; `null` en lo sembrado por la migración 0028. */
+  quien: string | null; app: string | null; motivo: string | null; at: string;
+}
+
+/** Lo que dice cada movimiento, en palabras de Mike. */
+export const NOMBRE_MOVIMIENTO_ALCANCE: Record<MovimientoAlcance['accion'], string> = {
+  entra: 'Se agregó al alcance',
+  sale: 'Se sacó del alcance',
+};
+
+/** La bitácora del alcance de un ítem, del más viejo al más nuevo. */
+export async function bitacoraAlcance(id: string): Promise<MovimientoAlcance[]> {
+  const r = await pedir<{ movimientos: MovimientoAlcance[] }>(`/orgs/${org()}/items/${encodeURIComponent(id)}/alcance`);
+  return r.movimientos ?? [];
 }
 
 /* ─────────────── borrar lo cancelado (contrato 0.38.0) ───────────────
@@ -255,15 +272,14 @@ export async function cancelarItem(id: string, motivo?: string): Promise<'cancel
  */
 
 export interface CensoDeCancelados {
-  /** Cancelados + descartados: todo lo que tiene `estado = 'cancelado'`. */
+  /** Todo lo que se SACÓ del alcance (0.64.0: fuera y con `cancelado_at`).
+   *  Un requerimiento que nadie ha decidido no entra aquí. */
   total: number;
   /** Cuántos se borraron de verdad. En seco siempre es 0. */
   borrados: number;
-  /** Los que estuvieron aprobados y se cancelaron. Son los que Mike ve en
-   *  la pestaña «Cancelados». */
+  /** De los sacados, los que alguna vez estuvieron en alcance. */
   cancelados: number;
-  /** Los que nunca estuvieron aprobados. NO salen en ninguna pestaña, y por
-   *  eso la cuenta de aquí puede ser mayor que la que se ve. */
+  /** De los sacados, los que nunca entraron al alcance. */
   descartados: number;
   /** `monto` en CENTAVOS. */
   se_van: Array<{ id: string; clave: string | null; nombre: string; monto: number; piezas: number }>;
