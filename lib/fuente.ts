@@ -43,11 +43,28 @@ export function fuente(): Fuente {
   return process.env.NEXT_PUBLIC_FUENTE === 'firestore' ? 'firestore' : 'api';
 }
 
-/** La empresa (org) en la API. Una sola por construcción, igual que FUENTE. */
+/** La empresa (org) en la API. Una sola por construcción (NEXT_PUBLIC_ORG)…
+ *  salvo por el dominio propio de una empresa (2-oct): ahí el Worker deja la
+ *  cookie `s101_org` con la empresa del dominio, y manda. Sólo en el
+ *  navegador; las pruebas de node siguen con la variable. */
 export function org(): string {
+  const deLaCookie = orgDeLaCookie();
+  if (deLaCookie) return deLaCookie;
   const o = process.env.NEXT_PUBLIC_ORG;
   if (!o) throw new Error('Falta NEXT_PUBLIC_ORG: con FUENTE=api hay que decir qué empresa.');
   return o;
+}
+
+/** La empresa que dejó el Worker en la cookie `s101_org`, si hay navegador y
+ *  si hay cookie. Se lee cada vez: es barato y así un cambio de dominio no
+ *  se queda pegado. */
+export function orgDeLaCookie(galletas?: string): string | null {
+  const crudo = galletas ?? (typeof document !== 'undefined' ? document.cookie : '');
+  if (!crudo) return null;
+  const m = /(?:^|;\s*)s101_org=([^;]+)/.exec(crudo);
+  if (!m) return null;
+  const v = decodeURIComponent(m[1]);
+  return /^[a-z0-9-]{2,40}$/.test(v) ? v : null;
 }
 
 /** Dónde vive la API vista desde aquí.

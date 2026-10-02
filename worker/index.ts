@@ -42,6 +42,17 @@ export function aDominioPropio(req: Request, env: { DOMINIO_PROPIO?: string }, u
   return Response.redirect(`https://${d}${u.pathname}${u.search}`, 301);
 }
 
+/** La cookie con la empresa del dominio propio; la lee lib/fuente.ts. */
+export const COOKIE_ORG = 's101_org';
+
+/** La empresa que pide la puerta de las empresas: `X-Org-Empresa`, sólo si
+ *  viene con `X-Dominio-Empresa`. Sola, a mano, no vale. */
+export function empresaDelDominio(req: Request): string | null {
+  const dominio = req.headers.get('X-Dominio-Empresa');
+  const org = req.headers.get('X-Org-Empresa');
+  return dominio && org && /^[a-z0-9-]{2,40}$/.test(org) ? org : null;
+}
+
 export default {
   async fetch(req: Request, env: { API: { fetch: (r: Request) => Promise<Response> }; DOMINIO_PROPIO?: string }, ctx: ExecutionContext): Promise<Response> {
     const u = new URL(req.url);
@@ -54,7 +65,18 @@ export default {
       r.headers.set('X-App', 'dash101');
       return env.API.fetch(r);
     }
-    return next.fetch(req, env, ctx);
+    /* 2-oct · la empresa del dominio propio. dash101 se construye para UNA
+     * empresa (NEXT_PUBLIC_ORG); por dash101.acme.com la puerta de las
+     * empresas (puerta/ de la API) manda X-Dominio-Empresa y X-Org-Empresa, y
+     * la pantalla —que corre en el navegador— se entera por una cookie del
+     * propio origen (`s101_org`), que lib/fuente.ts lee antes que la
+     * variable. La suite acota la sesión a esa empresa del otro lado. */
+    const empresa = empresaDelDominio(req);
+    const respuesta = await next.fetch(req, env, ctx);
+    if (!empresa) return respuesta;
+    const con = new Response(respuesta.body, respuesta);
+    con.headers.append('Set-Cookie', `${COOKIE_ORG}=${encodeURIComponent(empresa)}; Path=/; Secure; SameSite=Lax; Max-Age=86400`);
+    return con;
   },
 };
 

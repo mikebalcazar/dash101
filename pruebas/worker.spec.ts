@@ -90,4 +90,24 @@ describe("lo demás lo atiende Next", () => {
       expect(api.recibidas).toHaveLength(0);
     }
   });
+
+  /* 2-oct · por el dominio propio de una empresa, la pantalla se entera de
+   * cuál es por una cookie que deja el Worker. Sólo con las dos cabeceras
+   * que pone la puerta de las empresas; a mano, X-Org-Empresa no vale. */
+  describe("la empresa del dominio propio", () => {
+    const conPantalla = { ...apiDoble(), ASSETS: { fetch: async () => new Response("<html>dash</html>", { headers: { "Content-Type": "text/html" } }) } };
+    it("con las cabeceras de la puerta, la portada deja la cookie s101_org", async () => {
+      const r = await worker.fetch(pedir("/", { headers: { "X-Dominio-Empresa": "acme.com", "X-Org-Empresa": "acme", "X-Host-Original": "dash101.acme.com" } }), conPantalla as never, ctx);
+      expect(r.headers.get("Set-Cookie")).toContain("s101_org=acme");
+      expect(r.headers.get("Set-Cookie")).toContain("SameSite=Lax");
+    });
+    it("sin X-Dominio-Empresa, X-Org-Empresa a mano no deja nada", async () => {
+      const r = await worker.fetch(pedir("/", { headers: { "X-Org-Empresa": "acme" } }), conPantalla as never, ctx);
+      expect(r.headers.get("Set-Cookie")).toBeNull();
+    });
+    it("una empresa con forma rara tampoco", async () => {
+      const r = await worker.fetch(pedir("/", { headers: { "X-Dominio-Empresa": "acme.com", "X-Org-Empresa": "<script>" } }), conPantalla as never, ctx);
+      expect(r.headers.get("Set-Cookie")).toBeNull();
+    });
+  });
 });
