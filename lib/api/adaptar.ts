@@ -206,7 +206,7 @@ export function proyecto(
   return {
     id: f.id, nombre: f.nombre, descripcion: f.descripcion ?? '', cliente_id: f.cliente_id,
     cliente_nombre: cli?.nombre ?? '', cliente_uid: cli?.portal_activo ? cli.usuario_id : null,
-    items: partes.items.filter((i) => i.proyecto_id === f.id && i.estado !== 'cancelado').map((i) => item(i, partes.movimientos)),
+    items: partes.items.filter((i) => i.proyecto_id === f.id && i.estado === 'vendido').map((i) => item(i, partes.movimientos)),
     precio_venta: aPesos(f.precio_venta), compromiso_total: compromiso, cobrado, pagado,
     // Las mismas fórmulas que recalcularProyecto() tenía en Firestore.
     disponible: cobrado - pagado, margen_proyectado: aPesos(f.precio_venta) - compromiso,
