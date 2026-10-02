@@ -1,9 +1,16 @@
-/* Los ítems de un proyecto al editarlos: que se respeten los cambios.
+/* Los ítems de un proyecto al editarlos: que se respeten los cambios, y que
+ * dash101 NO fabrique ninguno.
  *
  * Mike lo reportó el 20-sep: al editar la lista de ítems dentro de un
  * proyecto y guardar, en vez de quedar la lista que se ve en pantalla,
  * quedaban los de antes MÁS los editados, y no había manera de borrar uno.
  * Eso infla el precio de venta del proyecto, que es la suma de sus ítems.
+ *
+ * Y el 2-oct decidió, con botones: «dash sólo lee». «ítems se pueden generar
+ * en 2 lugares: quell, quote. dash únicamente los lee y puede sacarlos o
+ * meterlos al alcance». Así que aquí los ítems se siembran por la API —como
+ * entran de verdad— y lo que se mide de dash101 es que edite, saque y NUNCA
+ * cree.
  *
  * Esta prueba recorre exactamente eso contra staging, con los mismos módulos
  * que usa la pantalla.
@@ -14,6 +21,8 @@ import { fuente } from "@/lib/fuente";
 import { entrarDePrueba, pedir } from "@/lib/api/cliente";
 import { createCliente } from "@/lib/clientes";
 import { createProyecto, getProyecto, updateProyecto } from "@/lib/proyectos";
+import { DASH_NO_GENERA_ITEMS } from "@/lib/api/escribir";
+import { sembrarItems, type Semilla } from "./sembrar";
 
 const CORREO = process.env.CORREO_SUPERADMIN ?? "mike@forespot.com";
 const ORG = `it-${(process.env.GITHUB_RUN_ID ?? Date.now().toString(36)).toString().toLowerCase().slice(-12)}`;
@@ -21,6 +30,13 @@ const ORG_ANTES = process.env.NEXT_PUBLIC_ORG;
 
 let uid = "";
 const ids = { cliente: "", proyecto: "" };
+
+/** Deja el proyecto EXACTAMENTE con estas semillas: saca lo que haya y
+ *  siembra lo nuevo por la API, como lo harían quell101 o quote101. */
+async function dejarCon(proyecto: string, semillas: Semilla[]): Promise<string[]> {
+  await updateProyecto(proyecto, { items: [] });
+  return sembrarItems(ORG, proyecto, ids.cliente, semillas);
+}
 
 beforeAll(async () => {
   expect(fuente()).toBe("api");
@@ -33,13 +49,12 @@ beforeAll(async () => {
   ids.cliente = await createCliente(uid, { nombre: "Cliente Uno"});
   ids.proyecto = await createProyecto(uid, {
     nombre: "Casa Uno", cliente_id: ids.cliente, cliente_nombre: "Cliente Uno",
-   
-    precio_venta: 0, estado: "activo", fecha_inicio: new Date(2026, 8, 1), partidas: [],
-    items: [
-      { nombre: "Cocina", monto: 100 },
-      { nombre: "Clóset", monto: 200 },
-    ],
+    estado: "activo", fecha_inicio: new Date(2026, 8, 1), partidas: [],
   });
+  await sembrarItems(ORG, ids.proyecto, ids.cliente, [
+    { nombre: "Cocina", monto: 100 },
+    { nombre: "Clóset", monto: 200 },
+  ]);
 }, 90000);
 
 afterAll(async () => {
@@ -47,14 +62,52 @@ afterAll(async () => {
   finally { process.env.NEXT_PUBLIC_ORG = ORG_ANTES; }
 });
 
+describe("dash101 no genera ítems (Mike, 2-oct)", () => {
+  it("crear un proyecto con `items` o con `precio_venta` no fabrica ninguno", async () => {
+    /* Antes del 2-oct, `precio_venta` sin ítems nacía como un ítem con el
+     * nombre del proyecto («regla 1»), y `items` los creaba uno por uno. Ya
+     * no: un proyecto nuevo de dash101 nace vacío y vale cero. */
+    const p = await createProyecto(uid, {
+      nombre: "Casa Vacía", cliente_id: ids.cliente, cliente_nombre: "Cliente Uno",
+      estado: "activo", fecha_inicio: new Date(2026, 8, 1), partidas: [],
+      precio_venta: 5000, items: [{ nombre: "Fantasma", monto: 5000 }],
+    });
+    const d = (await getProyecto(p))!;
+    expect(d.items, "ni el de la regla 1 ni el de la lista").toHaveLength(0);
+    expect(d.precio_venta).toBe(0);
+  });
+
+  it("un renglón sin id en la lista se rechaza completo, y no cambia nada", async () => {
+    const antes = (await getProyecto(ids.proyecto))!;
+    const cocina = antes.items!.find((x) => x.nombre === "Cocina")!;
+    await expect(updateProyecto(ids.proyecto, {
+      nombre: "Casa Uno renombrada",
+      items: [{ id: cocina.id, nombre: "Cocina grande", monto: 999 }, { nombre: "Nuevo de dash", monto: 50 }],
+    })).rejects.toThrow(DASH_NO_GENERA_ITEMS);
+    const d = (await getProyecto(ids.proyecto))!;
+    expect(d.nombre, "ni el proyecto se tocó").toBe("Casa Uno");
+    expect(d.items!.map((x) => x.nombre).sort(), "todo o nada: ni el nuevo ni el cambio").toEqual(["Clóset", "Cocina"]);
+    expect(d.precio_venta).toBe(300);
+  });
+
+  it("un precio de venta a secas tampoco fabrica el ítem fantasma", async () => {
+    await dejarCon(ids.proyecto, []);
+    await updateProyecto(ids.proyecto, { precio_venta: 7000 });
+    const d = (await getProyecto(ids.proyecto))!;
+    expect(d.items).toHaveLength(0);
+    expect(d.precio_venta, "el precio es la suma de los ítems, y no hay").toBe(0);
+    await dejarCon(ids.proyecto, [{ nombre: "Cocina", monto: 100 }, { nombre: "Clóset", monto: 200 }]);
+  });
+});
+
 describe("editar la lista de ítems de un proyecto", () => {
-  it("nace con los dos que se pidieron, y el precio es su suma", async () => {
+  it("nace con los dos que se sembraron, y el precio es su suma", async () => {
     const p = (await getProyecto(ids.proyecto))!;
     expect(p.items).toHaveLength(2);
     expect(p.precio_venta).toBe(300);
   });
 
-  it("se cambia uno, se borra otro y se agrega uno nuevo: queda LO QUE SE VE", async () => {
+  it("se cambia uno y se quita otro: queda LO QUE SE VE", async () => {
     const p = (await getProyecto(ids.proyecto))!;
     const cocina = p.items!.find((x) => x.nombre === "Cocina")!;
 
@@ -62,17 +115,14 @@ describe("editar la lista de ítems de un proyecto", () => {
       items: [
         // el que se queda, con otro monto
         { id: cocina.id, nombre: "Cocina", monto: 150 },
-        // uno nuevo, sin id
-        { nombre: "Isla", monto: 50 },
-        // y «Clóset» ya no viene: se borró en la pantalla
+        // y «Clóset» ya no viene: se quitó en la pantalla
       ],
     });
 
     const d = (await getProyecto(ids.proyecto))!;
-    const nombres = d.items!.map((x) => x.nombre).sort();
-    expect(nombres, "quedan exactamente los dos de la lista").toEqual(["Cocina", "Isla"]);
-    expect(d.items!.find((x) => x.nombre === "Cocina")!.monto).toBe(150);
-    expect(d.precio_venta, "y el precio es la suma de lo que quedó").toBe(200);
+    expect(d.items!.map((x) => x.nombre), "queda exactamente el de la lista").toEqual(["Cocina"]);
+    expect(d.items![0].monto).toBe(150);
+    expect(d.precio_venta, "y el precio es la suma de lo que quedó").toBe(150);
   });
 
   it("guardar dos veces seguidas lo mismo no duplica nada", async () => {
@@ -87,8 +137,8 @@ describe("editar la lista de ítems de un proyecto", () => {
 
   it("guardar con la MISMA forma que manda la pantalla no duplica", async () => {
     /* La pantalla no manda sólo `items`: manda también nombre,
-     * descripción, precio_venta, estado, fecha y partidas, todo junto. Esta
-     * prueba usa esa forma exacta, porque es la que reportó Mike. */
+     * descripción, estado, fecha y partidas, todo junto. Esta prueba usa esa
+     * forma exacta, porque es la que reportó Mike. */
     const antes = (await getProyecto(ids.proyecto))!;
     const filas = antes.items!.map((x) => ({
       id: x.id, nombre: x.nombre, descripcion: x.descripcion || undefined,
@@ -97,7 +147,6 @@ describe("editar la lista de ítems de un proyecto", () => {
     await updateProyecto(ids.proyecto, {
       nombre: antes.nombre,
       descripcion: antes.descripcion ?? "",
-      precio_venta: antes.precio_venta,
       estado: antes.estado,
       fecha_inicio: new Date(2026, 8, 1),
       items: filas,
@@ -113,8 +162,9 @@ describe("editar la lista de ítems de un proyecto", () => {
      * `monto` es el importe de la LÍNEA —las 20 juntas—; si alguien lo
      * tratara como el precio de una, el precio de venta del proyecto saldría
      * multiplicado por veinte y nadie lo notaría hasta cobrarle al cliente. */
+    const [puerta] = await dejarCon(ids.proyecto, [{ nombre: "Puerta de clóset", monto: 1_500 }]);
     await updateProyecto(ids.proyecto, {
-      items: [{ nombre: "Puerta de clóset", monto: 30_000, cantidad: 20 }],
+      items: [{ id: puerta, nombre: "Puerta de clóset", monto: 30_000, cantidad: 20 }],
     });
     const d = (await getProyecto(ids.proyecto))!;
     expect(d.items).toHaveLength(1);
@@ -124,29 +174,28 @@ describe("editar la lista de ítems de un proyecto", () => {
   });
 
   it("sin decir cantidad, es uno: lo que ya existía no cambia", async () => {
-    await updateProyecto(ids.proyecto, { items: [{ nombre: "Barra", monto: 8_000 }] });
+    const [barra] = await dejarCon(ids.proyecto, [{ nombre: "Barra", monto: 8_000 }]);
+    await updateProyecto(ids.proyecto, { items: [{ id: barra, nombre: "Barra", monto: 8_000 }] });
     const d = (await getProyecto(ids.proyecto))!;
     expect(d.items![0].cantidad).toBe(1);
     expect(d.precio_venta).toBe(8_000);
   });
 
-  it("el que se quita deja de verse, y los cancelados no estorban al siguiente guardado", async () => {
+  it("el que se quita deja de verse, y los sacados no estorban al siguiente guardado", async () => {
     /* Mike, tercera vez el 20-sep: «sigue agregando todo lo que aparece en la
      * lista de ítems. No hay forma de quitar/eliminar ítems».
      *
-     * Quitar CANCELA —la API contesta 403 `items_nunca_se_borran` si se
-     * intenta borrar, y hace bien: un ítem borrado deja el historial sin
-     * cuadrar—. Lo que estaba mal era que al guardar se pedía la lista del
-     * proyecto CON los cancelados, y la API tope cada lista en 500 filas por
-     * fecha: en un proyecto muy editado, los cancelados empujan a los vivos
-     * recientes fuera del tope, sus ids dejan de verse, y se vuelven a crear.
+     * Quitar SACA DEL ALCANCE —la API contesta 403 `items_nunca_se_borran`
+     * si se intenta borrar, y hace bien: un ítem borrado deja el historial
+     * sin cuadrar—. Lo que estaba mal era que al guardar se pedía la lista
+     * del proyecto CON los sacados, y la API tope cada lista en 500 filas por
+     * fecha: en un proyecto muy editado, los sacados empujan a los vivos
+     * recientes fuera del tope, sus ids dejan de verse, y se volvían a crear.
      *
      * Aquí se mide lo que se puede medir barato: que el quitado deje de
-     * verse, que siga existiendo cancelado —el rastro no se pierde— y que el
-     * siguiente guardado no lo reviva ni agregue copias. */
-    await updateProyecto(ids.proyecto, {
-      items: [{ nombre: "Se queda", monto: 100 }, { nombre: "Se va", monto: 50 }],
-    });
+     * verse, que siga existiendo fuera del alcance —el rastro no se pierde— y
+     * que el siguiente guardado no lo reviva ni agregue copias. */
+    await dejarCon(ids.proyecto, [{ nombre: "Se queda", monto: 100 }, { nombre: "Se va", monto: 50 }]);
     const antes = (await getProyecto(ids.proyecto))!.items!;
     const seVa = antes.find((p) => p.nombre === "Se va")!;
     const sobreviven = antes
@@ -178,22 +227,29 @@ describe("editar la lista de ítems de un proyecto", () => {
   });
 
   it("un id que ya no sale en la lista se revive, NO se duplica", async () => {
-    /* El corazón del defecto, reproducido barato: se cancela un ítem por la
+    /* El corazón del defecto, reproducido barato: se saca un ítem por la
      * espalda —como pasaba solo cuando el tope de 500 dejaba fuera a los
      * vivos— y se guarda la pantalla con ese mismo id adentro. Antes se creaba
      * una copia; ahora se actualiza el que ya estaba. */
-    await updateProyecto(ids.proyecto, { items: [{ nombre: "Cocina", monto: 100 }] });
-    const p1 = (await getProyecto(ids.proyecto))!.items![0];
+    const [p1] = await dejarCon(ids.proyecto, [{ nombre: "Cocina", monto: 100 }]);
 
-    await pedir(`/orgs/${ORG}/items/${p1.id}`, { method: "PATCH", body: { estado: "cancelado" } });
+    await pedir(`/orgs/${ORG}/items/${p1}`, { method: "PATCH", body: { estado: "cancelado" } });
 
-    await updateProyecto(ids.proyecto, { items: [{ id: p1.id, nombre: "Cocina", monto: 120 }] });
+    await updateProyecto(ids.proyecto, { items: [{ id: p1, nombre: "Cocina", monto: 120 }] });
 
     const d = (await getProyecto(ids.proyecto))!;
     expect(d.items, "uno solo, no dos").toHaveLength(1);
-    expect(d.items![0].id, "y es el mismo de antes, revivido").toBe(p1.id);
+    expect(d.items![0].id, "y es el mismo de antes, revivido").toBe(p1);
     expect(d.items![0].monto).toBe(120);
     expect(d.precio_venta).toBe(120);
+  });
+
+  it("un id que de veras no existe truena: no se inventa un ítem", async () => {
+    await expect(updateProyecto(ids.proyecto, {
+      items: [{ id: "no-existe-" + Date.now().toString(36), nombre: "Inventado", monto: 1 }],
+    })).rejects.toThrow();
+    const d = (await getProyecto(ids.proyecto))!;
+    expect(d.items!.map((p) => p.nombre), "la lista sigue como estaba").toEqual(["Cocina"]);
   });
 
   it("se pueden dejar en cero: un proyecto sin ítems vale cero", async () => {
@@ -214,29 +270,27 @@ describe("el tope de 500 no puede esconder ítems (lo de HOLCIM)", () => {
    * LISTA. Se pedían los ítems del proyecto sin filtrar el estado, y la API
    * tope cada lista en 500 filas ordenadas de la más vieja a la más nueva:
    * en un proyecto al que se le editaron los ítems muchas veces, los
-   * cancelados —los más viejos— llenan las 500 y empujan a los vivos fuera
+   * sacados —los más viejos— llenan las 500 y empujan a los vivos fuera
    * de la respuesta. La pantalla decía «Sin ítems» y no faltaba nada.
    *
-   * Sembrar 500 cancelados contra staging sería lento y no mediría nada más
+   * Sembrar 500 sacados contra staging sería lento y no mediría nada más
    * que esto: aquí se mide la regla que lo arregla, que es que la lectura
    * pida SÓLO LOS VIVOS y exija la lista completa. */
 
-  it("la lectura del proyecto pide sólo los vivos: un cancelado no ocupa lugar", async () => {
-    await updateProyecto(ids.proyecto, {
-      items: [{ nombre: "Se queda", monto: 400 }, { nombre: "Se va", monto: 600 }],
-    });
+  it("la lectura del proyecto pide sólo los vivos: un sacado no ocupa lugar", async () => {
+    await dejarCon(ids.proyecto, [{ nombre: "Se queda", monto: 400 }, { nombre: "Se va", monto: 600 }]);
     const antes = (await getProyecto(ids.proyecto))!;
     const seVa = antes.items!.find((p) => p.nombre === "Se va")!;
     await updateProyecto(ids.proyecto, {
       items: antes.items!.filter((p) => p.nombre !== "Se va").map((p) => ({ id: p.id, nombre: p.nombre, monto: p.monto })),
     });
 
-    // La lista del proyecto, tal como la pide la pantalla: el cancelado no
+    // La lista del proyecto, tal como la pide la pantalla: el sacado no
     // viene, ni siquiera para que lo tire el adaptador después.
     const crudo = await pedir<{ total: number; filas: Array<{ id: string; estado: string }> }>(
       `/orgs/${ORG}/items?proyecto_id=${encodeURIComponent(ids.proyecto)}&estado=vendido`,
     );
-    expect(crudo.filas.some((i) => i.id === seVa.id), "el cancelado no ocupa lugar en la respuesta").toBe(false);
+    expect(crudo.filas.some((i) => i.id === seVa.id), "el sacado no ocupa lugar en la respuesta").toBe(false);
     expect(crudo.total, "«total» cuenta sólo los vivos cuando se filtra").toBe(crudo.filas.length);
 
     const d = (await getProyecto(ids.proyecto))!;
@@ -248,9 +302,7 @@ describe("el tope de 500 no puede esconder ítems (lo de HOLCIM)", () => {
     /* Sin esto no hay arreglo posible: una respuesta topada se ve idéntica a
      * una completa —200, `filas`, y nada más—. Se comprueba con un tope
      * chiquito, que es el mismo mecanismo con el que se cae una de 500. */
-    await updateProyecto(ids.proyecto, {
-      items: [{ nombre: "Uno", monto: 10 }, { nombre: "Dos", monto: 20 }, { nombre: "Tres", monto: 30 }],
-    });
+    await dejarCon(ids.proyecto, [{ nombre: "Uno", monto: 10 }, { nombre: "Dos", monto: 20 }, { nombre: "Tres", monto: 30 }]);
     const cortada = await pedir<{ total: number; filas: unknown[] }>(
       `/orgs/${ORG}/items?proyecto_id=${encodeURIComponent(ids.proyecto)}&estado=vendido&limite=1`,
     );
@@ -264,21 +316,21 @@ describe("el tope de 500 no puede esconder ítems (lo de HOLCIM)", () => {
   });
 });
 
-describe("la partida (pestaña) del ítem viaja al crear y al editar (29-sep)", () => {
+describe("la partida (pestaña) del ítem viaja al editar (29-sep)", () => {
   /* Mike, 29-sep: «dividir por partidas (…) pestañas, tipo los libros de
-   * Excel». Hasta hoy la pantalla de la lista no conocía la partida: la
+   * Excel». La partida es un campo del ítem que la pantalla vieja no
+   * conocía y, como mandaba la lista sin él, la API lo tomaba por vacío y lo
    * quitaba al guardar. Ahora viaja si se manda, y si no se manda no se toca.
    * La regla del «no se toca» importa: cualquier pantalla vieja que guarde
    * la lista sin partida borraría las pestañas de todo el proyecto. */
   let proyecto = "";
 
-  it("un ítem nuevo nace en la partida que se le dijo", async () => {
+  it("un ítem sembrado en una partida la trae", async () => {
     proyecto = await createProyecto(uid, {
       nombre: "Casa con partidas", cliente_id: ids.cliente, cliente_nombre: "Cliente Uno",
-     
-      precio_venta: 0, estado: "activo", fecha_inicio: new Date(2026, 8, 1), partidas: [],
-      items: [{ nombre: "Barra", monto: 100, partida: "Cocina" }, { nombre: "Puerta", monto: 50 }],
+      estado: "activo", fecha_inicio: new Date(2026, 8, 1), partidas: [],
     });
+    await sembrarItems(ORG, proyecto, ids.cliente, [{ nombre: "Barra", monto: 100, partida: "Cocina" }, { nombre: "Puerta", monto: 50 }]);
     const p = (await getProyecto(proyecto))!;
     const barra = p.items!.find((i) => i.nombre === "Barra")!;
     const puerta = p.items!.find((i) => i.nombre === "Puerta")!;

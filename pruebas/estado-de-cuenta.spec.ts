@@ -17,6 +17,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { sembrarItems } from "./sembrar";
 import { fuente } from "@/lib/fuente";
 import { entrarDePrueba, pedir } from "@/lib/api/cliente";
 import { createCliente } from "@/lib/clientes";
@@ -45,10 +46,11 @@ beforeAll(async () => {
   ids.casa = await createProyecto(uid, {
    
     cliente_id: ids.holcim, cliente_nombre: "HOLCIM",
-    nombre: "Planta Norte", estado: "activo", precio_venta: 500_000,
+    nombre: "Planta Norte", estado: "activo",
     partidas: [], fecha_inicio: new Date(2026, 0, 15),
-    items: [{ nombre: "Alcance", monto: 500_000, cantidad: 1 }],
   });
+  // Los ítems entran por la API, como desde quell101 o quote101 (2-oct).
+  await sembrarItems(ORG, ids.casa, ids.holcim, [{ nombre: "Alcance", monto: 500_000, cantidad: 1 }]);
 
   const cobrar = (monto: number, proyecto_id: string | null, fecha: Date) =>
     createMovimiento(uid, {

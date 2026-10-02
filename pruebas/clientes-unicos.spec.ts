@@ -14,6 +14,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { sembrarItems } from "./sembrar";
 import { fuente } from "@/lib/fuente";
 import { entrarDePrueba, pedir } from "@/lib/api/cliente";
 import { clientesParecidos, createCliente, fusionarClientes, getCliente, listClientes } from "@/lib/clientes";
@@ -40,9 +41,9 @@ beforeAll(async () => {
   ids.proyecto = await createProyecto(uid, {
     nombre: "Cocina Luna", cliente_id: ids.enQuote, cliente_nombre: "Muebles Luna",
    
-    precio_venta: 0, estado: "activo", fecha_inicio: new Date(2026, 8, 1), partidas: [],
-    items: [{ nombre: "Cocina", monto: 100 }],
+    estado: "activo", fecha_inicio: new Date(2026, 8, 1), partidas: [],
   });
+  await sembrarItems(ORG, ids.proyecto, ids.enQuote, [{ nombre: "Cocina", monto: 100 }]);
 }, 120000);
 
 afterAll(async () => {

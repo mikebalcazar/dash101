@@ -248,16 +248,6 @@ export async function deleteProveedor(id: string): Promise<void> {
 const cantidadDe = (p: ItemProyectoInput): number =>
   p.cantidad && p.cantidad > 0 ? Math.trunc(p.cantidad) : 1;
 
-function filaItem(p: ItemProyectoInput, proyecto: { id: string; cliente_id: string }): Record<string, unknown> {
-  return {
-    cliente_id: proyecto.cliente_id, proyecto_id: proyecto.id,
-    nombre: p.nombre, descripcion: oNulo(p.descripcion), monto: A.aCentavos(p.monto),
-    cantidad: cantidadDe(p), moneda: 'MXN', estado: 'vendido',
-    tipo: 'mueble', fecha_entrega: dia(p.fecha_entrega),
-    ...(p.partida !== undefined ? { partida: p.partida.trim().slice(0, 80) } : {}),
-  };
-}
-
 function filaPartida(p: PartidaProyectoInput, proyectoId: string): Record<string, unknown> {
   return {
     proyecto_id: proyectoId, proveedor_id: oNulo(p.proveedor_id), proveedor_nombre: oNulo(p.proveedor_nombre),
@@ -265,30 +255,27 @@ function filaPartida(p: PartidaProyectoInput, proyectoId: string): Record<string
   };
 }
 
-/** Regla 1: si NO se dicen ítems, el precio es un solo ítem con el nombre
- *  del proyecto. Así un proyecto capturado «a precio cerrado» tiene algo que
- *  enseñarle al cliente en su portal.
+/* DASH101 NO GENERA ÍTEMS (Mike, 2-oct-2026, con botones: «dash sólo lee»).
  *
- *  UNA LISTA VACÍA NO ES «NO SE DIJERON»: es «no hay ninguno», y hay que
- *  respetarla. Hasta el 20-sep las dos cosas se trataban igual, y por eso
- *  borrar todos los ítems de un proyecto y guardar los revivía como uno solo
- *  con el precio entero. Mike lo reportó con las palabras exactas: «no hay
- *  manera de borrar ítems», y «al guardar los duplica y los suma» —porque
- *  después de revivir ese ítem fantasma, al volver a capturar los suyos
- *  quedaban los suyos MÁS el fantasma, y el precio contaba doble—. */
-function itemsOPrecio(nombre: string, precio: number, items: ItemProyectoInput[] | undefined): ItemProyectoInput[] {
-  if (items !== undefined) return items;
-  if (precio > 0) return [{ nombre, monto: precio }];
-  return [];
-}
+ * «ítems se pueden generar en 2 lugares: quell, quote. dash únicamente los
+ * lee y puede sacarlos o meterlos al alcance, pero generarlos sólo quote y
+ * quell». Un ítem nace como requerimiento en la obra (quell101) o como
+ * renglón de una cotización aprobada (quote101). Aquí sólo se EDITAN los que
+ * ya existen —nombre, cantidad, precio, descripción, partida, entrega— y se
+ * sacan del alcance al quitarlos de la lista.
+ *
+ * Se fue con esto la «regla 1» (precio sin ítems = un ítem con el nombre del
+ * proyecto): un precio de venta capturado aquí ya no fabrica nada; el precio
+ * del proyecto es la suma de sus ítems vendidos, y se mueve desde quell o
+ * quote. */
+export const DASH_NO_GENERA_ITEMS = 'dash101 no genera ítems: un ítem se levanta como requerimiento en quell101 o se cotiza y aprueba en quote101.';
 
 export async function createProyecto(_uid: string, d: ProyectoInput): Promise<string> {
   const f = await crear<A.FilaProyecto>('proyectos', {
     cliente_id: d.cliente_id, nombre: d.nombre, descripcion: oNulo(d.descripcion), estado: d.estado,
     fecha_inicio: dia(d.fecha_inicio), fecha_fin_estimada: dia(d.fecha_fin_estimada),
   });
-  const donde = { id: f.id, cliente_id: d.cliente_id };
-  for (const p of itemsOPrecio(d.nombre, d.precio_venta, d.items)) await crear('items', filaItem(p, donde));
+  // Ni `items` ni `precio_venta` crean nada: ver DASH_NO_GENERA_ITEMS.
   for (const p of d.partidas) await crear('partidas', filaPartida(p, f.id));
   return f.id;
 }
@@ -305,7 +292,10 @@ export async function updateProyecto(
 ): Promise<void> {
   const actual = await obtener<A.FilaProyecto>('proyectos', id);
   if (!actual) throw new Error('Proyecto no encontrado');
-  const donde = { id, cliente_id: actual.cliente_id };
+  /* Todo o nada, ANTES de tocar la base: un renglón sin id es un ítem que
+   * dash101 no puede fabricar (DASH_NO_GENERA_ITEMS). Se rechaza completo
+   * para no dejar ni el proyecto ni la lista guardados a medias. */
+  if (d.items?.some((p) => !p.id)) throw new Error(DASH_NO_GENERA_ITEMS);
 
   await cambiar('proyectos', id, {
     nombre: d.nombre, descripcion: d.descripcion === undefined ? undefined : oNulo(d.descripcion), estado: d.estado,
@@ -315,8 +305,9 @@ export async function updateProyecto(
     iva_incluido: d.iva_incluido === undefined ? undefined : d.iva_incluido ? 1 : 0,
   });
 
-  /* Ítems: por id. Los que vienen con id se actualizan, los que no se crean,
-   * los que ya no vienen se quitan.
+  /* Ítems: por id. Los que vienen con id se actualizan, los que ya no
+   * vienen se sacan del alcance. Un renglón SIN id se rechaza: dash101 no
+   * genera ítems (DASH_NO_GENERA_ITEMS, 2-oct).
    *
    * TRES COSAS QUE SE APRENDIERON A GOLPES (Mike lo reportó tres veces el
    * 20-sep: «sigue agregando todo lo que aparece en la lista de ítems; no hay
@@ -332,9 +323,9 @@ export async function updateProyecto(
    *    cancelados no ocupan lugar en el tope.
    *
    * 2. UN ID QUE LA PANTALLA MANDA NUNCA SE CONVIERTE EN UNA COPIA. Si trae
-   *    id pero no está en la lista, se intenta ACTUALIZARLO; sólo si la API
-   *    dice que no existe se crea. Un id que existe jamás se duplica, aunque
-   *    la lista venga incompleta por lo que sea.
+   *    id pero no está en la lista, se ACTUALIZA (se revive); desde el 2-oct
+   *    ya ni siquiera hay rama que cree: si la API dice que no existe, truena
+   *    y se dice.
    *
    * 3. LO QUE SE QUITA SE SIGUE CANCELANDO, y está bien que así sea: la API
    *    contesta 403 `items_nunca_se_borran` a propósito, porque un ítem
@@ -349,8 +340,8 @@ export async function updateProyecto(
    * («los que ya no vienen se cancelan») no los vería, y un ítem quitado
    * seguiría vivo. Mejor tronar que guardar a medias. */
   const vivos = await listarCompleto<A.FilaItem>('items', { proyecto_id: id, estado: 'vendido' });
-  if (d.items !== undefined || (d.precio_venta !== undefined && vivos.length === 0)) {
-    const quiere = itemsOPrecio(d.nombre ?? actual.nombre, d.precio_venta ?? A.aPesos(actual.precio_venta), d.items);
+  if (d.items !== undefined) {
+    const quiere = d.items;   // ya revisados arriba: todos traen id
     const porId = new Map(vivos.map((i) => [i.id, i]));
     const quedan = new Set<string>();
     for (const p of quiere) {
@@ -361,17 +352,12 @@ export async function updateProyecto(
         // la conoce no debe borrarla al guardar la lista.
         ...(p.partida !== undefined ? { partida: p.partida.trim().slice(0, 80) } : {}),
       };
-      if (!p.id) { await crear('items', filaItem(p, donde)); continue; }
-      quedan.add(p.id);
-      if (porId.has(p.id)) { await cambiar('items', p.id, campos); continue; }
-      // Trae id pero no salió en la lista: se intenta actualizar; si de veras
-      // no existe —lo borró alguien más entre que se abrió la pantalla y se
-      // guardó—, entonces sí es uno nuevo.
-      try {
-        await cambiar('items', p.id, { ...campos, estado: 'vendido' });
-      } catch {
-        await crear('items', filaItem(p, donde));
-      }
+      quedan.add(p.id!);
+      if (porId.has(p.id!)) { await cambiar('items', p.id!, campos); continue; }
+      // Trae id pero no salió en la lista de vivos: lo sacaron del alcance
+      // entre que se abrió la pantalla y se guardó. Se revive tal cual —es el
+      // mismo ítem—; si de veras no existe, la API lo dice y no se inventa.
+      await cambiar('items', p.id!, { ...campos, estado: 'vendido' });
     }
     for (const i of vivos) if (!quedan.has(i.id)) await cambiar('items', i.id, { estado: 'cancelado' });
   }

@@ -18,6 +18,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { sembrarItems } from "./sembrar";
 import { fuente } from "@/lib/fuente";
 import { entrarDePrueba, pedir, pedirCrudo } from "@/lib/api/cliente";
 import { createCliente } from "@/lib/clientes";
@@ -55,10 +56,10 @@ beforeAll(async () => {
   ids.proyecto = await createProyecto(uid, {
    
     cliente_id: ids.cliente, cliente_nombre: "Familia",
-    nombre: "Casa", estado: "activo", precio_venta: 60_000,
+    nombre: "Casa", estado: "activo",
     partidas: [], fecha_inicio: new Date(2026, 2, 1),
-    items: [{ nombre: "Barra de cocina", monto: 60_000, cantidad: 1 }],
   });
+  await sembrarItems(ORG, ids.proyecto, ids.cliente, [{ nombre: "Barra de cocina", monto: 60_000, cantidad: 1 }]);
 
   // El lado de la obra. La sesión de quell101 se abre con /me, como en la app.
   await pedirCrudo(`/orgs/${ORG}/quell/me`);

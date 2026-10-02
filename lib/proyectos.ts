@@ -30,8 +30,12 @@ export interface ProyectoInput {
   descripcion?: string;
   cliente_id: string;
   cliente_nombre: string;
-  precio_venta: number;
+  /** Se ignora desde el 2-oct: dash101 no genera ítems y el precio de venta
+   *  es la suma de los ítems vendidos (ver DASH_NO_GENERA_ITEMS). Se queda
+   *  en la forma para que las pantallas viejas no truenen. */
+  precio_venta?: number;
   partidas: PartidaProyectoInput[];
+  /** Se ignora desde el 2-oct, por lo mismo. */
   items?: ItemProyectoInput[];
   estado: EstadoProyecto;
   fecha_inicio: Date;
@@ -149,12 +153,12 @@ export async function createProyecto(uid: string, data: ProyectoInput): Promise<
     cliente_nombre: data.cliente_nombre,
     cliente_uid,
     productos: armarItems(data.items ?? []), // campo de Firestore, ver desdeFirestore()
-    precio_venta: data.precio_venta,
+    precio_venta: data.precio_venta ?? 0,
     compromiso_total: compromiso,
     cobrado: 0,
     pagado: 0,
     disponible: 0,
-    margen_proyectado: data.precio_venta - compromiso,
+    margen_proyectado: (data.precio_venta ?? 0) - compromiso,
     partidas: partidasFull,
     estado: data.estado,
     fecha_inicio: Timestamp.fromDate(data.fecha_inicio),

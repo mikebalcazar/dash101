@@ -22,6 +22,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { sembrarItems } from "./sembrar";
 import { fuente } from "@/lib/fuente";
 import { entrarDePrueba, pedir, pedirCrudo } from "@/lib/api/cliente";
 import { createCliente } from "@/lib/clientes";
@@ -62,16 +63,16 @@ beforeAll(async () => {
   ids.proyecto = await createProyecto(uid, {
    
     cliente_id: ids.cliente, cliente_nombre: "Familia",
-    nombre: "Casa", estado: "activo", precio_venta: 26_000,
+    nombre: "Casa", estado: "activo",
     partidas: [], fecha_inicio: new Date(2026, 2, 1),
-    /* Tres renglones capturados por separado, que es justo el problema:
-     * dos puertas iguales y una barra. */
-    items: [
-      { nombre: "Puerta de recámara", monto: 8_000, cantidad: 1 },
-      { nombre: "Puerta de recámara", monto: 8_000, cantidad: 1 },
-      { nombre: "Barra de cocina", monto: 10_000, cantidad: 1 },
-    ],
   });
+  /* Tres renglones capturados por separado, que es justo el problema: dos
+   * puertas iguales y una barra. Entran por la API, como desde quote101. */
+  await sembrarItems(ORG, ids.proyecto, ids.cliente, [
+    { nombre: "Puerta de recámara", monto: 8_000, cantidad: 1 },
+    { nombre: "Puerta de recámara", monto: 8_000, cantidad: 1 },
+    { nombre: "Barra de cocina", monto: 10_000, cantidad: 1 },
+  ]);
 
   await pedirCrudo(`/orgs/${ORG}/quell/me`);
   ids.obra = (await pedirCrudo<{ id: string }>(`/orgs/${ORG}/quell/projects`, {

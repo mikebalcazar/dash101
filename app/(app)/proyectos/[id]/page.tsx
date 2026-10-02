@@ -181,7 +181,6 @@ export default function ProyectoDetallePage() {
       await updateProyecto(id, {
         nombre: nombre.trim(),
         descripcion: descripcion.trim() || "",
-        precio_venta: parseFloat(precioVenta) || 0,
         estado,
         iva_incluido: ivaIncluido,
         fecha_inicio: fechaInicio ? new Date(fechaInicio) : undefined,
@@ -391,14 +390,7 @@ export default function ProyectoDetallePage() {
           <ItemsDelProyecto
             proyecto={p}
             alCambiar={() => { void loadProyecto(); }}
-            alEditarLista={(partida) => {
-              /* Desde una pestaña, «+ Ítem en esta partida»: se abre la
-               * lista con un renglón nuevo ya puesto en esa partida. */
-              if (partida !== undefined) {
-                setItemsEdit((prev) => [...prev, { id: "", nombre: "", descripcion: "", cantidad: "1", unitario: "", monto: "", fecha_entrega: "", partida }]);
-              }
-              setEditMode("items");
-            }}
+            alEditarLista={() => setEditMode("items")}
           />
 
           {/* Lo acordado con cada proveedor. Se llamaba «Partidas de
@@ -589,11 +581,6 @@ function ProyectoEditForm(props: EditFormProps) {
   );
   const precioNum = parseFloat(props.precioVenta) || 0;
 
-  const addItem = () =>
-    props.setItems((prev) => [
-      ...prev,
-      { id: "", nombre: "", descripcion: "", cantidad: "1", unitario: "", monto: "", fecha_entrega: "", partida: "" },
-    ]);
   /** Las partidas que ya existen en la lista, para proponerlas al teclear. */
   const partidasDeLaLista = Array.from(new Set(props.items.map((p) => p.partida.trim()).filter(Boolean)));
   /** Tocar la cantidad o el precio por pieza recalcula el importe en el
@@ -668,14 +655,11 @@ function ProyectoEditForm(props: EditFormProps) {
         </div>
         <div>
           <label className="text-xs font-medium text-ink-dim block mb-1.5">Precio venta</label>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={props.precioVenta}
-            onChange={(e) => props.setPrecioVenta(e.target.value)}
-            className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
-          />
+          {/* Se lee, no se captura (2-oct): es la suma de los ítems
+              vendidos, y ésos se mueven desde quell101 o quote101. */}
+          <p className="w-full bg-cream/60 border border-black/5 rounded-xl px-3 py-2 text-sm text-ink-dim tabular-nums" data-precio-venta-leido>
+            {formatMonto(parseFloat(props.precioVenta) || 0, "MXN")}
+          </p>
         </div>
       </div>
 
@@ -692,7 +676,7 @@ function ProyectoEditForm(props: EditFormProps) {
        * lo marque mal lo va a ver aquí y no en el papel que ya mandó. */}
       <div>
         <label className="text-xs font-medium text-ink-dim block mb-1.5">
-          El precio de venta que capturaste, ¿cómo va?
+          El precio de venta, ¿cómo va?
         </label>
         <div className="flex gap-2">
           {[
@@ -735,17 +719,12 @@ function ProyectoEditForm(props: EditFormProps) {
       <div className="pt-2">
         <div className="flex justify-between items-baseline mb-1">
           <label className="text-xs font-medium text-ink-dim">Ítems del proyecto</label>
-          <button
-            type="button"
-            onClick={addItem}
-            className="text-xs text-ink hover:underline flex items-center gap-1"
-          >
-            <IconPlus size={12} />
-            Agregar
-          </button>
         </div>
+        {/* Mike, 2-oct (con botones): dash101 no genera ítems. Aquí se
+            editan los que ya hay; quitar uno lo saca del alcance. Hasta hoy
+            había un «Agregar» en este renglón. */}
         <p className="text-[11px] text-ink-muted mb-2">
-          Lo que el cliente ve en su estado de cuenta. Cada ingreso se asigna a un ítem.
+          Lo que el cliente ve en su estado de cuenta. Cada ingreso se asigna a un ítem. Un ítem nuevo se levanta en quell101 o se cotiza en quote101.
         </p>
         <datalist id="partidas-de-la-lista">
           {partidasDeLaLista.map((pa) => <option key={pa} value={pa} />)}
