@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { useEmpresa } from "@/lib/empresa-context";
-import { clientesParecidos, createCliente } from "@/lib/clientes";
+import { clienteDelChoque, clientePorCorreo, clientesParecidos, createCliente } from "@/lib/clientes";
 import type { Cliente } from "@/types/schema";
 import { IconArrowLeft } from "@tabler/icons-react";
 
@@ -30,6 +30,11 @@ export default function NuevoClientePage() {
    * del sur), y el trabajo capturado no se pierde. */
   const [parecidos, setParecidos] = useState<Cliente[]>([]);
   const [insistir, setInsistir] = useState(false);
+  /* El correo es de UN cliente (contrato 0.65.0). Mike, 4-oct: «avisar que ya
+   * existe un cliente, presentar su info y preguntar si es ese cliente el que
+   * estás buscando y ya usarlo o si quieres crear uno nuevo con otro email».
+   * Aquí no hay «insistir»: con el mismo correo no se crea otro. */
+  const [conEseCorreo, setConEseCorreo] = useState<Cliente | null>(null);
 
   if (!empresa) {
     return (
@@ -47,6 +52,10 @@ export default function NuevoClientePage() {
     if (!user) return;
     setError("");
 
+    if (email.trim()) {
+      const dueno = await clientePorCorreo(email, []).catch(() => null);
+      if (dueno) { setConEseCorreo(dueno); return; }
+    }
     if (!insistir) {
       const iguales = await clientesParecidos(nombre.trim(), []).catch(() => []);
       if (iguales.length > 0) { setParecidos(iguales); return; }
@@ -63,6 +72,8 @@ export default function NuevoClientePage() {
       });
       router.push("/clientes");
     } catch (err) {
+      const choque = clienteDelChoque(err);
+      if (choque) { setConEseCorreo(choque); return; }
       setError(err instanceof Error ? err.message : "Error al crear cliente");
     } finally {
       setSubmitting(false);
@@ -117,8 +128,9 @@ export default function NuevoClientePage() {
             <label className="text-xs font-medium text-ink-dim block mb-1.5">Email</label>
             <input
               type="email"
+              id="correo-cliente"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => { setEmail(e.target.value); setConEseCorreo(null); }}
               placeholder="contacto@ejemplo.com"
               className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
             />
@@ -146,6 +158,32 @@ export default function NuevoClientePage() {
             className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 resize-none transition"
           />
         </div>
+
+        {conEseCorreo && (
+          <div data-con-ese-correo className="bg-amber-50 text-amber-900 text-xs px-3 py-2.5 rounded-xl space-y-2">
+            <p>
+              Ya hay un cliente con el correo <strong>{conEseCorreo.email}</strong>. ¿Es éste el que buscas?
+            </p>
+            <p className="font-medium">
+              {conEseCorreo.nombre}
+              {conEseCorreo.telefono ? ` · ${conEseCorreo.telefono}` : ""}
+              {conEseCorreo.rfc ? ` · ${conEseCorreo.rfc}` : ""}
+              {conEseCorreo.portal_activo ? " · con portal" : ""}
+            </p>
+            <div className="flex gap-3 flex-wrap">
+              <Link href={`/clientes/${conEseCorreo.id}`} className="underline font-medium">
+                Sí, es ése: abrirlo
+              </Link>
+              <button
+                type="button"
+                onClick={() => { setConEseCorreo(null); document.getElementById("correo-cliente")?.focus(); }}
+                className="underline font-medium"
+              >
+                No, es otro: lo creo con otro correo
+              </button>
+            </div>
+          </div>
+        )}
 
         {parecidos.length > 0 && !insistir && (
           <div className="bg-sky-50 text-sky-900 text-xs px-3 py-2.5 rounded-xl space-y-2">

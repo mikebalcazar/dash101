@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { useEmpresa } from "@/lib/empresa-context";
-import { clientesParecidos, createCliente, listClientes } from "@/lib/clientes";
+import { clienteDelChoque, clientePorCorreo, clientesParecidos, createCliente, listClientes } from "@/lib/clientes";
 import { listProveedores } from "@/lib/proveedores";
 import { createProyecto } from "@/lib/proyectos";
 import { listObras, ligarObra, type Obra } from "@/lib/obras";
@@ -44,6 +44,8 @@ export default function NuevoProyectoPage() {
   const [errorCliente, setErrorCliente] = useState("");
   const [parecidos, setParecidos] = useState<Cliente[]>([]);
   const [insistir, setInsistir] = useState(false);
+  // El correo es de UN cliente (0.65.0): el que ya lo tiene, para preguntar «¿es éste?».
+  const [conEseCorreo, setConEseCorreo] = useState<Cliente | null>(null);
   const [estado, setEstado] = useState<EstadoProyecto>("planeando");
   const [fechaInicio, setFechaInicio] = useState(new Date().toISOString().slice(0, 10));
   const [partidas, setPartidas] = useState<Partida[]>([]);
@@ -135,6 +137,10 @@ export default function NuevoProyectoPage() {
     if (!nombre) { setErrorCliente("Escribe el nombre del cliente."); return; }
     if (!empresa?.id || !user) return;
 
+    if (nc.email.trim()) {
+      const dueno = await clientePorCorreo(nc.email, clientes).catch(() => null);
+      if (dueno) { setConEseCorreo(dueno); return; }
+    }
     const iguales = await clientesParecidos(nombre, clientes);
     if (iguales.length > 0 && !insistir) { setParecidos(iguales); return; }
 
@@ -153,6 +159,8 @@ export default function NuevoProyectoPage() {
       setInsistir(false);
       setNc({ nombre: "", email: "", telefono: "" });
     } catch (e) {
+      const choque = clienteDelChoque(e);
+      if (choque) { setConEseCorreo(choque); return; }
       setErrorCliente(e instanceof Error ? e.message : "No se pudo guardar el cliente.");
     } finally {
       setGuardandoCliente(false);
@@ -368,8 +376,9 @@ export default function NuevoProyectoPage() {
             <div className="grid grid-cols-2 gap-3 mt-2">
               <input
                 type="email"
+                id="correo-cliente-nuevo"
                 value={nc.email}
-                onChange={(e) => setNc({ ...nc, email: e.target.value })}
+                onChange={(e) => { setNc({ ...nc, email: e.target.value }); setConEseCorreo(null); }}
                 placeholder="Correo (opcional)"
                 className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
               />
@@ -381,6 +390,42 @@ export default function NuevoProyectoPage() {
                 className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
               />
             </div>
+
+            {conEseCorreo && (
+              <div data-con-ese-correo className="bg-white border border-amber-300 rounded-xl p-3 mt-3">
+                <p className="text-xs text-ink-dim mb-2">
+                  Ya hay un cliente con el correo <strong>{conEseCorreo.email}</strong>. ¿Es éste el que buscas?
+                </p>
+                <p className="text-sm text-ink-dim font-medium mb-2">
+                  {conEseCorreo.nombre}
+                  {conEseCorreo.telefono ? <span className="text-ink-muted font-normal"> · {conEseCorreo.telefono}</span> : null}
+                  {conEseCorreo.rfc ? <span className="text-ink-muted font-normal"> · {conEseCorreo.rfc}</span> : null}
+                </p>
+                <div className="flex gap-3 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClienteId(conEseCorreo.id!);
+                      setNuevoCliente(false);
+                      setConEseCorreo(null);
+                      setParecidos([]);
+                      setInsistir(false);
+                      setNc({ nombre: "", email: "", telefono: "" });
+                    }}
+                    className="bg-ink text-cream rounded-lg px-3 py-1.5 text-xs font-medium"
+                  >
+                    Sí, usar {conEseCorreo.nombre}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setConEseCorreo(null); document.getElementById("correo-cliente-nuevo")?.focus(); }}
+                    className="text-xs text-ink-muted underline"
+                  >
+                    No, es otro: lo creo con otro correo
+                  </button>
+                </div>
+              </div>
+            )}
 
             {parecidos.length > 0 && (
               <div className="bg-white border border-black/10 rounded-xl p-3 mt-3">

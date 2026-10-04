@@ -700,6 +700,42 @@ test('se da de alta un cliente desde «nuevo proyecto», y avisa del parecido', 
   await ctx.close();
 });
 
+/* Mike, 4-oct-2026: «en caso de querer generar un nuevo cliente con el email
+ * de otro que ya existe, avisar que ya existe un cliente, presentar su info y
+ * preguntar si es ese cliente el que estás buscando y ya usarlo». Aquí, con
+ * la pantalla enfrente: se intenta dar de alta otro cliente con el correo de
+ * uno que ya está, sale el aviso con su nombre, y «Sí, usar» lo escoge. */
+test('un cliente nuevo con el correo de otro que ya existe: avisa, enseña quién es, y «Sí, usar» lo escoge', async () => {
+  const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  // Un cliente con correo, por la API, para que haya con quién chocar.
+  const correo = `dueno-${Date.now().toString(36)}@ejemplo.mx`;
+  const dueno = await api(pag, '/clientes', { method: 'POST', body: { nombre: 'Dueño del correo', correo, telefono: '5512345678' } });
+
+  await pag.goto(`${URL}/proyectos/nuevo`, { waitUntil: 'load' });
+  await pag.getByLabel('Cliente').waitFor({ timeout: 20000 });
+  await pag.waitForTimeout(1000);
+  await pag.getByLabel('Cliente').selectOption('__nuevo__');
+  await pag.getByPlaceholder('Nombre o razón social').fill('Otro nombre cualquiera');
+  await pag.getByPlaceholder('Correo (opcional)').fill(correo.toUpperCase());
+  await pag.getByRole('button', { name: 'Guardar cliente' }).click();
+
+  const aviso = pag.locator('[data-con-ese-correo]');
+  await aviso.waitFor({ timeout: 15000 });
+  assert.match(await aviso.innerText(), /Ya hay un cliente con el correo/, 'avisa que el correo ya es de alguien');
+  assert.match(await aviso.innerText(), /Dueño del correo/, 'y dice quién es');
+  assert.match(await aviso.innerText(), /5512345678/, 'con su teléfono');
+  await pag.getByRole('button', { name: /Sí, usar Dueño del correo/ }).click();
+  await pag.waitForTimeout(1500);
+  assert.equal(await pag.getByLabel('Cliente').inputValue(), dueno.id, 'quedó escogido el que ya existía, sin crear otro');
+
+  const lista = await api(pag, '/clientes');
+  assert.equal(lista.filas.filter((f) => f.correo === correo).length, 1, 'y sigue habiendo uno solo con ese correo');
+  try { await api(pag, `/clientes/${dueno.id}/borrar`, { method: 'POST', body: { modo: 'borrar' } }); } catch { /* se queda en la demo; no estorba */ }
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
 /* ═══════════════ 6 bis · editar la lista de ítems EN LA PANTALLA ═══════════════
  *
  * Mike lo reportó dos veces, y la segunda con la pantalla enfrente:

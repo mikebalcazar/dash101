@@ -48,6 +48,19 @@ export async function clientesParecidos(nombre: string): Promise<Cliente[]> {
   return r.parecidos.map(A.cliente);
 }
 
+/** El cliente que YA tiene ese correo, si lo hay (contrato 0.65.0). Mike,
+ *  4-oct: «en caso de querer generar un nuevo cliente con el email de otro
+ *  que ya existe, avisar que ya existe un cliente, presentar su info y
+ *  preguntar si es ese cliente». La API contesta el resumen; aquí se vuelve
+ *  un `Cliente` para que la pantalla lo pinte como a cualquiera. */
+export async function clientePorCorreo(correo: string): Promise<Cliente | null> {
+  const c = correo.trim();
+  if (!c) return null;
+  const q = new URLSearchParams({ correo: c });
+  const r = await pedir<{ por_correo: A.FilaCliente | null }>(`/orgs/${org()}/clientes/parecidos?${q}`);
+  return r.por_correo ? A.cliente(r.por_correo) : null;
+}
+
 export async function getCliente(id: string): Promise<Cliente | null> {
   const f = await obtener<A.FilaCliente>('clientes', id);
   return f ? A.cliente(f) : null;

@@ -17,7 +17,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sembrarItems } from "./sembrar";
 import { fuente } from "@/lib/fuente";
 import { entrarDePrueba, pedir } from "@/lib/api/cliente";
-import { clientesParecidos, createCliente, fusionarClientes, getCliente, listClientes } from "@/lib/clientes";
+import { clienteDelChoque, clientePorCorreo, clientesParecidos, createCliente, fusionarClientes, getCliente, listClientes } from "@/lib/clientes";
 import { createProyecto, getProyecto } from "@/lib/proyectos";
 
 const CORREO = process.env.CORREO_SUPERADMIN ?? "mike@forespot.com";
@@ -61,6 +61,31 @@ describe("¿no te refieres a X?", () => {
 
   it("otro nombre no molesta a nadie", async () => {
     expect(await clientesParecidos("Herrería Sol", [])).toHaveLength(0);
+  });
+});
+
+/* Mike, 4-oct: «en caso de querer generar un nuevo cliente con el email de
+ * otro que ya existe, avisar que ya existe un cliente, presentar su info y
+ * preguntar si es ese cliente (…) o si quieres crear uno nuevo con otro
+ * email». La regla la contesta la API (0.65.0); aquí se mide que el módulo
+ * de la pantalla pregunte antes y entienda el rechazo si aun así choca. */
+describe("el correo es de un solo cliente", () => {
+  it("clientePorCorreo dice quién lo tiene, con su info, sin importar mayúsculas", async () => {
+    const c = await clientePorCorreo("  Compras@LUNA.mx ", []);
+    expect(c?.id).toBe(ids.enQuote);
+    expect(c?.nombre).toBe("Muebles Luna");
+    expect(c?.email).toBe("compras@luna.mx");
+    expect(await clientePorCorreo("nadie@luna.mx", [])).toBeNull();
+  });
+
+  it("crear otro con ese correo lo rechaza la API, y el módulo entrega al dueño del correo", async () => {
+    let choque: unknown = null;
+    try { await createCliente(uid, { nombre: "Luna del Sur", email: "compras@luna.mx" }); } catch (e) { choque = e; }
+    expect(choque, "la API dijo que no").not.toBeNull();
+    const dueno = clienteDelChoque(choque);
+    expect(dueno?.id).toBe(ids.enQuote);
+    expect(dueno?.nombre).toBe("Muebles Luna");
+    expect((await listClientes()).map((c) => c.id).sort()).toEqual([ids.enDash, ids.enQuote].sort());
   });
 });
 
