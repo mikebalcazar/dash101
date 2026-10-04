@@ -127,6 +127,30 @@ export async function clientesParecidos(
   });
 }
 
+/** El cliente que ya tiene ese correo, o null (0.65.0). Con la API lo contesta
+ *  el servidor; con Firestore se busca en la lista que ya tiene la pantalla. */
+export async function clientePorCorreo(correo: string, clientes: Cliente[]): Promise<Cliente | null> {
+  const c = String(correo || '').trim().toLowerCase();
+  if (!c) return null;
+  if (fuente() === 'api') return leer.clientePorCorreo(c);
+  return clientes.find((x) => String(x.email || '').trim().toLowerCase() === c) ?? null;
+}
+
+/** Si la API rechazó el alta porque el correo ya es de otro cliente (409
+ *  `correo_en_uso`), devuelve ese cliente; si no, null. Es la red de abajo de
+ *  `clientePorCorreo`: la pantalla pregunta antes, y si aun así choca —dos
+ *  personas capturando a la vez— se le enseña el mismo aviso. */
+export function clienteDelChoque(e: unknown): Cliente | null {
+  const err = e as { error?: string; detalle?: { cliente?: Record<string, unknown> } };
+  if (!err || err.error !== 'correo_en_uso' || !err.detalle?.cliente) return null;
+  const c = err.detalle.cliente;
+  return {
+    id: String(c.id), nombre: String(c.nombre ?? ''), rfc: String(c.rfc ?? ''), email: String(c.correo ?? ''),
+    telefono: String(c.telefono ?? ''), notas: '', uid: null, portal_email: c.portal_activo ? String(c.correo ?? '') : null,
+    portal_activo: !!c.portal_activo, creado_at: null, creado_por: '',
+  } as unknown as Cliente;
+}
+
 /** Juntar dos clientes en uno: `queda` se queda con todo, `seVa` desaparece.
  *  Devuelve cuántas filas se movieron, para poder decírselo a quien lo hizo:
  *  «se movieron 3 proyectos y 12 ítems» es lo que deja tranquilo a alguien
