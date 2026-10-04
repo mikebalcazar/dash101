@@ -710,7 +710,7 @@ test('un cliente nuevo con el correo de otro que ya existe: avisa, enseña quié
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
   // Un cliente con correo, por la API, para que haya con quién chocar.
   const correo = `dueno-${Date.now().toString(36)}@ejemplo.mx`;
-  const dueno = await api(pag, '/clientes', { method: 'POST', body: { nombre: 'Dueño del correo', correo, telefono: '5512345678' } });
+  const dueno = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: 'Dueño del correo', correo, telefono: '5512345678' } });
 
   await pag.goto(`${URL}/proyectos/nuevo`, { waitUntil: 'load' });
   await pag.getByLabel('Cliente').waitFor({ timeout: 20000 });
@@ -729,9 +729,9 @@ test('un cliente nuevo con el correo de otro que ya existe: avisa, enseña quié
   await pag.waitForTimeout(1500);
   assert.equal(await pag.getByLabel('Cliente').inputValue(), dueno.id, 'quedó escogido el que ya existía, sin crear otro');
 
-  const lista = await api(pag, '/clientes');
+  const lista = await api(pag, `/orgs/${ORG}/clientes`);
   assert.equal(lista.filas.filter((f) => f.correo === correo).length, 1, 'y sigue habiendo uno solo con ese correo');
-  try { await api(pag, `/clientes/${dueno.id}/borrar`, { method: 'POST', body: { modo: 'borrar' } }); } catch { /* se queda en la demo; no estorba */ }
+  try { await api(pag, `/orgs/${ORG}/clientes/${dueno.id}/borrar`, { method: 'POST', body: { modo: 'borrar' } }); } catch { /* se queda en la demo; no estorba */ }
   assert.deepEqual(errores, [], 'cero errores de JavaScript');
   await ctx.close();
 });
