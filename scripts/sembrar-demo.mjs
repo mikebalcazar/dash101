@@ -35,7 +35,11 @@ const DEMO = {
     { nombre: 'Caja chica', tipo: 'caja', saldo_inicial: 500000 },
   ],
   proveedores: [
-    { nombre: 'Maderas del Sur', categoria: 'insumos', correo: 'ventas@maderas-del-sur.ejemplo.mx', terminos_pago: '30 días' },
+    /* 0.67.0 · Maderas del Sur trae su cuenta (proveedor_cuentas), para que
+     * la orden de la demo enseñe «Para pagarle» con una CLABE de verdad
+     * (ficticia, pero que cuadra). */
+    { nombre: 'Maderas del Sur', categoria: 'insumos', correo: 'ventas@maderas-del-sur.ejemplo.mx', terminos_pago: '30 días',
+      cuentas: [{ alias: 'Principal', clabe: clabeDe('01218000987654321'), banco: 'Banorte', beneficiario: 'Maderas del Sur SA de CV' }] },
     { nombre: 'Herrajes Aztecas', categoria: 'herrajes', correo: 'pedidos@herrajes-aztecas.ejemplo.mx' },
   ],
   cliente: { nombre: 'Familia Ramírez', correo: 'familia.ramirez@ejemplo.mx', telefono: '55 0000 0000', notas: 'Org de demostración. Todo es ficticio.' },
@@ -122,6 +126,14 @@ async function asegurar(tabla, filtro, clave, valor, datos, app = 'dash101') {
   const ya = l.data.filas.find((f) => String(f[clave] ?? '') === valor);
   if (ya) { hallados.push(`${tabla}/${ya.id}`); return ya; }
   return crear(tabla, datos, app);
+}
+
+/** Una CLABE que cuadra: 17 dígitos y su verificador calculado (la API la revisa). */
+function clabeDe(base17) {
+  const pesos = [3, 7, 1];
+  let suma = 0;
+  for (let i = 0; i < 17; i++) suma += (Number(base17[i]) * pesos[i % 3]) % 10;
+  return base17 + String((10 - (suma % 10)) % 10);
 }
 
 /** Un día relativo a hoy, en `AAAA-MM-DD`. Las fechas de las compras son
@@ -287,7 +299,10 @@ async function main() {
   const cuentas = {};
   for (const c of DEMO.cuentas) cuentas[c.nombre] = await asegurar('cuentas', null, 'nombre', c.nombre, c);
   const proveedores = {};
-  for (const p of DEMO.proveedores) proveedores[p.nombre] = await asegurar('proveedores', null, 'nombre', p.nombre, p);
+  for (const { cuentas: cts = [], ...p } of DEMO.proveedores) {
+    proveedores[p.nombre] = await asegurar('proveedores', null, 'nombre', p.nombre, p);
+    for (const c of cts) await asegurar('proveedor_cuentas', { proveedor_id: proveedores[p.nombre].id }, 'clabe', c.clabe, { ...c, proveedor_id: proveedores[p.nombre].id });
+  }
 
   /* ── la familia y su cocina ── */
   const cliente = await asegurar('clientes', null, 'nombre', DEMO.cliente.nombre, DEMO.cliente);

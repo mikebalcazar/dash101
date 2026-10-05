@@ -437,6 +437,12 @@ test('pedir una compra desde el celular, pagarla, y que el que la pidió lo vea'
   assert.match(dice, /En el buzón/, 'cae directa al buzón, sin autorización previa');
   const folio = dice.match(/OC-\d+/)[0];
 
+  // 0.67.0 · Mike, 5-oct: «ahí mismo en la orden aparezcan los datos
+  // bancarios o de pago del proveedor». Éste se escribió a mano, así que no
+  // hay cuenta de dónde, y la pantalla lo dice en vez de quedarse callada.
+  assert.match(dice, /Para pagarle/, 'la orden trae el bloque «Para pagarle»');
+  assert.match(dice, /no está dado de alta en Proveedores/, 'y con un proveedor escrito a mano dice que no hay cuenta');
+
   // La cotización subió y se pinta.
   assert.equal(await pag.locator('img[alt="cotizacion.png"]').count(), 1, 'la cotización se ve');
 
@@ -464,6 +470,39 @@ test('pedir una compra desde el celular, pagarla, y que el que la pidió lo vea'
   assert.ok(!/El buzón de lo que hay por pagar/.test(lista), 'y ya no hay que entrar a un buzón aparte');
 
   console.log(`    ${folio}: pedida a 390×844 con foto, pagada de ${CUENTA_PRUEBAS}, egreso de 116000 centavos`);
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
+/* ═══════════════ 5a · para pagarle (0.67.0) ═══════════════
+ *
+ * Mike, 5-oct: «en las órdenes de compra, ahí mismo en la orden (desde dash)
+ * aparezcan los datos bancarios o de pago del proveedor para hacer ese
+ * pago». La compra de la demo a Maderas del Sur, que sembrar-demo deja con
+ * su cuenta: la orden enseña alias, banco, la CLABE en grupos que se leen,
+ * a nombre de quién, y el botón para copiarla. */
+test('la orden a un proveedor dado de alta trae su cuenta para pagarle, con la CLABE legible y «Copiar»', async () => {
+  const { ctx, pag, errores } = await pestana({ width: 390, height: 844 }, true);
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  const buzon = await pag.evaluate(async () => (await fetch('/s101/orgs/demo/ordenes/buzon', {
+    headers: { 'X-App': 'dash101' }, credentials: 'include',
+  })).json());
+  const oc = (buzon.data?.filas || []).find((f) => f.proveedor_nombre === 'Maderas del Sur');
+  assert.ok(oc, 'hay una compra a Maderas del Sur en el buzón (si no: node scripts/sembrar-demo.mjs)');
+
+  await pag.goto(`${URL}/ordenes/${oc.id}`, { waitUntil: 'load' });
+  const bloque = pag.locator('[data-para-pagarle]');
+  await bloque.waitFor({ timeout: 30000 });
+  const dice = await bloque.innerText();
+  assert.match(dice, /Para pagarle/);
+  assert.match(dice, /Maderas del Sur/, 'el proveedor');
+  assert.match(dice, /Principal · Banorte/, 'la cuenta con su alias y su banco');
+  assert.match(dice, /\d{3} \d{3} \d{11} \d/, 'la CLABE en grupos que se leen');
+  assert.match(dice, /A nombre de Maderas del Sur SA de CV/, 'y a nombre de quién');
+  assert.equal(await bloque.locator('button', { hasText: 'Copiar' }).count(), 1, 'con su botón para copiarla');
+  assert.ok(!/no está dado de alta/.test(dice), 'y no dice que falta el proveedor');
+
+  console.log(`    ${oc.folio}: «Para pagarle» con la cuenta de Maderas del Sur a 390×844`);
   assert.deepEqual(errores, [], 'cero errores de JavaScript');
   await ctx.close();
 });
