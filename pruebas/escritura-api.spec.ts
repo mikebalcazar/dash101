@@ -102,6 +102,11 @@ describe("la empresa, cuentas, cliente, proveedor", () => {
     ids.proveedor = await createProveedor(uid, { nombre: "Maderas de Prueba", terminos_pago_default: "15 días", email: "ventas@maderas.ejemplo.mx" });
     const prov = await getProveedor(ids.proveedor);
     expect(prov?.terminos_pago_default).toBe("15 días");
+    // Contrato 0.68.0: el tipo del proveedor. Sin decirlo, es de materiales.
+    expect(prov?.tipo).toBe("materiales");
+    const herrero = await createProveedor(uid, { nombre: "Herrería de Prueba", tipo: "servicios" });
+    expect((await getProveedor(herrero))?.tipo).toBe("servicios");
+    await deleteProveedor(herrero);
   });
 
   it("se actualizan y lo que no cambia se queda", async () => {

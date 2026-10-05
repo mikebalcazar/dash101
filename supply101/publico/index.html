@@ -145,6 +145,13 @@
         <p class="sub" style="margin:0"><b>Proveedor nuevo.</b> Sólo el nombre es obligatorio; lo demás sirve para pagarle y encontrarlo.</p>
         <label for="pv-nombre" style="margin-top:8px">Nombre</label>
         <input id="pv-nombre" placeholder="Maderas del Sur" autocomplete="organization">
+        <!-- Mike, 5-oct-2026: «en proveedores hay 2 tipos: materiales y servicios»;
+             los contratistas se dan de alta como proveedores de servicios. -->
+        <label for="pv-tipo">Tipo</label>
+        <select id="pv-tipo">
+          <option value="materiales">Materiales (surte material)</option>
+          <option value="servicios">Servicios (contratista, instalador, taller externo)</option>
+        </select>
         <label for="pv-rfc">RFC</label>
         <input id="pv-rfc" placeholder="MDS010101AB1" autocapitalize="characters" style="text-transform:uppercase">
         <div class="fila">

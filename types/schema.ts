@@ -4,6 +4,9 @@ export type Moneda = "MXN" | "USD";
 export type RolMiembro = "owner" | "socio" | "viewer";
 export type ScopeMiembro = "all" | "proyectos";
 export type TipoCuenta = "banco" | "caja" | "credito" | "otro";
+/** Qué es el proveedor (contrato 0.68.0, Mike 5-oct-2026): surte materiales, o
+ *  da un servicio (un contratista). Es el mismo campo en todas las apps. */
+export type TipoProveedor = "materiales" | "servicios";
 /** `finiquito` lo pone la API sola cuando todos los ítems vendidos llegan a la etapa 7. */
 export type EstadoProyecto = "planeando" | "activo" | "pausado" | "finiquito" | "cerrado";
 export type EstadoPartida = "pendiente" | "parcial" | "pagado";
@@ -77,6 +80,7 @@ export interface Proveedor {
   id?: string;
   nombre: string;
   rfc?: string;
+  tipo?: TipoProveedor;
   categoria?: string;
   email?: string;
   telefono?: string;

@@ -222,7 +222,7 @@ export async function quitarAccesoPortal(clienteId: string): Promise<void> {
 
 export async function createProveedor(_uid: string, d: ProveedorInput): Promise<string> {
   const f = await crear<A.FilaProveedor>('proveedores', {
-    nombre: d.nombre, rfc: oNulo(d.rfc), categoria: oNulo(d.categoria), correo: oNulo(d.email), telefono: oNulo(d.telefono),
+    nombre: d.nombre, rfc: oNulo(d.rfc), tipo: d.tipo ?? 'materiales', categoria: oNulo(d.categoria), correo: oNulo(d.email), telefono: oNulo(d.telefono),
     terminos_pago: oNulo(d.terminos_pago_default), notas: oNulo(d.notas),
   });
   return f.id;
@@ -231,7 +231,7 @@ export async function createProveedor(_uid: string, d: ProveedorInput): Promise<
 export async function updateProveedor(id: string, d: Partial<ProveedorInput>): Promise<void> {
   const o = (v: string | undefined) => (v === undefined ? undefined : oNulo(v));
   await cambiar('proveedores', id, {
-    nombre: d.nombre, rfc: o(d.rfc), categoria: o(d.categoria), correo: o(d.email), telefono: o(d.telefono),
+    nombre: d.nombre, rfc: o(d.rfc), tipo: d.tipo, categoria: o(d.categoria), correo: o(d.email), telefono: o(d.telefono),
     terminos_pago: o(d.terminos_pago_default), notas: o(d.notas),
   });
 }

@@ -14,11 +14,12 @@ import { db } from "./firebase";
 import { fuente } from "./fuente";
 import * as leer from "./api/leer";
 import * as escribir from "./api/escribir";
-import type { Proveedor } from "@/types/schema";
+import type { Proveedor, TipoProveedor } from "@/types/schema";
 
 export interface ProveedorInput {
   nombre: string;
   rfc?: string;
+  tipo?: TipoProveedor;
   categoria?: string;
   email?: string;
   telefono?: string;
@@ -45,6 +46,7 @@ export async function createProveedor(uid: string, data: ProveedorInput): Promis
   const payload = {
     nombre: data.nombre,
     rfc: data.rfc ?? "",
+    tipo: data.tipo ?? "materiales",
     categoria: data.categoria ?? "",
     email: data.email ?? "",
     telefono: data.telefono ?? "",

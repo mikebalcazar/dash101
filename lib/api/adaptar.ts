@@ -81,7 +81,7 @@ export function delDia(dia: string): Date {
 
 export interface FilaCuenta { id: string; nombre: string; tipo: string; banco: string | null; moneda: 'MXN' | 'USD'; saldo_inicial: number; saldo?: number; creado_at: string }
 export interface FilaCliente { id: string; nombre: string; correo: string | null; telefono: string | null; rfc: string | null; notas: string | null; usuario_id: string | null; portal_activo: boolean; creado_at: string }
-export interface FilaProveedor { id: string; nombre: string; rfc: string | null; categoria: string | null; correo: string | null; telefono: string | null; terminos_pago: string | null; notas: string | null; creado_at: string }
+export interface FilaProveedor { id: string; nombre: string; rfc: string | null; tipo: string | null; categoria: string | null; correo: string | null; telefono: string | null; terminos_pago: string | null; notas: string | null; creado_at: string }
 export interface FilaProyecto {
   id: string; cliente_id: string; nombre: string; descripcion: string | null;
   estado: 'planeando' | 'activo' | 'pausado' | 'finiquito' | 'cerrado';
@@ -163,7 +163,7 @@ export function cliente(f: FilaCliente): Cliente {
 
 export function proveedor(f: FilaProveedor): Proveedor {
   return {
-    id: f.id, nombre: f.nombre, rfc: f.rfc ?? '', categoria: f.categoria ?? '', email: f.correo ?? '',
+    id: f.id, nombre: f.nombre, rfc: f.rfc ?? '', tipo: f.tipo === 'servicios' ? 'servicios' : 'materiales', categoria: f.categoria ?? '', email: f.correo ?? '',
     telefono: f.telefono ?? '', terminos_pago_default: f.terminos_pago ?? '', notas: f.notas ?? '',
     creado_at: ts(f.creado_at), creado_por: '',
   };
