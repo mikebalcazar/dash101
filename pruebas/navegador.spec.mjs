@@ -440,7 +440,7 @@ test('pedir una compra desde el celular, pagarla, y que el que la pidió lo vea'
   // 0.67.0 · Mike, 5-oct: «ahí mismo en la orden aparezcan los datos
   // bancarios o de pago del proveedor». Éste se escribió a mano, así que no
   // hay cuenta de dónde, y la pantalla lo dice en vez de quedarse callada.
-  assert.match(dice, /Para pagarle/, 'la orden trae el bloque «Para pagarle»');
+  assert.match(dice, /Para pagarle/i, 'la orden trae el bloque «Para pagarle» (el título va en mayúsculas por CSS)');
   assert.match(dice, /no está dado de alta en Proveedores/, 'y con un proveedor escrito a mano dice que no hay cuenta');
 
   // La cotización subió y se pinta.
@@ -494,7 +494,7 @@ test('la orden a un proveedor dado de alta trae su cuenta para pagarle, con la C
   const bloque = pag.locator('[data-para-pagarle]');
   await bloque.waitFor({ timeout: 30000 });
   const dice = await bloque.innerText();
-  assert.match(dice, /Para pagarle/);
+  assert.match(dice, /Para pagarle/i, 'el título (en mayúsculas por CSS)');
   assert.match(dice, /Maderas del Sur/, 'el proveedor');
   assert.match(dice, /Principal · Banorte/, 'la cuenta con su alias y su banco');
   assert.match(dice, /\d{3} \d{3} \d{11} \d/, 'la CLABE en grupos que se leen');
