@@ -91,10 +91,13 @@ function rev(ok, texto, extra = '') {
 }
 
 async function pedir(ruta, { app, method = 'GET', body } = {}) {
-  const cabeceras = { 'Content-Type': 'application/json' };
+  // Un FormData (planos, documentos, fotos) va tal cual: el navegador pone su
+  // propio Content-Type con el separador.
+  const forma = body instanceof FormData;
+  const cabeceras = forma ? {} : { 'Content-Type': 'application/json' };
   if (app) cabeceras['X-App'] = app;
   if (galleta) cabeceras.Cookie = galleta;
-  const r = await fetch(`${STAGING}${ruta}`, { method, headers: cabeceras, body: body ? JSON.stringify(body) : undefined, redirect: 'manual' });
+  const r = await fetch(`${STAGING}${ruta}`, { method, headers: cabeceras, body: forma ? body : body ? JSON.stringify(body) : undefined, redirect: 'manual' });
   const puesta = r.headers.get('set-cookie');
   if (puesta) galleta = puesta.split(';')[0];
   const texto = await r.text();
@@ -140,6 +143,114 @@ async function entrar(correo, { codigo = true, pin } = {}) {
   } else {
     const e = await pedir('/auth/entrar', { method: 'POST', body: { correo, pin } });
     if (e.estado !== 200) throw new Error(`no entró ${correo} con PIN: ${e.estado} ${e.error ?? ''}`);
+  }
+}
+
+/* Una llamada al motor de obra (`/orgs/demo/quell/…`), que contesta «pelón». */
+const quell = (ruta, o = {}) => pedir(`/orgs/${ORG}/quell${ruta}`, { app: 'quell101', ...o });
+const forma = (campos) => { const fd = new FormData(); fd.append('op_id', crypto.randomUUID()); for (const [k, v] of Object.entries(campos)) fd.append(k, v); return fd; };
+
+/** Un PNG de verdad, dibujado aquí: un plano esquemático de 1000 × 700 con
+ *  el contorno de la cocina y la isla. Sin dependencias: cabecera, IHDR,
+ *  IDAT con zlib y CRC a mano. Es lo justo para que el plano se vea como
+ *  plano y no como un cuadro blanco. */
+async function pngPlano(ancho = 1000, alto = 700) {
+  const { deflateSync } = await import('node:zlib');
+  const px = new Uint8Array(ancho * alto * 3).fill(0xF6);
+  const pinta = (x, y, c) => { if (x < 0 || y < 0 || x >= ancho || y >= alto) return; const i = (y * ancho + x) * 3; px[i] = c[0]; px[i + 1] = c[1]; px[i + 2] = c[2]; };
+  const rect = (x0, y0, x1, y1, c, grosor = 3) => { for (let x = x0; x <= x1; x++) for (let g = 0; g < grosor; g++) { pinta(x, y0 + g, c); pinta(x, y1 - g, c); } for (let y = y0; y <= y1; y++) for (let g = 0; g < grosor; g++) { pinta(x0 + g, y, c); pinta(x1 - g, y, c); } };
+  const gris = [0x9A, 0xA6, 0xB0], tinta = [0x2C, 0x2C, 0x2C], azul = [0x00, 0x80, 0xC1];
+  for (let x = 0; x < ancho; x += 50) for (let y = 0; y < alto; y++) if (y % 4 === 0) pinta(x, y, [0xDD, 0xE3, 0xE8]);
+  for (let y = 0; y < alto; y += 50) for (let x = 0; x < ancho; x++) if (x % 4 === 0) pinta(x, y, [0xDD, 0xE3, 0xE8]);
+  rect(60, 60, 940, 640, tinta, 4);                 // los muros
+  rect(80, 80, 920, 200, gris, 2); rect(80, 80, 240, 620, gris, 2); // la L de la cocina
+  rect(420, 330, 720, 470, azul, 3);                // la isla
+  for (let x = 80; x < 920; x += 60) rect(x, 80, x + 56, 200, [0xC4, 0xCC, 0xD3], 1);
+  const crc = (buf) => { let c = ~0; for (const b of buf) { c ^= b; for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xEDB88320 & -(c & 1)); } return (~c) >>> 0; };
+  const trozo = (tipo, datos) => { const t = Buffer.from(tipo, 'ascii'); const l = Buffer.alloc(4); l.writeUInt32BE(datos.length); const c = Buffer.alloc(4); c.writeUInt32BE(crc(Buffer.concat([t, datos]))); return Buffer.concat([l, t, datos, c]); };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(ancho, 0); ihdr.writeUInt32BE(alto, 4); ihdr[8] = 8; ihdr[9] = 2; ihdr[10] = 0; ihdr[11] = 0; ihdr[12] = 0;
+  const filas = Buffer.alloc((ancho * 3 + 1) * alto);
+  for (let y = 0; y < alto; y++) { filas[y * (ancho * 3 + 1)] = 0; Buffer.from(px.buffer, y * ancho * 3, ancho * 3).copy(filas, y * (ancho * 3 + 1) + 1); }
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]), trozo('IHDR', ihdr), trozo('IDAT', deflateSync(filas)), trozo('IEND', Buffer.alloc(0))]);
+}
+
+/** Dónde va cada pieza en el plano (fracción del ancho y del alto), por ítem. */
+const PIEZAS = {
+  'Cocina integral en L': { type: 'Mueble', x: 0.5, y: 0.2 },
+  'Isla con cubierta de cuarzo': { type: 'Mueble', x: 0.57, y: 0.57 },
+  'Instalación y ajuste en sitio': { type: 'Servicio', x: 0.16, y: 0.72 },
+};
+const PUNTO = '¿La cubierta de la isla la quieren en cuarzo blanco o gris? Necesitamos definirlo para pedirla.';
+
+async function sembrarObra(cliente, proyecto, items) {
+  linea('');
+  linea('== La obra de la cocina, en quell101 ==');
+  const yo = await quell('/me');
+  if (yo.estado !== 200) throw new Error(`quell /me: ${yo.estado} ${yo.error ?? ''}`);
+  const nombreObra = `${DEMO.proyecto.nombre} (obra)`;
+  const lista = await quell('/projects');
+  let obra = (lista.projects || []).find((p) => p.name === nombreObra);
+  if (!obra) {
+    const r = await quell('/projects', { method: 'POST', body: { name: nombreObra, client: DEMO.cliente.nombre } });
+    if (r.estado !== 200) throw new Error(`obra: ${r.estado} ${r.error ?? ''}`);
+    obra = { id: r.id, name: nombreObra }; creados.push(`quell/projects/${r.id}`);
+  } else hallados.push(`quell/projects/${obra.id}`);
+
+  // Ligada al proyecto de la familia (409 ya_ligada al mismo proyecto es «ya estaba»).
+  const liga = await pedir(`/orgs/${ORG}/obras/${obra.id}/ligar`, { app: 'dash101', method: 'POST', body: { proyecto_id: proyecto.id } });
+  rev(liga.estado === 200 || (liga.estado === 409 && liga.detalle?.proyecto_id === proyecto.id), 'la obra está ligada al proyecto de la familia', `${liga.estado} ${liga.error ?? ''}`);
+
+  // El plano.
+  let detalle = await quell(`/projects/${obra.id}`);
+  let plano = (detalle.plans || [])[0];
+  if (!plano) {
+    const fd = forma({ name: 'Planta de la cocina', file_name: 'planta-cocina.png', width: '1000', height: '700', rotation: '0' });
+    fd.append('image', new File([await pngPlano()], 'planta-cocina.png', { type: 'image/png' }));
+    const r = await quell(`/projects/${obra.id}/plans`, { method: 'POST', body: fd });
+    if (r.estado !== 200) throw new Error(`plano: ${r.estado} ${r.error ?? ''}`);
+    plano = { id: r.id }; creados.push(`quell/plans/${r.id}`);
+    detalle = await quell(`/projects/${obra.id}`);
+  } else hallados.push(`quell/plans/${plano.id}`);
+  rev(!!plano?.id, 'la obra tiene su plano');
+
+  // Una pieza por ítem, colgada del ítem (ligar no mueve el precio de venta).
+  const piezas = {};
+  for (const [nombre, donde] of Object.entries(PIEZAS)) {
+    const item = items[nombre];
+    if (!item) continue;
+    let pieza = (detalle.elements || []).find((e) => e.item_id === item.id || e.name === nombre);
+    if (!pieza) {
+      const r = await quell(`/plans/${plano.id}/elements`, { method: 'POST', body: { op_id: crypto.randomUUID(), name: nombre, type: donde.type, x: donde.x, y: donde.y } });
+      if (r.estado !== 200) throw new Error(`pieza ${nombre}: ${r.estado} ${r.error ?? ''}`);
+      pieza = { id: r.id, name: nombre }; creados.push(`quell/elements/${r.id}`);
+    } else hallados.push(`quell/elements/${pieza.id}`);
+    piezas[nombre] = pieza;
+    if (!pieza.item_id) {
+      const l = await pedir(`/orgs/${ORG}/obras/${obra.id}/items`, { app: 'dash101', method: 'POST', body: { ligar: [{ element_id: pieza.id, item_id: item.id }] } });
+      rev(l.estado === 200, `la pieza «${nombre}» cuelga de su ítem`, `${l.estado} ${l.error ?? ''}`);
+    }
+  }
+
+  // El plano de la isla, como documento principal de su pieza.
+  const isla = piezas['Isla con cubierta de cuarzo'];
+  if (isla) {
+    const docs = await quell(`/elements/${isla.id}/docs`);
+    if (!docs.principal) {
+      const fd = forma({ rol: 'principal', nombre: 'Plano de la isla' });
+      fd.append('archivo', new File([await pngPlano(800, 500)], 'plano-isla.png', { type: 'image/png' }));
+      const r = await quell(`/elements/${isla.id}/docs`, { method: 'POST', body: fd });
+      rev(r.estado === 200, 'la isla tiene su plano como documento', `${r.estado} ${r.error ?? ''}`);
+      if (r.estado === 200) creados.push(`quell/docs/${r.doc.id}`);
+    } else hallados.push(`quell/docs/${docs.principal.id}`);
+    // Y un punto abierto para la familia, sobre la isla. Si la familia ya lo
+    // contestó, no se vuelve a abrir: eso lo decide el taller en la demo.
+    const dudas = await quell(`/projects/${obra.id}/dudas`);
+    const ya = (dudas.dudas || []).find((d) => d.texto === PUNTO);
+    if (!ya) {
+      const r = await quell(`/projects/${obra.id}/dudas`, { method: 'POST', body: forma({ texto: PUNTO, element_id: isla.id, para: 'cliente' }) });
+      rev(r.estado === 200 && r.para === 'cliente', 'hay un punto por definir para la familia, sobre la isla', `${r.estado} ${r.error ?? ''}`);
+      if (r.estado === 200) creados.push(`quell/dudas/${r.id}`);
+    } else { hallados.push(`quell/dudas/${ya.id}`); rev(true, `el punto de la isla ya estaba (${ya.estado})`); }
   }
 }
 
@@ -227,6 +338,16 @@ async function main() {
   /* ── el portal de la familia (peek101 depende de esto) ── */
   const acceso = await pedir(`/orgs/${ORG}/clientes/${cliente.id}/acceso`, { app: 'dash101', method: 'POST', body: { correo: DEMO.cliente.correo, pin: DEMO.pin } });
   rev(acceso.estado === 201, 'la familia tiene acceso al portal', `${acceso.estado} · ${DEMO.cliente.correo}`);
+
+  /* ── la obra en quell101, ligada al proyecto (5-oct-2026) ──
+   *
+   * peek101 es el único visor del cliente y enseña el plano, las piezas y los
+   * puntos por definir desde el motor de obra. Para que la demo —y la prueba
+   * de navegador de peek101— tengan qué enseñar, la cocina tiene su obra:
+   * un plano, una pieza por ítem colgada del ítem, un plano de la isla como
+   * documento, y un punto abierto para la familia. Todo por las rutas de
+   * quell101 como superadmin (que nace como dueño de la bitácora). */
+  await sembrarObra(cliente, proyecto, items);
 
   linea('');
   linea(`  creados: ${creados.length} · ya estaban: ${hallados.length}`);
