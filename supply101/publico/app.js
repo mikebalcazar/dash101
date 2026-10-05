@@ -494,6 +494,7 @@ function abrirAltaProveedor(abrir) {
 }
 function limpiarAltaProveedor() {
   for (const c of PV_CAMPOS) $('pv-' + c).value = '';
+  $('pv-tipo').value = 'materiales';
   for (const el of document.querySelectorAll('#alta-proveedor .campo-mal')) el.classList.remove('campo-mal');
   pintarCuentasAlta();
   $('pv-docs').value = '';
@@ -534,6 +535,7 @@ $('pv-guardar').onclick = async () => {
   if (!nombre) { $('pv-nombre').classList.add('campo-mal'); $('pv-nombre').focus(); return decir('err-proveedor', 'Escribe el nombre del proveedor.'); }
   const cuerpo = {
     nombre,
+    tipo: $('pv-tipo').value === 'servicios' ? 'servicios' : 'materiales',
     rfc: $('pv-rfc').value.trim().toUpperCase(),
     correo: $('pv-correo').value.trim(),
     telefono: $('pv-telefono').value.trim(),

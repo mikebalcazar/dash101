@@ -135,6 +135,8 @@ rev(await p.locator('#pv-maps-ver').isVisible() && (await p.locator('#pv-maps-ve
 
 console.log('· lo que manda al guardar');
 await p.locator('#pv-rfc').fill('fle010101ab1');
+rev((await p.locator('#pv-tipo').inputValue()) === 'materiales', 'el tipo arranca en materiales');
+await p.locator('#pv-tipo').selectOption('servicios');
 await p.locator('#pv-correo').fill('ventas@esquina.mx');
 await p.locator('#pv-telefono').fill('55 1234 5678');
 await p.locator('#pv-cuentas .c-clabe').first().fill('012 180 00123456789 0');
@@ -154,7 +156,8 @@ const m = posts[0] || {};
 rev(posts.length === 1, 'un solo POST a proveedores');
 rev(m.nombre === 'Ferretería La Esquina' && m.rfc === 'FLE010101AB1' && m.correo === 'ventas@esquina.mx' && m.telefono === '55 1234 5678', 'con nombre, RFC (en mayúsculas), correo y teléfono', JSON.stringify(m));
 rev(m.direccion === 'Av. Central 10, CDMX' && m.maps_url === liga, 'con dirección y la liga de Google Maps');
-rev(Object.keys(m).sort().join(',') === 'correo,direccion,maps_url,nombre,rfc,telefono', 'y nada más: la cuenta ya no va en columnas', Object.keys(m).sort().join(','));
+rev(m.tipo === 'servicios', 'con el tipo escogido (servicios: un contratista)', m.tipo);
+rev(Object.keys(m).sort().join(',') === 'correo,direccion,maps_url,nombre,rfc,telefono,tipo', 'y nada más: la cuenta ya no va en columnas', Object.keys(m).sort().join(','));
 rev(cuentas.length === 2 && cuentas.every((c) => c.proveedor_id === 'pv-2'), 'dos POST a proveedor_cuentas, colgadas del proveedor nuevo', JSON.stringify(cuentas.map((c) => c.proveedor_id)));
 rev(cuentas[0].alias === 'Principal' && cuentas[0].clabe === '012180001234567890' && cuentas[0].banco === 'BBVA' && cuentas[0].beneficiario === 'Ferretería La Esquina SA', 'la primera con su alias, la CLABE sin espacios, banco y beneficiario', JSON.stringify(cuentas[0]));
 rev(cuentas[1].alias === 'Nómina' && cuentas[1].clabe === '002180009988776655' && cuentas[1].banco === 'Banorte', 'y la segunda con el suyo', JSON.stringify(cuentas[1]));
@@ -192,6 +195,7 @@ console.log('· un rechazo de la API señala el campo');
 rechazar = { rfc: 'El RFC son 12 o 13 caracteres: letras, fecha y homoclave.' };
 await p.locator('#b-alta-proveedor').click();
 rev((await p.locator('#pv-nombre').inputValue()) === '' && (await p.locator('#pv-cuentas .pv-cuenta').count()) === 1 && (await p.locator('#pv-docs-lista').innerText()).trim() === '', 'el alta abre limpia: una cuenta vacía y sin documentos');
+rev((await p.locator('#pv-tipo').inputValue()) === 'materiales', 'y el tipo vuelve a materiales');
 await p.locator('#pv-guardar').click();
 rev(/Escribe el nombre/.test(await p.locator('#err-proveedor').innerText()) && posts.length === 1, 'sin nombre no se manda nada');
 await p.locator('#pv-nombre').fill('Pinturas Norte');

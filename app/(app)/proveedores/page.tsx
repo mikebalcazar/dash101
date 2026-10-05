@@ -77,7 +77,7 @@ export default function ProveedoresPage() {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-ink-dim truncate">{p.nombre}</p>
                   <p className="text-[11px] text-ink-muted truncate">
-                    {p.categoria || p.rfc || p.email || "—"}
+                    {p.tipo === "servicios" ? "Servicios" : "Materiales"}{(p.categoria || p.rfc || p.email) ? ` · ${p.categoria || p.rfc || p.email}` : ""}
                   </p>
                 </div>
               </div>

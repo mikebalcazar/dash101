@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { createProveedor } from "@/lib/proveedores";
+import type { TipoProveedor } from "@/types/schema";
 import { IconArrowLeft } from "@tabler/icons-react";
 
 export default function NuevoProveedorPage() {
@@ -12,6 +13,7 @@ export default function NuevoProveedorPage() {
   const { user } = useAuth();
 
   const [nombre, setNombre] = useState("");
+  const [tipo, setTipo] = useState<TipoProveedor>("materiales");
   const [categoria, setCategoria] = useState("");
   const [rfc, setRfc] = useState("");
   const [email, setEmail] = useState("");
@@ -29,6 +31,7 @@ export default function NuevoProveedorPage() {
     try {
       await createProveedor(user.uid, {
         nombre: nombre.trim(),
+        tipo,
         categoria: categoria.trim() || undefined,
         rfc: rfc.trim() || undefined,
         email: email.trim() || undefined,
@@ -73,6 +76,21 @@ export default function NuevoProveedorPage() {
             placeholder="DevWorks SC"
             className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
           />
+        </div>
+
+        {/* Mike, 5-oct-2026: «en proveedores hay 2 tipos: materiales y servicios»
+            (los contratistas se dan de alta como proveedores de servicios).
+            Es el mismo campo en supply101 y en el cronograma de quell101. */}
+        <div>
+          <label className="text-xs font-medium text-ink-dim block mb-1.5">Tipo</label>
+          <select
+            value={tipo}
+            onChange={(e) => setTipo(e.target.value as TipoProveedor)}
+            className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
+          >
+            <option value="materiales">Materiales (surte material)</option>
+            <option value="servicios">Servicios (contratista, instalador, taller externo)</option>
+          </select>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
