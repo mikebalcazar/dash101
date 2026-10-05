@@ -25,7 +25,8 @@ import { formatMontoExact } from "@/lib/format";
 import { SoltarArchivo } from "@/components/soltar-archivo";
 import { AQuien, BOTON, CAJA, CAJA_NUM, Dinero, ETIQUETA, Estado, Tipo, Vence } from "@/components/ordenes-ui";
 import type { Cuenta } from "@/types/schema";
-import { IconArrowLeft, IconFileText } from "@tabler/icons-react";
+import { IconArrowLeft, IconCheck, IconCopy, IconFileText } from "@tabler/icons-react";
+import { clabeLegible, type ProveedorDePago } from "@/lib/ordenes";
 
 const QUE: Record<EventoOrden["que"], string> = {
   creada: "La pidió",
@@ -46,6 +47,7 @@ export default function OrdenPage() {
   const [orden, setOrden] = useState<Orden | null>(null);
   const [eventos, setEventos] = useState<EventoOrden[]>([]);
   const [archivos, setArchivos] = useState<ArchivoOrden[]>([]);
+  const [proveedor, setProveedor] = useState<ProveedorDePago | null>(null);
   const [puedoPagar, setPuedoPagar] = useState(false);
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -69,6 +71,7 @@ export default function OrdenPage() {
       setOrden(r.orden);
       setEventos(r.eventos);
       setArchivos(r.archivos);
+      setProveedor(r.proveedor);
       setMontoNuevo(String(r.orden.monto));
       setConceptoNuevo(r.orden.concepto);
     } catch (e) {
@@ -183,6 +186,11 @@ export default function OrdenPage() {
           </p>
         )}
       </div>
+
+      {/* Mike, 5-oct-2026: «ahí mismo en la orden aparezcan los datos
+          bancarios o de pago del proveedor para hacer ese pago». Un reembolso
+          no: ése se le regresa a quien puso el dinero. */}
+      {orden.tipo === "compra" && <ParaPagarle orden={orden} proveedor={proveedor} />}
 
       {archivos.length > 0 && (
         <div className="bg-white border border-black/5 rounded-2xl p-4 mb-4">
@@ -373,5 +381,76 @@ export default function OrdenPage() {
         </ol>
       </div>
     </div>
+  );
+}
+
+
+/* ─────────────── para pagarle ───────────────
+ * La ficha de pago del proveedor, tal como la manda la API con la orden
+ * (contrato 0.67.0): sus cuentas con alias, CLABE legible y a nombre de
+ * quién, cada una con «Copiar» para pegarla en el banco sin teclearla. Si la
+ * orden trae el proveedor escrito a mano no hay cuenta de dónde: se dice. */
+function ParaPagarle({ orden, proveedor }: { orden: Orden; proveedor: ProveedorDePago | null }) {
+  return (
+    <div className="bg-white border border-black/5 rounded-2xl p-4 mb-4" data-para-pagarle>
+      <h3 className="text-xs font-medium text-ink-muted uppercase tracking-wide mb-2">Para pagarle</h3>
+      {!proveedor ? (
+        <p className="text-xs text-ink-muted">
+          {orden.proveedor_nombre
+            ? <>«{orden.proveedor_nombre}» no está dado de alta en Proveedores, así que aquí no hay cuenta a la cual pagarle.</>
+            : <>La orden no dice a quién se le compra.</>}
+        </p>
+      ) : (
+        <>
+          <p className="text-sm text-ink-dim">
+            {proveedor.nombre}
+            {proveedor.rfc && <span className="text-ink-muted"> · RFC {proveedor.rfc}</span>}
+          </p>
+          {proveedor.terminos_pago && (
+            <p className="text-xs text-ink-muted mt-0.5">Términos: {proveedor.terminos_pago}</p>
+          )}
+          {proveedor.cuentas.length === 0 ? (
+            <p className="text-xs text-ink-muted mt-2">Este proveedor no tiene cuenta registrada. Se le agrega en Proveedores.</p>
+          ) : (
+            <ul className="mt-2 space-y-2">
+              {proveedor.cuentas.map((c) => (
+                <li key={c.id} className="bg-cream rounded-xl px-3 py-2" data-cuenta={c.clabe}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-ink-dim">
+                      {c.alias}
+                      {c.banco && <span className="text-ink-muted font-normal"> · {c.banco}</span>}
+                    </span>
+                    <Copiar texto={c.clabe} />
+                  </div>
+                  <p className="font-mono text-sm tracking-wider text-ink-dim mt-0.5">{clabeLegible(c.clabe)}</p>
+                  {c.beneficiario && <p className="text-xs text-ink-muted">A nombre de {c.beneficiario}</p>}
+                  {c.notas && <p className="text-xs text-ink-muted">{c.notas}</p>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function Copiar({ texto }: { texto: string }) {
+  const [listo, setListo] = useState(false);
+  const copiar = async () => {
+    try {
+      await navigator.clipboard.writeText(texto);
+      setListo(true);
+      setTimeout(() => setListo(false), 1500);
+    } catch { /* sin portapapeles: la CLABE está a la vista para copiarla a mano */ }
+  };
+  return (
+    <button
+      type="button" onClick={() => void copiar()}
+      className="inline-flex items-center gap-1 text-[11px] text-ink-muted hover:text-ink-dim transition"
+      aria-label="Copiar la CLABE"
+    >
+      {listo ? <IconCheck size={14} /> : <IconCopy size={14} />} {listo ? "Copiada" : "Copiar"}
+    </button>
   );
 }

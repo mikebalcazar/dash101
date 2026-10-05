@@ -71,6 +71,31 @@ export interface ArchivoOrden {
   id: string; nombre: string; mime: string | null; bytes: number | null;
 }
 
+/** Contrato 0.67.0 · Lo que hace falta para pagarle al proveedor, en la
+ *  orden misma (Mike, 5-oct-2026: «ahí mismo en la orden (desde dash)
+ *  aparezcan los datos bancarios o de pago del proveedor para hacer ese
+ *  pago»). `null` si la orden sólo trae el nombre escrito a mano. Las
+ *  cuentas son las del proveedor (alias, CLABE, banco, beneficiario). */
+export interface CuentaDeProveedor {
+  id: string; alias: string; clabe: string; banco: string | null; beneficiario: string | null; notas: string | null;
+}
+export interface ProveedorDePago {
+  id: string; nombre: string; rfc: string | null; correo: string | null; telefono: string | null;
+  terminos_pago: string | null; cuentas: CuentaDeProveedor[];
+}
+
+/** Una orden con su historia, sus papeles y, desde 0.67.0, su proveedor como se le paga. */
+export interface OrdenCompleta {
+  orden: Orden; eventos: EventoOrden[]; archivos: ArchivoOrden[]; proveedor: ProveedorDePago | null;
+}
+
+/** La CLABE en grupos que se leen (banco · plaza · cuenta · verificador). */
+export function clabeLegible(clabe: string): string {
+  const d = clabe.replace(/\D/g, '');
+  if (d.length !== 18) return clabe;
+  return `${d.slice(0, 3)} ${d.slice(3, 6)} ${d.slice(6, 17)} ${d.slice(17)}`;
+}
+
 export interface Buzon {
   filas: Orden[];
   /** En PESOS. */
@@ -147,9 +172,10 @@ export async function crearOrden(d: OrdenInput): Promise<Orden> {
   return orden(await pedir<FilaOrden>(base(), { method: 'POST', body: cuerpo }));
 }
 
-export async function verOrden(id: string): Promise<{ orden: Orden; eventos: EventoOrden[]; archivos: ArchivoOrden[] }> {
-  const r = await pedir<{ orden: FilaOrden; eventos: EventoOrden[]; archivos: ArchivoOrden[] }>(`${base()}/${id}`);
-  return { ...r, orden: orden(r.orden) };
+export async function verOrden(id: string): Promise<OrdenCompleta> {
+  const r = await pedir<{ orden: FilaOrden; eventos: EventoOrden[]; archivos: ArchivoOrden[]; proveedor?: ProveedorDePago | null }>(`${base()}/${id}`);
+  // Una API anterior a 0.67.0 no manda `proveedor`: se toma como «no hay».
+  return { ...r, orden: orden(r.orden), proveedor: r.proveedor ?? null };
 }
 
 /** 0.56.1 · La orden que dejó ese egreso: desde el movimiento se llega a

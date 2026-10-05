@@ -23,7 +23,7 @@ import { createCliente } from "@/lib/clientes";
 import { createProveedor } from "@/lib/proveedores";
 import { createProyecto } from "@/lib/proyectos";
 import {
-  corregirOrden, crearOrden, desglosar, devolverOrden, getBuzon, getPermisosOrdenes, getResumenOrdenes,
+  clabeLegible, corregirOrden, crearOrden, desglosar, devolverOrden, getBuzon, getPermisosOrdenes, getResumenOrdenes,
   listContadores, listMisOrdenes, listOrdenesPagadas, listPartidasDe, marcarContador, pagarOrden, vencida, verOrden,
 } from "@/lib/ordenes";
 import {
@@ -40,6 +40,15 @@ const dia = (n: number) => {
   const p = (x: number) => String(x).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 };
+
+// Una CLABE que cuadra (17 dígitos y su verificador), para la cuenta del proveedor.
+const clabeDe = (base17: string) => {
+  const pesos = [3, 7, 1];
+  let suma = 0;
+  for (let i = 0; i < 17; i++) suma += (Number(base17[i]) * pesos[i % 3]) % 10;
+  return base17 + String((10 - (suma % 10)) % 10);
+};
+const CLABE_MADERAS = clabeDe("07218000123412345");
 
 let uid = "";
 const ids = { banco: "", cliente: "", proveedor: "", proyecto: "", orden: "", movimiento: "", cfdi: "" };
@@ -59,6 +68,8 @@ beforeAll(async () => {
   ids.banco = await createCuenta(uid, { nombre: "Banco", tipo: "banco", moneda: "MXN", saldo_inicial: 50000});
   ids.cliente = await createCliente(uid, { nombre: "Cliente Uno"});
   ids.proveedor = await createProveedor(uid, { nombre: "Maderas de Prueba" });
+  // 0.67.0 · su cuenta, como la da de alta supply101 (proveedor_cuentas).
+  await pedir(`/orgs/${ORG}/proveedor_cuentas`, { method: "POST", body: { proveedor_id: ids.proveedor, alias: "Principal", clabe: CLABE_MADERAS, banco: "Banorte", beneficiario: "Maderas de Prueba SA" } });
   ids.proyecto = await createProyecto(uid, {
     nombre: "Casa Uno", cliente_id: ids.cliente, cliente_nombre: "Cliente Uno",
    
@@ -80,6 +91,12 @@ describe("el desglose, antes de tocar la red", () => {
     const d = desglosar(100);
     expect(d.subtotal + d.iva).toBe(100);
     expect(d.subtotal).toBe(86.21);
+  });
+
+  it("la CLABE se enseña en grupos que se leen, y una que no es CLABE se deja como viene", () => {
+    expect(clabeLegible("012180001234567890")).toBe("012 180 00123456789 0");
+    expect(clabeLegible("012 180 00123456789 0")).toBe("012 180 00123456789 0");
+    expect(clabeLegible("1234")).toBe("1234");
   });
 
   it("una orden vencida se mide por día, no por hora", () => {
@@ -117,6 +134,12 @@ describe("pedir una compra", () => {
     const r = await verOrden(ids.orden);
     expect(r.orden.monto).toBe(1160);
     expect(r.eventos.map((e) => e.que)).toContain("creada");
+    // 0.67.0 · Mike, 5-oct: «ahí mismo en la orden aparezcan los datos
+    // bancarios o de pago del proveedor». La orden trae al proveedor con su cuenta.
+    expect(r.proveedor?.id).toBe(ids.proveedor);
+    expect(r.proveedor?.nombre).toBe("Maderas de Prueba");
+    expect(r.proveedor?.cuentas.map((c) => c.clabe)).toEqual([CLABE_MADERAS]);
+    expect(r.proveedor?.cuentas[0]).toMatchObject({ alias: "Principal", banco: "Banorte", beneficiario: "Maderas de Prueba SA" });
   });
 
   it("las partidas del proyecto traen su id, que es lo que la pantalla liga", async () => {
