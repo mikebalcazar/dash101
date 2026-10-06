@@ -112,7 +112,7 @@ export interface FilaItem { id: string; proyecto_id: string | null; nombre: stri
   refs?: { agrupados?: unknown[] } | null }
 /** 0.70.0 · Lo que de un pago le toca a un ítem (el anticipo). Centavos. */
 export interface FilaMovimientoItem { id: string; movimiento_id: string; item_id: string; proyecto_id: string | null; monto: number; creado_at: string }
-export interface FilaPartida { id: string; proyecto_id: string; item_id: string | null; proveedor_id: string | null; proveedor_nombre: string | null; concepto: string | null; monto_acordado: number; monto_pagado: number; estado: 'pendiente' | 'parcial' | 'pagado' }
+export interface FilaPartida { id: string; proyecto_id: string; item_id: string | null; proveedor_id: string | null; proveedor_nombre: string | null; concepto: string | null; monto_acordado: number; monto_pagado: number; estado: 'pendiente' | 'parcial' | 'pagado'; /** 0.73.0: si nace de una fase del cronograma de quell101. */ tarea_id?: string | null; obra_id?: string | null; fecha_esperada?: string | null }
 export interface FilaMovimiento {
   id: string; tipo: 'ingreso' | 'egreso'; monto: number; fecha: string; cuenta_id: string;
   proyecto_id: string | null; item_id: string | null; contraparte_tipo: string; contraparte_id: string | null;
@@ -175,8 +175,9 @@ export function proveedor(f: FilaProveedor): Proveedor {
 
 export function partida(f: FilaPartida): PartidaProyecto {
   return {
-    proveedor_id: f.proveedor_id ?? '', proveedor_nombre: f.proveedor_nombre ?? '', concepto: f.concepto ?? '',
+    id: f.id, proveedor_id: f.proveedor_id ?? '', proveedor_nombre: f.proveedor_nombre ?? '', concepto: f.concepto ?? '',
     monto_acordado: aPesos(f.monto_acordado), monto_pagado: aPesos(f.monto_pagado), estado: f.estado,
+    tarea_id: f.tarea_id ?? null, fecha_esperada: f.fecha_esperada ?? null,
   };
 }
 

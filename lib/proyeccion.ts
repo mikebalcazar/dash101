@@ -61,7 +61,7 @@ export interface Lapso {
   fin: Date;
 }
 
-export type ClasePlaneado = "opex" | "nomina" | "orden" | "cobro";
+export type ClasePlaneado = "opex" | "nomina" | "orden" | "cobro" | "compromiso";
 
 /** Un cobro o un gasto que cae en una fecha. En PESOS. */
 export interface Planeado {
@@ -105,11 +105,67 @@ export interface CobroPlaneado {
   fecha: string;
 }
 
+/** Un compromiso con proveedor que falta pagar, con fecha. En PESOS. */
+export interface CompromisoPlaneado {
+  id: string;
+  nombre: string;
+  monto: number;
+  /** AAAA-MM-DD. */
+  fecha: string;
+}
+
 export interface Fuentes {
   opex: Opex[];
   nomina?: { programa: ProgramaDeNomina | null; borradores: BorradorDeRaya[] } | null;
   ordenes?: OrdenPlaneada[] | null;
   cobros?: CobroPlaneado[] | null;
+  compromisos?: CompromisoPlaneado[] | null;
+}
+
+/* ─────────────── los compromisos con proveedores ───────────────
+ *
+ * Mike, 6-oct: «el costo de cada fase, así de ahí se pobla la lista de
+ * compromisos de gastos en el proyecto para la proyección del flujo». Cada
+ * partida del proyecto (acordado − pagado) es un gasto que falta. Las que
+ * nacen del cronograma traen `fecha_esperada`; las capturadas a mano, no, y
+ * quedan SIN FECHA: se dice cuánto suman. Una orden de compra pendiente que
+ * ya apunta a la partida (`partida_id`) es parte de ese mismo dinero y entra
+ * por su lado, así que se le resta a la partida para no contarlo dos veces. */
+
+export interface PartidaParaPagar {
+  id: string;
+  proyecto_nombre: string;
+  proveedor_nombre: string | null;
+  concepto: string | null;
+  /** En PESOS. */
+  monto_acordado: number;
+  /** En PESOS. */
+  monto_pagado: number;
+  fecha_esperada: string | null;
+}
+
+export interface CompromisosDeProyectos {
+  compromisos: CompromisoPlaneado[];
+  /** Lo que falta pagar de partidas sin fecha. En PESOS. */
+  sin_fecha: number;
+  cuantos_sin_fecha: number;
+}
+
+export function compromisosDeProyectos(partidas: PartidaParaPagar[], ordenesPendientes: Array<{ partida_id: string | null; monto: number }> = []): CompromisosDeProyectos {
+  const enOrdenes = new Map<string, number>();
+  for (const o of ordenesPendientes) if (o.partida_id) enOrdenes.set(o.partida_id, (enOrdenes.get(o.partida_id) ?? 0) + o.monto);
+  const compromisos: CompromisoPlaneado[] = [];
+  let sin_fecha = 0;
+  let cuantos_sin_fecha = 0;
+  for (const p of partidas) {
+    const falta = Math.round((p.monto_acordado - p.monto_pagado - (enOrdenes.get(p.id) ?? 0)) * 100) / 100;
+    if (falta <= 0) continue;
+    const nombre = `${p.proyecto_nombre} · ${p.concepto || p.proveedor_nombre || "Compromiso"}${p.concepto && p.proveedor_nombre ? ` (${p.proveedor_nombre})` : ""}`;
+    if (p.fecha_esperada) compromisos.push({ id: p.id, nombre, monto: falta, fecha: p.fecha_esperada });
+    else { sin_fecha += falta; cuantos_sin_fecha += 1; }
+  }
+  sin_fecha = Math.round(sin_fecha * 100) / 100;
+  return { compromisos: compromisos.sort((a, b) => a.fecha.localeCompare(b.fecha)), sin_fecha, cuantos_sin_fecha };
 }
 
 /* ─────────────── los cobros de proyectos ─────────────── */
@@ -376,6 +432,13 @@ export function planear(fuentes: Fuentes, hoy: Date, hasta: Date): Planeado[] {
     if (f > hasta) continue;
     const vencido = f < desde;
     salida.push({ clase: "cobro", id: cb.id, nombre: cb.nombre, tipo: "ingreso", monto: cb.monto, fecha: vencido ? new Date(desde) : f, vencido });
+  }
+
+  for (const cp of fuentes.compromisos ?? []) {
+    const f = delDiaLocal(cp.fecha);
+    if (f > hasta) continue;
+    const vencido = f < desde;
+    salida.push({ clase: "compromiso", id: cp.id, nombre: cp.nombre, tipo: "egreso", monto: cp.monto, fecha: vencido ? new Date(desde) : f, vencido });
   }
 
   for (const o of fuentes.ordenes ?? []) {

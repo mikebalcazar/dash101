@@ -110,12 +110,19 @@ export interface Accionista {
 export const CATEGORIA_RETIRO_UTILIDADES = "retiro_utilidades";
 
 export interface PartidaProyecto {
+  id?: string;
   proveedor_id: string;
   proveedor_nombre: string;
   concepto?: string;
   monto_acordado: number;
   monto_pagado: number;
   estado: EstadoPartida;
+  /** 0.73.0 · Si nace de una fase del cronograma de quell101 (Mike, 6-oct):
+   *  el costo, el responsable y la fecha se cambian allá; aquí se lee. */
+  tarea_id?: string | null;
+  /** AAAA-MM-DD: cuándo se espera pagarla (el material al arrancar la fase,
+   *  lo demás al terminarla). Es lo que el flujo proyectado usa. */
+  fecha_esperada?: string | null;
 }
 
 /**

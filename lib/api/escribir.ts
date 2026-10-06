@@ -370,7 +370,10 @@ export async function updateProyecto(
    * viene de un proveedor toma la primera fila de ese proveedor; las filas
    * que sobran se borran (sí se pueden: nada cuelga de una partida). */
   if (d.partidas !== undefined) {
-    const filas = await listar<A.FilaPartida>('partidas', { proyecto_id: id });
+    /* 0.73.0 · Las partidas que nacen de una fase del cronograma de quell101
+     * (`tarea_id`) no son de esta pantalla: ni se emparejan ni se borran. La
+     * API las rechazaría (409 del_cronograma), pero aquí ni se intenta. */
+    const filas = (await listar<A.FilaPartida>('partidas', { proyecto_id: id })).filter((f) => !f.tarea_id);
     const porProveedor = new Map<string, A.FilaPartida[]>();
     for (const f of filas) {
       const k = f.proveedor_id ?? '';
