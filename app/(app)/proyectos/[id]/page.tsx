@@ -119,7 +119,7 @@ export default function ProyectoDetallePage() {
         setFechaInicio(fi.toDate().toISOString().slice(0, 10));
       }
       setPartidasEdit(
-        (p.partidas ?? []).map((pt) => ({
+        (p.partidas ?? []).filter((pt) => !pt.tarea_id).map((pt) => ({
           proveedor_id: pt.proveedor_id,
           proveedor_nombre: pt.proveedor_nombre,
           concepto: pt.concepto ?? "",
@@ -408,7 +408,7 @@ export default function ProyectoDetallePage() {
             <h3 className="text-sm font-medium text-ink-dim mb-2">Compromisos con proveedores</h3>
             {p.partidas.length === 0 ? (
               <div className="bg-white border border-black/5 rounded-2xl p-6 text-center text-xs text-ink-muted">
-                Sin compromisos. Edita el proyecto para agregar.
+                Sin compromisos. Edita el proyecto para agregar, o ponles costo a las fases del cronograma en quell101.
               </div>
             ) : (
               <div className="bg-white border border-black/5 rounded-2xl overflow-hidden">
@@ -416,19 +416,28 @@ export default function ProyectoDetallePage() {
                   <thead className="bg-cream/50 text-xs text-ink-muted uppercase tracking-wide">
                     <tr>
                       <th className="text-left px-4 py-2 font-medium">Proveedor</th>
+                      <th className="text-left px-4 py-2 font-medium hidden sm:table-cell">Se paga</th>
                       <th className="text-right px-4 py-2 font-medium">Acordado</th>
                       <th className="text-right px-4 py-2 font-medium">Pagado</th>
                       <th className="text-right px-4 py-2 font-medium">Estado</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {p.partidas.map((pt: PartidaProyecto) => (
-                      <tr key={pt.proveedor_id} className="border-t border-black/5">
+                    {p.partidas.map((pt: PartidaProyecto, i: number) => (
+                      <tr key={pt.id ?? `${pt.proveedor_id}-${i}`} data-partida={pt.tarea_id ? "cronograma" : "mano"} className="border-t border-black/5">
                         <td className="px-4 py-3">
-                          <p className="text-sm font-medium text-ink-dim">{pt.proveedor_nombre}</p>
+                          <p className="text-sm font-medium text-ink-dim">
+                            {pt.proveedor_nombre || <span className="text-ink-muted">Sin responsable</span>}
+                            {/* 0.73.0 · Nace de una fase del cronograma de quell101: el costo,
+                                el responsable y la fecha se cambian allá (Mike, 6-oct). */}
+                            {pt.tarea_id && <span className="ml-1.5 text-[10px] px-1.5 py-px rounded-full bg-sky-50 text-sky-900 align-middle" title="Nace de una fase del cronograma de quell101: ahí se cambia">del cronograma</span>}
+                          </p>
                           {pt.concepto && (
                             <p className="text-[11px] text-ink-muted">{pt.concepto}</p>
                           )}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-ink-muted hidden sm:table-cell tabular-nums">
+                          {pt.fecha_esperada ? formatDateShort(new Date(`${pt.fecha_esperada}T12:00:00`)) : "—"}
                         </td>
                         <td className="text-right px-4 py-3 text-sm text-ink-dim">
                           {formatMonto(pt.monto_acordado, "MXN")}

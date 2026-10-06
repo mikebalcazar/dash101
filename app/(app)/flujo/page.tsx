@@ -18,7 +18,12 @@
  *     buzón no se puede leer (403), igual: sin ellas y dicho;
  *   · los cobros de proyectos por su plan de pagos (contrato 0.72.0), con lo
  *     ya cobrado descontado en orden de fecha. Lo por cobrar sin plan queda
- *     sin fecha y se dice cuánto es.
+ *     sin fecha y se dice cuánto es;
+ *   · los compromisos con proveedores de los proyectos (las partidas), lo
+ *     que falta pagar de cada uno en su fecha esperada (0.73.0: la que
+ *     nace de una fase del cronograma la trae; la capturada a mano, no, y
+ *     queda sin fecha). Una orden pendiente que ya apunta a la partida se le
+ *     resta, para no contar dos veces.
  *
  * Cada renglón de la tabla se abre y enseña lo planeado en ese bloque, uno
  * por uno, con su fecha y su monto.
@@ -32,11 +37,14 @@ import { listOpex } from "@/lib/opex";
 import { getBuzon } from "@/lib/ordenes";
 import { listProyectos } from "@/lib/proyectos";
 import { listPlanes } from "@/lib/plan-pagos";
+import { listar } from "@/lib/api/cliente";
+import type { FilaPartida } from "@/lib/api/adaptar";
+import { aPesos } from "@/lib/api/adaptar";
 import { describirPrograma, getProgramaNomina, type NominaProgramada } from "@/lib/nomina";
 import { ErrorApi } from "@/lib/api/cliente";
 import {
-  BLOQUES, cobrosDeProyectos, etiquetaDeLapso, primerBloqueBajoUmbral, proyectar,
-  type Bloque, type BloqueProyeccion, type CobrosDeProyectos, type OrdenPlaneada, type Planeado,
+  BLOQUES, cobrosDeProyectos, compromisosDeProyectos, etiquetaDeLapso, primerBloqueBajoUmbral, proyectar,
+  type Bloque, type BloqueProyeccion, type CobrosDeProyectos, type CompromisosDeProyectos, type OrdenPlaneada, type Planeado,
 } from "@/lib/proyeccion";
 import type { Cuenta, Opex } from "@/types/schema";
 import { formatMonto } from "@/lib/format";
@@ -88,6 +96,7 @@ const CLASE: Record<Planeado["clase"], string> = {
   nomina: "Nómina",
   orden: "Orden de compra",
   cobro: "Cobro de proyecto",
+  compromiso: "Compromiso con proveedor",
 };
 
 export default function FlujoPage() {
@@ -98,6 +107,7 @@ export default function FlujoPage() {
   const [nominaCerrada, setNominaCerrada] = useState(false);
   const [ordenes, setOrdenes] = useState<OrdenPlaneada[] | null>(null);
   const [cobros, setCobros] = useState<CobrosDeProyectos>({ cobros: [], sin_fecha: 0, proyectos_sin_fecha: 0 });
+  const [compromisos, setCompromisos] = useState<CompromisosDeProyectos>({ compromisos: [], sin_fecha: 0, cuantos_sin_fecha: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [bloque, setBloque] = useState<Bloque>(BLOQUE_POR_OMISION);
@@ -129,28 +139,36 @@ export default function FlujoPage() {
       getBuzon().then(
         (b) => b.filas
           .filter((o) => o.estado === "en_buzon" || o.estado === "devuelta")
-          .map<OrdenPlaneada>((o) => ({
+          .map((o) => ({
             id: o.id,
             nombre: `${o.folio} · ${o.proveedor_nombre || o.concepto}`,
             monto: o.monto,
             fecha_maxima_pago: o.fecha_maxima_pago,
+            partida_id: o.partida_id,
           })),
         (e) => { if (sinPermiso(e)) return null; throw e; },
       ),
-      Promise.all([listProyectos(), listPlanes()]).then(([ps, plan]) =>
-        cobrosDeProyectos(
-          ps.filter((p) => p.id && p.estado !== "cerrado").map((p) => ({ id: p.id!, nombre: p.nombre, precio_venta: p.precio_venta, cobrado: p.cobrado })),
-          plan,
-        ),
-      ),
+      Promise.all([listProyectos(), listPlanes(), listar<FilaPartida>("partidas", { limite: "5000" })]),
     ])
-      .then(([cs, os, n, ords, cb]) => {
+      .then(([cs, os, n, ords, [ps, plan, partidas]]) => {
         setCuentas(cs);
         setOpexes(os);
         setNomina(n.n);
         setNominaCerrada(n.cerrada);
-        setOrdenes(ords);
-        setCobros(cb);
+        setOrdenes(ords ? ords.map<OrdenPlaneada>(({ id, nombre, monto, fecha_maxima_pago }) => ({ id, nombre, monto, fecha_maxima_pago })) : null);
+        const vivos = ps.filter((p) => p.id && p.estado !== "cerrado");
+        setCobros(cobrosDeProyectos(
+          vivos.map((p) => ({ id: p.id!, nombre: p.nombre, precio_venta: p.precio_venta, cobrado: p.cobrado })),
+          plan,
+        ));
+        const nombreDe = new Map(vivos.map((p) => [p.id!, p.nombre]));
+        setCompromisos(compromisosDeProyectos(
+          partidas.filter((f) => nombreDe.has(f.proyecto_id)).map((f) => ({
+            id: f.id, proyecto_nombre: nombreDe.get(f.proyecto_id) ?? "", proveedor_nombre: f.proveedor_nombre, concepto: f.concepto,
+            monto_acordado: aPesos(f.monto_acordado), monto_pagado: aPesos(f.monto_pagado), fecha_esperada: f.fecha_esperada ?? null,
+          })),
+          (ords ?? []).map((o) => ({ partida_id: o.partida_id, monto: o.monto })),
+        ));
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Error"))
       .finally(() => setLoading(false));
@@ -160,11 +178,11 @@ export default function FlujoPage() {
   const opexActivos = useMemo(() => opexes.filter((o) => o.activo), [opexes]);
   const programa = nomina?.programa && nomina.programa.activo ? nomina.programa : null;
   const borradores = nomina?.borradores ?? [];
-  const hayFuentes = opexActivos.length > 0 || !!programa || borradores.length > 0 || (ordenes?.length ?? 0) > 0 || cobros.cobros.length > 0;
+  const hayFuentes = opexActivos.length > 0 || !!programa || borradores.length > 0 || (ordenes?.length ?? 0) > 0 || cobros.cobros.length > 0 || compromisos.compromisos.length > 0;
 
   const proyeccion = useMemo(
-    () => proyectar(capitalInicial, { opex: opexActivos, nomina, ordenes, cobros: cobros.cobros }, { bloque, meses }),
-    [capitalInicial, opexActivos, nomina, ordenes, cobros, bloque, meses]
+    () => proyectar(capitalInicial, { opex: opexActivos, nomina, ordenes, cobros: cobros.cobros, compromisos: compromisos.compromisos }, { bloque, meses }),
+    [capitalInicial, opexActivos, nomina, ordenes, cobros, compromisos, bloque, meses]
   );
 
   const chartData = useMemo(
@@ -465,6 +483,14 @@ export default function FlujoPage() {
               : <>Ningún cobro de proyecto con fecha: se fechan en el plan de pagos de cada proyecto.</>}
             {cobros.sin_fecha > 0 && (
               <> <span className="font-medium">{formatMonto(cobros.sin_fecha, empresa.moneda, { short: true })} por cobrar sin fecha</span> en {cobros.proyectos_sin_fecha} proyecto{cobros.proyectos_sin_fecha === 1 ? "" : "s"}: no entra hasta que tenga plan.</>
+            )}
+          </p>
+          <p data-compromisos-dice>
+            {compromisos.compromisos.length > 0
+              ? <>{compromisos.compromisos.length} compromiso{compromisos.compromisos.length === 1 ? "" : "s"} con proveedores por pagar, en su fecha (los que nacen del cronograma de quell101 la traen).</>
+              : <>Ningún compromiso con proveedores con fecha.</>}
+            {compromisos.sin_fecha > 0 && (
+              <> <span className="font-medium">{formatMonto(compromisos.sin_fecha, empresa.moneda, { short: true })} por pagar sin fecha</span> en {compromisos.cuantos_sin_fecha} compromiso{compromisos.cuantos_sin_fecha === 1 ? "" : "s"} capturado{compromisos.cuantos_sin_fecha === 1 ? "" : "s"} a mano: no entra{compromisos.cuantos_sin_fecha === 1 ? "" : "n"}.</>
             )}
             {" "}El primer bloque cuenta de hoy en adelante.
           </p>

@@ -17,7 +17,7 @@
 import { describe, expect, it } from "vitest";
 import type { Opex } from "@/types/schema";
 import {
-  cobrosDeProyectos, etiquetaDeLapso, inicioDeBloque, lapsos, nominaOcurreEn, planear, primerBloqueBajoUmbral, proyectar,
+  cobrosDeProyectos, compromisosDeProyectos, etiquetaDeLapso, inicioDeBloque, lapsos, nominaOcurreEn, planear, primerBloqueBajoUmbral, proyectar,
   siguienteBloque,
 } from "@/lib/proyeccion";
 import type { ProgramaDeNomina } from "@/lib/nomina";
@@ -230,5 +230,36 @@ describe("los cobros de proyectos entran por su plan de pagos, con lo cobrado de
     expect(p[1].ingresos).toBe(300_000);
     expect(p[2].ingresos).toBe(300_000);
     expect(p[0].planeados.every((x) => x.clase === "cobro" && x.tipo === "ingreso")).toBe(true);
+  });
+});
+
+describe("los compromisos con proveedores entran en su fecha esperada, con lo pagado y las órdenes descontados (0.73.0)", () => {
+  /* Mike, 6-oct: «el costo de cada fase, así de ahí se pobla la lista de
+   * compromisos de gastos en el proyecto para la proyección del flujo». Lo
+   * que se mide: que lo que falta sea acordado − pagado − órdenes pendientes
+   * que ya apuntan a la partida (para no contar dos veces), que la que no
+   * tiene fecha quede fuera y se diga cuánto es, y que caigan como egreso. */
+  const partidas = [
+    { id: "a", proyecto_nombre: "Cocina", proveedor_nombre: "Maderas", concepto: "MW-01 · Entrega de material", monto_acordado: 30_000, monto_pagado: 10_000, fecha_esperada: "2026-10-20" },
+    { id: "b", proyecto_nombre: "Cocina", proveedor_nombre: "Goyo", concepto: "MW-01 · Fabricación", monto_acordado: 30_000, monto_pagado: 0, fecha_esperada: "2026-11-25" },
+    { id: "c", proyecto_nombre: "Cocina", proveedor_nombre: "Herrería", concepto: null, monto_acordado: 8_000, monto_pagado: 0, fecha_esperada: null },
+    { id: "d", proyecto_nombre: "Cocina", proveedor_nombre: "Vidrio", concepto: "Pagada", monto_acordado: 5_000, monto_pagado: 5_000, fecha_esperada: "2026-10-30" },
+  ];
+
+  it("lo que falta es acordado − pagado − órdenes pendientes de esa partida; la pagada no entra; la sin fecha se cuenta aparte", () => {
+    const r = compromisosDeProyectos(partidas, [{ partida_id: "a", monto: 5_000 }, { partida_id: null, monto: 999 }]);
+    expect(r.compromisos.map((c) => [c.id, c.monto])).toEqual([["a", 15_000], ["b", 30_000]]);
+    expect(r.compromisos[0].nombre).toBe("Cocina · MW-01 · Entrega de material (Maderas)");
+    expect(r.sin_fecha).toBe(8_000);
+    expect(r.cuantos_sin_fecha).toBe(1);
+  });
+
+  it("caen como egreso en su fecha; la vencida, en el primer bloque y marcada", () => {
+    const r = compromisosDeProyectos([...partidas, { id: "z", proyecto_nombre: "Clóset", proveedor_nombre: null, concepto: "Vieja", monto_acordado: 1_000, monto_pagado: 0, fecha_esperada: "2026-09-01" }]);
+    const p = proyectar(0, { opex: [], compromisos: r.compromisos }, { bloque: "mes", meses: 3, hoy: HOY });
+    expect(p[0].planeados.map((x) => [x.id, x.vencido])).toEqual([["z", true], ["a", false]]);
+    expect(p[0].egresos).toBe(21_000);
+    expect(p[1].egresos).toBe(30_000);
+    expect(p[0].planeados.every((x) => x.clase === "compromiso" && x.tipo === "egreso")).toBe(true);
   });
 });
