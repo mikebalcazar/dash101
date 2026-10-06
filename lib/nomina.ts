@@ -172,6 +172,84 @@ export async function marcarRecibido(pago_id: string, recibido: boolean): Promis
   return pagoEnPesos(r.pago);
 }
 
+/* ─────────────── la nómina programada (contrato 0.71.0) ───────────────
+ *
+ * Mike, 6-oct: «hay que ver en nómina el programar la nómina para que
+ * también se considere en los gastos para proyectar los flujos».
+ *
+ * Es UNA por empresa: cada cuánto se paga, qué día y cuánto suele ser. No
+ * es un corte ni mueve dinero: el flujo proyectado la pone como gasto en
+ * cada fecha de pago futura. Mismo permiso que la raya: si la API contesta
+ * 403, el flujo lo dice y sigue sin ella. En PESOS de este lado. */
+
+export type FrecuenciaDeNomina = 'semanal' | 'quincenal' | 'mensual';
+
+export interface ProgramaDeNomina {
+  activo: boolean;
+  frecuencia: FrecuenciaDeNomina;
+  /** 0 domingo … 6 sábado; sólo con 'semanal'. */
+  dia_semana: number | null;
+  /** 1–31; sólo con 'mensual'. La quincenal paga el 15 y el último del mes. */
+  dia_del_mes: number | null;
+  /** En PESOS: lo que suele costar cada pago. */
+  monto: number;
+  nota: string;
+  actualizado_at: string | null;
+}
+
+/** Un corte abierto: ya tiene total y fecha, la proyección lo usa tal cual. */
+export interface BorradorDeRaya {
+  id: string;
+  periodo_inicio: string;
+  periodo_fin: string;
+  /** En PESOS. */
+  total: number;
+}
+
+export interface NominaProgramada {
+  programa: ProgramaDeNomina | null;
+  /** En PESOS: el último corte pagado, para proponerlo como estimación. */
+  ultimo_total: number | null;
+  borradores: BorradorDeRaya[];
+}
+
+export async function getProgramaNomina(): Promise<NominaProgramada> {
+  const r = await pedir<{
+    programa: (Omit<ProgramaDeNomina, 'monto'> & { monto: number }) | null;
+    ultimo_total: number | null;
+    borradores: Array<Omit<BorradorDeRaya, 'total'> & { total: number }>;
+  }>(`${base()}/programa`);
+  return {
+    programa: r.programa ? { ...r.programa, monto: aPesos(r.programa.monto) } : null,
+    ultimo_total: r.ultimo_total === null ? null : aPesos(r.ultimo_total),
+    borradores: r.borradores.map((b) => ({ ...b, total: aPesos(b.total) })),
+  };
+}
+
+export async function ponerProgramaNomina(p: {
+  activo: boolean; frecuencia: FrecuenciaDeNomina; dia_semana?: number | null; dia_del_mes?: number | null;
+  /** En PESOS. */
+  monto: number; nota?: string;
+}): Promise<ProgramaDeNomina> {
+  const r = await pedir<{ programa: Omit<ProgramaDeNomina, 'monto'> & { monto: number } }>(`${base()}/programa`, {
+    method: 'PUT',
+    body: { ...p, monto: aCentavos(p.monto) },
+  });
+  return { ...r.programa, monto: aPesos(r.programa.monto) };
+}
+
+export const DIAS_DE_LA_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const DIAS_EN_PLURAL = ['domingos', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábados'];
+
+/** Cómo se dice el programa en una línea: «cada semana, los sábados». */
+export function describirPrograma(p: ProgramaDeNomina): string {
+  switch (p.frecuencia) {
+    case 'semanal': return `cada semana, los ${DIAS_EN_PLURAL[p.dia_semana ?? 6]}`;
+    case 'quincenal': return 'cada quincena, el 15 y el último día del mes';
+    case 'mensual': return `cada mes, el día ${p.dia_del_mes ?? 1}`;
+  }
+}
+
 /* ─────────────── los expedientes de roster101 (contrato 0.32.0) ───────────────
  *
  * Mike, 20-sep: «en la sección de raya de dash debo poder escoger a quién se

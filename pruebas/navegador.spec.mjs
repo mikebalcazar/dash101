@@ -1020,6 +1020,83 @@ test('el estado de cuenta del proyecto: la lista suma el subtotal y el IVA se de
   await ctx.close();
 });
 
+test('6-oct: el flujo proyectado se presenta por bloques —semana, quincena, mes, trimestre, semestre, año— y cada bloque abre lo que tiene planeado; la nómina se programa desde Nómina', async () => {
+  /* Mike, 6-oct: «en la proyección de flujos necesito que haya opción para
+   * presentar por bloques de tiempo (…) Quiero ver todos los gastos y los
+   * cobros que están planeados para esa semana. Hay que ver en nómina el
+   * programar la nómina para que también se considere en los gastos».
+   *
+   * SÓLO SE LEE: la demo no se toca. Lo que se afirma se calcula igual que
+   * la app: los OPEX activos salen de la API; el número de bloques de un
+   * año es fijo (13 meses porque el bloque de hoy y el de hoy + 12 meses
+   * entran los dos; 2 años; 25 quincenas), y la cuenta que dice cada
+   * renglón tiene que ser la de los renglones que abre. */
+  const { ctx, pag, errores } = await pestana(undefined, true);
+  await pag.goto(`${URL}/flujo`, { waitUntil: 'load' });
+  await pag.locator('[data-bloque]').waitFor({ timeout: 20000 });
+
+  const opex = filas(await api(pag, `/orgs/${ORG}/opex`)).filter((o) => o.activo);
+  assert.ok(opex.length > 0, 'la demo trae OPEX activos: sin eso la pantalla no proyecta nada');
+  assert.match(await pag.locator('[data-fuentes]').innerText(), new RegExp(`${opex.length} OPEX activo`), 'la nota dice cuántos OPEX entran');
+
+  const cuantos = async (bloque, esperados) => {
+    await pag.locator('[data-bloque]').selectOption(bloque);
+    await pag.waitForFunction((n) => document.querySelectorAll('[data-fila-bloque]').length === n, esperados, { timeout: 10000 });
+  };
+  await cuantos('mes', 13);
+  assert.match(await texto(pag), /por mes · 1 año/, 'el encabezado dice el bloque y el horizonte');
+  await cuantos('anio', 2);
+  await cuantos('quincena', 25);
+  await cuantos('trimestre', 5);
+  await cuantos('semestre', 3);
+  await cuantos('semana', 53);
+
+  /* El horizonte también cambia: a 3 meses por mes son 4 bloques. */
+  await pag.locator('[data-horizonte]').selectOption('3');
+  await cuantos('mes', 4);
+
+  /* Un bloque con algo planeado se abre y enseña exactamente lo que dijo. */
+  const boton = pag.locator('[data-abrir-bloque]:not([disabled])').first();
+  await boton.waitFor({ timeout: 5000 });
+  const dice = (await boton.innerText()).match(/· (\d+)$/);
+  assert.ok(dice, `el renglón dice cuántas cosas trae: ${await boton.innerText()}`);
+  assert.equal(await pag.locator('[data-planeado]').count(), 0, 'cerrado, no enseña nada');
+  await boton.click();
+  await pag.locator('[data-planeado]').first().waitFor({ timeout: 5000 });
+  assert.equal(await pag.locator('[data-planeado]').count(), Number(dice[1]), 'abierto, enseña tantos como dijo');
+  assert.match(await pag.locator('[data-planeado]').first().innerText(), /OPEX|Nómina|Orden/, 'y cada uno dice de qué clase es');
+  await boton.click();
+  await pag.waitForFunction(() => document.querySelectorAll('[data-planeado]').length === 0, null, { timeout: 5000 });
+
+  /* Lo escogido se recuerda al volver. */
+  await pag.goto(`${URL}/flujo`, { waitUntil: 'load' });
+  await pag.locator('[data-bloque]').waitFor({ timeout: 20000 });
+  assert.equal(await pag.locator('[data-bloque]').inputValue(), 'mes');
+  assert.equal(await pag.locator('[data-horizonte]').inputValue(), '3');
+
+  /* La nómina programada vive en Nómina, con el permiso de la raya: si la
+   * API cierra la puerta, ni la tarjeta ni la nota la ofrecen; si la abre,
+   * la tarjeta está y el formulario se abre (y NO se guarda: es la demo). */
+  const puerta = await pag.evaluate(async () => (await fetch('/s101/orgs/demo/nomina/programa', { headers: { 'X-App': 'dash101' } })).status);
+  await pag.goto(`${URL}/nomina`, { waitUntil: 'load' });
+  if (puerta === 403) {
+    await pag.getByText('Esto lo lleva alguien más').waitFor({ timeout: 20000 });
+    assert.equal(await pag.locator('[data-nomina-programada]').count(), 0, 'sin permiso no hay tarjeta');
+  } else {
+    assert.equal(puerta, 200, 'la puerta de la nómina programada contesta');
+    await pag.locator('[data-nomina-programada]').waitFor({ timeout: 20000 });
+    if (await pag.locator('[data-editar-programa]').count()) await pag.locator('[data-editar-programa]').click();
+    await pag.locator('[data-programa-monto]').waitFor({ timeout: 5000 });
+    await pag.locator('[data-programa-frecuencia]').selectOption('quincenal');
+    assert.equal(await pag.locator('[data-programa-dia]').count(), 0, 'la quincenal no pide día');
+    await pag.locator('[data-programa-frecuencia]').selectOption('semanal');
+    assert.equal(await pag.locator('[data-programa-dia]').count(), 1, 'la semanal sí');
+  }
+
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
 test('un cobro se captura «falta facturar» y aparece en la lista de pendientes', async () => {
   /* Encargo de Mike del 20-sep. Se recorre lo que él hace: capturar un
    * ingreso diciendo que falta facturarlo, y encontrarlo en Fiscal → Falta la

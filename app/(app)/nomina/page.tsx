@@ -18,6 +18,7 @@ import { useEmpresa } from "@/lib/empresa-context";
 import { ErrorApi } from "@/lib/api/cliente";
 import { listRayas, type Raya } from "@/lib/nomina";
 import { formatMonto } from "@/lib/format";
+import { NominaProgramada } from "@/components/nomina-programada";
 
 const COLOR: Record<Raya["estado"], string> = {
   borrador: "bg-cream text-ink-dim",
@@ -84,6 +85,9 @@ export default function NominaPage() {
       </div>
 
       {error && <p className="text-xs text-mauve-900 bg-mauve-50 px-3 py-2 rounded-xl mb-3">{error}</p>}
+
+      {/* Mike, 6-oct: programar la nómina para que entre en el flujo proyectado. */}
+      {!cargando && <NominaProgramada />}
 
       {cargando ? (
         <p className="text-sm text-ink-muted">Cargando…</p>
