@@ -54,6 +54,8 @@ import { formatDateShort, formatMonto } from "@/lib/format";
 import type { ItemProyecto, Proyecto } from "@/types/schema";
 import type { Timestamp } from "firebase/firestore";
 import { BotonVerItem, NombreDeItem } from "@/components/panel-item";
+import { avanceDeItems } from "@/lib/pieza";
+import { avanceDe, colorDeTipo, embudo, estadoDeCobro, nombreDeTipo, sumarAvances, type AvanceDeItem, type AvanceDeItems, type EtapaDeObra } from "@/lib/lista-items";
 
 const SIN = "__sin__";
 /* La pestaña que no es partida: lo que está fuera del alcance. Mike, 2-oct:
@@ -116,6 +118,14 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
   const [moviendo, setMoviendo] = useState("");
   const [opciones, setOpciones] = useState<Opciones>({ productos: [], unicos: [] });
   const [abiertos, setAbiertos] = useState<Record<string, boolean>>({});
+  /* El avance de obra de cada ítem (contrato 0.76.0), para pintar la lista
+   * como la de quell101 (Mike, 6-oct). Si no llega, la lista sale igual. */
+  const [avance, setAvance] = useState<AvanceDeItems | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    if (proyecto.id) void avanceDeItems(proyecto.id).then((a) => { if (vivo) setAvance(a); });
+    return () => { vivo = false; };
+  }, [proyecto.id, proyecto.items]);
 
   const traerFuera = async () => {
     try { setFuera(await fueraDeAlcance(proyecto.id!)); }
@@ -499,21 +509,15 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
       )}
 
       {modo === "ver" && pestana !== FUERA && (
-        <div className="bg-white border border-black/5 rounded-2xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-cream/50 text-xs text-ink-muted uppercase tracking-wide">
-              <tr>
-                <th className="text-left px-4 py-2 font-medium">Ítem</th>
-                <th className="text-right px-4 py-2 font-medium">Cant.</th>
-                <th className="text-left px-4 py-2 font-medium">Entrega</th>
-                <th className="text-right px-4 py-2 font-medium">Importe</th>
-                <th className="px-2 py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {bloques.map((bloque) =>
-                bloque.producto ? (
-                  <ProductoEnLaLista
+        <>
+          {/* Arriba, un recuadro por etapa con cuántos ítems la llevan
+              cumplida, como en quell101 (Mike, 6-oct). Sólo si la obra
+              contestó y hay etapas. */}
+          <Embudo ids={visibles.map((f) => f.id)} avance={avance} />
+          <div className="bg-white border border-black/5 rounded-2xl overflow-hidden" data-lista-items>
+            {bloques.map((bloque) =>
+              bloque.producto ? (
+                <ProductoEnLaLista
                     key={`pr:${bloque.producto.id}`}
                     producto={bloque.producto}
                     piezas={bloque.filas}
@@ -528,11 +532,12 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
                     alCambiarProducto={cambiarProducto}
                     alSeparar={separar}
                     partidas={nombresDePartida}
+                    avance={avance}
                     alMoverDePartida={moverDePartida}
                   />
-                ) : (
-                  bloque.filas.map((pr) => (
-                    <FilaDeItem
+              ) : (
+                bloque.filas.map((pr) => (
+                  <FilaDeItem
                       key={pr.id}
                       fila={pr}
                       opciones={opciones}
@@ -542,14 +547,15 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
                       alCambiarProducto={cambiarProducto}
                       alSeparar={separar}
                       partidas={nombresDePartida}
+                      avance={avance?.items[pr.id]}
+                      etapas={avance?.etapas ?? []}
                       alMoverDePartida={moverDePartida}
                     />
-                  ))
-                ),
-              )}
-            </tbody>
-          </table>
-        </div>
+                ))
+              ),
+            )}
+          </div>
+        </>
       )}
 
       {hecho && <p className="text-xs text-mint-900 mt-2">{hecho}</p>}
@@ -558,18 +564,101 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
   );
 }
 
+/* ─────────────── la lista con el estilo de quell101 ───────────────
+ *
+ * Mike, 6-oct, con la lista de quell101 enfrente: «en dash quiero que la
+ * lista de ítems tenga el mismo estilo. Hoy en dash es muy cansado a la vista
+ * como está». Era una tabla con encabezados en mayúsculas y cinco columnas;
+ * ahora es un renglón por ítem como en la obra: la raya del color de su tipo,
+ * el código en negritas y el nombre, abajo en gris de qué es; los tramos de
+ * las etapas de obra cumplidas con su porcentaje y en qué etapa va; y lo que
+ * es de dash101: el importe y una pastilla con el cobro. Las cuentas viven en
+ * lib/lista-items.ts.
+ */
+
+/** Los tramos de las etapas: el ojo cuenta los llenos sin leer el número. */
+function Tramos({ llenos, etapas }: { llenos: number; etapas: EtapaDeObra[] }) {
+  return (
+    <span className="hidden md:flex gap-0.5 w-20 shrink-0" data-tramos={llenos} aria-hidden="true">
+      {etapas.map((x, i) => (
+        <i
+          key={x.clave}
+          className={`flex-1 h-2 rounded-sm ${i < llenos ? (x.abre_punchlist ? "bg-mint-900" : "bg-ink") : "bg-cream"}`}
+        />
+      ))}
+    </span>
+  );
+}
+
+/** El porcentaje de obra y en qué etapa va. Sin pieza en ningún plano lo
+ *  dice, en vez de un cero que parece atraso. */
+function AvanceDeObra({ avance, etapas }: { avance?: AvanceDeItem; etapas: EtapaDeObra[] }) {
+  const a = avanceDe(avance, etapas);
+  if (!etapas.length) return null;
+  return (
+    <>
+      {a ? <Tramos llenos={a.llenos} etapas={etapas} /> : <span className="hidden md:block w-20 shrink-0" />}
+      <span className="hidden sm:block w-[4.5rem] shrink-0 text-right" data-avance-obra={a ? a.pct : ""}>
+        {a ? (
+          <>
+            <span className="block text-sm font-medium text-ink tabular-nums">{a.pct}%</span>
+            <span className="block text-[11px] text-ink-muted truncate">{a.etapa}</span>
+          </>
+        ) : (
+          <span className="block text-[11px] text-ink-muted">Sin plano</span>
+        )}
+      </span>
+    </>
+  );
+}
+
+/** El importe y, debajo, el cobro con su color: lo que en quell es «En
+ *  producción» o «Todo resuelto», aquí es dinero. Una sola columna para que
+ *  el nombre del ítem quepa (Mike, 6-oct: la lista era «cansada a la vista»). */
+function ImporteYCobro({ monto, pagado, fuerte = false }: { monto: number; pagado: number; fuerte?: boolean }) {
+  const c = estadoDeCobro(monto, pagado);
+  const tono = c.tono === "ok" ? "text-mint-900" : c.tono === "parcial" ? "text-sky-900" : "text-ink-muted";
+  return (
+    <span className="w-24 shrink-0 text-right">
+      <span className={`block text-sm text-ink tabular-nums ${fuerte ? "font-medium" : ""}`}>{formatMonto(monto, "MXN")}</span>
+      <span data-cobro={c.tono} className={`block text-[11px] tabular-nums ${tono}`}>{c.texto}</span>
+    </span>
+  );
+}
+
+/** Los recuadros de arriba: cuántos ítems llevan cumplida cada etapa. */
+function Embudo({ ids, avance }: { ids: string[]; avance: AvanceDeItems | null }) {
+  const cols = embudo(ids, avance);
+  if (!cols.length) return null;
+  return (
+    <div className="grid gap-2 mb-2 grid-cols-3 sm:grid-cols-6" data-embudo>
+      {cols.map((x) => (
+        <div key={x.clave} className="relative overflow-hidden bg-white border border-black/5 rounded-xl px-3 py-2">
+          <b className="block text-lg font-semibold text-ink leading-tight tabular-nums">{x.n}</b>
+          <span className="block text-[11px] text-ink-muted truncate">{x.nombre}</span>
+          <i
+            className={`absolute left-0 bottom-0 h-[3px] ${x.bisagra ? "bg-mint-900" : "bg-ink"}`}
+            style={{ width: ids.length ? `${(x.n / ids.length) * 100}%` : 0 }}
+          />
+        </div>
+      ))}
+      <div className="bg-white border border-black/5 rounded-xl px-3 py-2">
+        <b className="block text-lg font-semibold text-ink leading-tight tabular-nums">{ids.length}</b>
+        <span className="block text-[11px] text-ink-muted">ítems</span>
+      </div>
+    </div>
+  );
+}
+
 /* ─────────────── un renglón de ítem, con su producto ───────────────
  *
  * Mike, 20-sep: «todos los ítems, aparte del tipo de ítem, deberían tener un
- * dropdown para seleccionar qué producto es».
- *
- * El dropdown va DEBAJO DEL NOMBRE y no en una columna propia. La tabla ya
- * trae seis columnas y esta pantalla se usa en el celular: una séptima la
- * manda a desplazarse de lado, y lo que se busca —«¿de qué modelo es esta
- * puerta?»— se lee junto al nombre, no a dos dedos de distancia.
+ * dropdown para seleccionar qué producto es». Vive detrás del «+», con la
+ * descripción, lo cobrado, la bitácora del alcance y la partida: la lista
+ * enseña lo que se busca de un vistazo y el detalle se abre.
  */
 function FilaDeItem({
-  fila, opciones, pestana, moviendo, alMover, alCambiarProducto, alSeparar, partidas, alMoverDePartida, sangrada = false,
+  fila, opciones, pestana, moviendo, alMover, alCambiarProducto, alSeparar, partidas, alMoverDePartida, avance, etapas, sangrada = false,
 }: {
   fila: Fila;
   opciones: Opciones;
@@ -581,123 +670,116 @@ function FilaDeItem({
   /** Las pestañas con nombre, para moverlo de una a otra. */
   partidas: string[];
   alMoverDePartida: (ids: string[], partida: string) => void;
+  /** Su avance de obra (contrato 0.76.0) y el catálogo de etapas. */
+  avance?: AvanceDeItem;
+  etapas: EtapaDeObra[];
   sangrada?: boolean;
 }) {
   const [abierta, setAbierta] = useState(false);
   const pct = fila.monto > 0 ? Math.min(100, (fila.pagado / fila.monto) * 100) : 0;
   const fe = fila.fecha_entrega as Timestamp | null | undefined;
   const fusionados = fila.fusionados ?? 0;
+  const cant = fila.cantidad ?? 1;
+  const debajo = [
+    nombreDeTipo(fila.tipo),
+    pestana === "" && fila.partida ? fila.partida : "",
+    cant > 1 ? `${cant} piezas · ${formatMonto(fila.monto / cant, "MXN")} c/u` : "",
+    fe && typeof fe.toDate === "function" ? `entrega ${formatDateShort(fe.toDate())}` : "",
+  ].filter(Boolean).join(" · ");
   return (
     <>
-      <tr className="border-t border-black/5">
-        <td className={`py-3 ${sangrada ? "pl-10 pr-4" : "px-4"}`}>
-          <div className="flex items-start gap-2">
-            {/* El «+». Mike, 20-sep: «oculta la descripción en la lista, sólo
-                que se abra con un signo de más para desplegar más info». Es
-                un botón de verdad y no un div: así se llega con el teclado y
-                el lector de pantalla dice si está abierto o cerrado. */}
-            <button
-              type="button"
-              onClick={() => setAbierta((v) => !v)}
-              aria-expanded={abierta}
-              aria-label={abierta ? `Ocultar el detalle de ${fila.nombre}` : `Ver el detalle de ${fila.nombre}`}
-              className="mt-0.5 shrink-0 w-5 h-5 rounded-md border border-black/10 bg-white text-ink-muted inline-flex items-center justify-center hover:border-black/25"
-            >
-              {abierta ? <IconMinus size={11} /> : <IconPlus size={11} />}
-            </button>
-            <div className="min-w-0">
-              {/* Mike, 6-oct: picar el ítem, o el ⓘ, abre el panel de la obra. */}
-              <p className="text-sm font-medium text-ink-dim flex items-start gap-1">
-                <NombreDeItem id={fila.id}>
-                  {fila.clave && <span className="text-ink-muted font-normal">{fila.clave} · </span>}
-                  {fila.nombre}
-                </NombreDeItem>
-                <BotonVerItem id={fila.id} />
-              </p>
-              {pestana === "" && fila.partida && (
-                <p className="text-[10px] text-ink-muted uppercase tracking-wide mt-0.5">{fila.partida}</p>
-              )}
-            </div>
-          </div>
-        </td>
-        <td className="text-right px-4 py-3 text-sm text-ink-dim tabular-nums">{fila.cantidad ?? 1}</td>
-        <td className="px-4 py-3 text-xs text-ink-muted whitespace-nowrap">
-          {fe && typeof fe.toDate === "function" ? formatDateShort(fe.toDate()) : "—"}
-        </td>
-        <td className="text-right px-4 py-3 text-sm text-ink-dim">
-          {formatMonto(fila.monto, "MXN")}
-          {(fila.cantidad ?? 1) > 1 && (
-            <span className="block text-[10px] text-ink-muted">
-              {formatMonto(fila.monto / (fila.cantidad ?? 1), "MXN")} c/u
+      <div className={`flex items-center gap-3 border-t border-black/5 first:border-t-0 py-2.5 pr-2 hover:bg-cream/40 ${sangrada ? "pl-8 bg-cream/20" : "pl-3"}`} data-fila-item={fila.id}>
+        <i className="w-1 self-stretch rounded-full shrink-0" style={{ background: colorDeTipo(fila.tipo) }} title={nombreDeTipo(fila.tipo)} />
+        {/* El «+». Mike, 20-sep: «oculta la descripción en la lista, sólo
+            que se abra con un signo de más para desplegar más info». */}
+        <button
+          type="button"
+          onClick={() => setAbierta((v) => !v)}
+          aria-expanded={abierta}
+          aria-label={abierta ? `Ocultar el detalle de ${fila.nombre}` : `Ver el detalle de ${fila.nombre}`}
+          className="shrink-0 w-5 h-5 rounded-md border border-black/10 bg-white text-ink-muted inline-flex items-center justify-center hover:border-black/25"
+        >
+          {abierta ? <IconMinus size={11} /> : <IconPlus size={11} />}
+        </button>
+        <div className="flex-1 min-w-0">
+          {/* Mike, 6-oct: picar el ítem, o el ⓘ, abre el panel de la obra. */}
+          <p className="text-sm text-ink flex items-center gap-1 min-w-0">
+            <span className="truncate">
+              <NombreDeItem id={fila.id}>
+                {fila.clave && <b className="font-semibold">{fila.clave} </b>}
+                {fila.nombre}
+              </NombreDeItem>
             </span>
-          )}
-        </td>
-        <td className="px-2 py-3 text-right">
-          <Cancelador id={fila.id} nombre={fila.nombre} ocupado={moviendo === fila.id} alCancelar={alMover} />
-        </td>
-      </tr>
+            <BotonVerItem id={fila.id} />
+          </p>
+          <p className="text-xs text-ink-muted truncate">{debajo}</p>
+        </div>
+        <AvanceDeObra avance={avance} etapas={etapas} />
+        <ImporteYCobro monto={fila.monto} pagado={fila.pagado ?? 0} />
+        <span className="shrink-0">
+          <Cancelador id={fila.id} nombre={fila.nombre} ocupado={moviendo === fila.id} alCancelar={alMover} compacto />
+        </span>
+      </div>
 
       {/* Lo que estaba estorbando en la lista: la descripción, lo cobrado y
           el selector de producto. Mike los pidió aquí, detrás del «+». */}
       {abierta && (
-        <tr className="border-t border-black/5 bg-cream/20">
-          <td colSpan={5} className={`py-3 ${sangrada ? "pl-16 pr-4" : "px-4"}`}>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="sm:col-span-2">
-                <p className="text-[10px] text-ink-muted uppercase tracking-wide mb-1">Descripción</p>
-                <p className="text-xs text-ink-dim">{fila.descripcion || "—"}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-ink-muted uppercase tracking-wide mb-1">Cobrado</p>
-                <p className="text-sm text-ink-dim">{formatMonto(fila.pagado ?? 0, "MXN")}</p>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <div className="flex-1 max-w-[6rem] h-1 bg-white rounded-full overflow-hidden">
-                    <div className="h-full bg-mint-900" style={{ width: `${pct}%` }} />
-                  </div>
-                  <span className="text-[10px] text-ink-muted">{pct.toFixed(0)}%</span>
+        <div className={`border-t border-black/5 bg-cream/20 py-3 pr-4 ${sangrada ? "pl-16" : "pl-11"}`}>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="sm:col-span-2">
+              <p className="text-[10px] text-ink-muted uppercase tracking-wide mb-1">Descripción</p>
+              <p className="text-xs text-ink-dim">{fila.descripcion || "—"}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-ink-muted uppercase tracking-wide mb-1">Cobrado</p>
+              <p className="text-sm text-ink-dim">{formatMonto(fila.pagado ?? 0, "MXN")}</p>
+              <div className="flex items-center gap-1.5 mt-1">
+                <div className="flex-1 max-w-[6rem] h-1 bg-white rounded-full overflow-hidden">
+                  <div className="h-full bg-mint-900" style={{ width: `${pct}%` }} />
                 </div>
-              </div>
-              <div className="sm:col-span-3">
-                <p className="text-[10px] text-ink-muted uppercase tracking-wide mb-1">Bitácora del alcance</p>
-                <HistorialAlcance id={fila.id} />
-              </div>
-              <div className="sm:col-span-3">
-                <p className="text-[10px] text-ink-muted uppercase tracking-wide mb-1">En qué partida (pestaña) va</p>
-                <SelectorDePartida
-                  valor={fila.partida}
-                  partidas={partidas}
-                  ocupado={moviendo === fila.id}
-                  etiqueta={`Partida de ${fila.nombre}`}
-                  marca={fila.id}
-                  alEscoger={(pa) => alMoverDePartida([fila.id], pa)}
-                />
-              </div>
-              <div className="sm:col-span-3">
-                <p className="text-[10px] text-ink-muted uppercase tracking-wide mb-1">De qué producto es</p>
-                <SelectorDeProducto
-                  fila={fila}
-                  opciones={opciones}
-                  ocupado={moviendo === fila.id}
-                  alEscoger={alCambiarProducto}
-                />
-                {fusionados > 0 && (
-                  <div className="mt-2 text-[11px] text-mauve-900">
-                    <p>Este renglón se tragó {fusionados} más cuando juntar borraba renglones.</p>
-                    <button
-                      type="button"
-                      onClick={() => alSeparar({ item: fila.id })}
-                      disabled={moviendo === fila.id}
-                      className="mt-1 inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-xl border border-mauve-900/30 bg-white text-mauve-900 disabled:opacity-40"
-                    >
-                      <IconArrowsSplit size={13} />
-                      {moviendo === fila.id ? "Separando…" : `Separar en ${fusionados + 1} renglones`}
-                    </button>
-                  </div>
-                )}
+                <span className="text-[10px] text-ink-muted">{pct.toFixed(0)}%</span>
               </div>
             </div>
-          </td>
-        </tr>
+            <div className="sm:col-span-3">
+              <p className="text-[10px] text-ink-muted uppercase tracking-wide mb-1">Bitácora del alcance</p>
+              <HistorialAlcance id={fila.id} />
+            </div>
+            <div className="sm:col-span-3">
+              <p className="text-[10px] text-ink-muted uppercase tracking-wide mb-1">En qué partida (pestaña) va</p>
+              <SelectorDePartida
+                valor={fila.partida}
+                partidas={partidas}
+                ocupado={moviendo === fila.id}
+                etiqueta={`Partida de ${fila.nombre}`}
+                marca={fila.id}
+                alEscoger={(pa) => alMoverDePartida([fila.id], pa)}
+              />
+            </div>
+            <div className="sm:col-span-3">
+              <p className="text-[10px] text-ink-muted uppercase tracking-wide mb-1">De qué producto es</p>
+              <SelectorDeProducto
+                fila={fila}
+                opciones={opciones}
+                ocupado={moviendo === fila.id}
+                alEscoger={alCambiarProducto}
+              />
+              {fusionados > 0 && (
+                <div className="mt-2 text-[11px] text-mauve-900">
+                  <p>Este renglón se tragó {fusionados} más cuando juntar borraba renglones.</p>
+                  <button
+                    type="button"
+                    onClick={() => alSeparar({ item: fila.id })}
+                    disabled={moviendo === fila.id}
+                    className="mt-1 inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-xl border border-mauve-900/30 bg-white text-mauve-900 disabled:opacity-40"
+                  >
+                    <IconArrowsSplit size={13} />
+                    {moviendo === fila.id ? "Separando…" : `Separar en ${fusionados + 1} renglones`}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
@@ -708,14 +790,11 @@ function FilaDeItem({
  * El encargo original de Mike (§98) era éste: «no tiene caso tener 21 ítems
  * enlistados idénticos en dash». Aquí se cumple sin borrar nada: la lista
  * enseña UN renglón por modelo —«Puerta modelo A · 21 piezas · $178,500»— y
- * quien quiera ver las 21 lo abre.
- *
- * Se abre y no se queda abierto: la lista corta es la que él pidió, y las
- * piezas son el detalle. Adentro, cada pieza trae su código de obra y su
- * propio dropdown, que es como se saca una del grupo.
+ * quien quiera ver las 21 lo abre. Su avance de obra es el de todas sus
+ * piezas juntas, y la etapa la pone la más atrasada.
  */
 function ProductoEnLaLista({
-  producto, piezas, abierto, alAbrir, opciones, pestana, moviendo, alMover, alCambiarProducto, alSeparar, partidas, alMoverDePartida,
+  producto, piezas, abierto, alAbrir, opciones, pestana, moviendo, alMover, alCambiarProducto, alSeparar, partidas, alMoverDePartida, avance,
 }: {
   producto: Producto;
   piezas: Fila[];
@@ -729,6 +808,7 @@ function ProductoEnLaLista({
   alSeparar: (que: { producto: string } | { item: string }) => void;
   partidas: string[];
   alMoverDePartida: (ids: string[], partida: string) => void;
+  avance: AvanceDeItems | null;
 }) {
   /* Las piezas de un producto pueden estar en varias pestañas; el
    * desplegable del renglón mueve TODAS las que se ven aquí de un golpe. */
@@ -736,48 +816,36 @@ function ProductoEnLaLista({
   const cuantas = piezas.reduce((s, f) => s + (f.cantidad ?? 1), 0);
   const monto = piezas.reduce((s, f) => s + f.monto, 0);
   const pagado = piezas.reduce((s, f) => s + (f.pagado ?? 0), 0);
-  const pct = monto > 0 ? Math.min(100, (pagado / monto) * 100) : 0;
+  const tipo = piezas[0]?.tipo;
+  const etapas = avance?.etapas ?? [];
+  const junto = sumarAvances(piezas.map((f) => avance?.items[f.id]));
   return (
     <>
-      <tr className="border-t border-black/5 bg-cream/30">
-        <td className="px-4 py-3">
-          <button
-            type="button"
-            onClick={alAbrir}
-            aria-expanded={abierto}
-            className="text-left inline-flex items-start gap-1.5"
-          >
-            {abierto ? <IconChevronDown size={14} className="mt-0.5 shrink-0" /> : <IconChevronRight size={14} className="mt-0.5 shrink-0" />}
-            <span>
-              <span className="block text-sm font-medium text-ink-dim">
-                {producto.codigo && <span className="text-ink-muted font-normal">{producto.codigo} · </span>}
-                {producto.nombre}
-              </span>
-              <span className="block text-[11px] text-ink-muted">
-                {piezas.length} ítem{piezas.length === 1 ? "" : "s"} · {formatMonto(producto.precio / 100, "MXN")} la pieza
-                {" · "}{formatMonto(pagado, "MXN")} cobrado
-                {abierto ? "" : " · toca para ver cada pieza y cambiarla de producto"}
-              </span>
+      <div className="flex items-center gap-3 border-t border-black/5 first:border-t-0 py-2.5 pl-3 pr-2 bg-cream/30 hover:bg-cream/50" data-fila-producto={producto.id}>
+        <i className="w-1 self-stretch rounded-full shrink-0" style={{ background: colorDeTipo(tipo) }} title={nombreDeTipo(tipo)} />
+        <button
+          type="button"
+          onClick={alAbrir}
+          aria-expanded={abierto}
+          className="flex-1 min-w-0 text-left inline-flex items-start gap-1.5"
+        >
+          {abierto ? <IconChevronDown size={14} className="mt-0.5 shrink-0" /> : <IconChevronRight size={14} className="mt-0.5 shrink-0" />}
+          <span className="min-w-0">
+            <span className="block text-sm text-ink truncate">
+              {producto.codigo && <b className="font-semibold">{producto.codigo} </b>}
+              {producto.nombre}
             </span>
-          </button>
-        </td>
-        <td className="text-right px-4 py-3 text-sm text-ink-dim tabular-nums">{cuantas}</td>
-        <td className="px-4 py-3" />
-        <td className="text-right px-4 py-3 text-sm font-medium text-ink-dim">
-          {formatMonto(monto, "MXN")}
-          <span className="flex items-center gap-1.5 justify-end mt-1">
-            <span className="w-16 h-1 bg-white rounded-full overflow-hidden block">
-              <span className="h-full bg-mint-900 block" style={{ width: `${pct}%` }} />
+            <span className="block text-xs text-ink-muted truncate">
+              {nombreDeTipo(tipo)} · {piezas.length} ítem{piezas.length === 1 ? "" : "s"} · {cuantas} pieza{cuantas === 1 ? "" : "s"} · {formatMonto(producto.precio / 100, "MXN")} la pieza
+              {abierto ? "" : " · toca para ver cada pieza y cambiarla de producto"}
             </span>
-            <span className="text-[10px] text-ink-muted w-7 text-right">{pct.toFixed(0)}%</span>
           </span>
-        </td>
-        <td className="px-2 py-3 text-right">
+        </button>
+        <AvanceDeObra avance={junto} etapas={etapas} />
+        <ImporteYCobro monto={monto} pagado={pagado} fuerte />
+        <span className="shrink-0 flex flex-col items-end gap-1">
           {/* Sacar las piezas del grupo de un golpe. Mike, 20-sep:
-              «sepárame todos los ítems de puertas otra vez». De una en una
-              son 29 clics, y ése era justo el problema. No se pierde nada:
-              cada pieza se queda con su precio y vuelve a ser su propio
-              producto único. */}
+              «sepárame todos los ítems de puertas otra vez». */}
           <button
             type="button"
             onClick={() => alSeparar({ producto: producto.id })}
@@ -788,18 +856,16 @@ function ProductoEnLaLista({
             <IconArrowsSplit size={12} />
             {moviendo === producto.id ? "Separando…" : "Separar"}
           </button>
-          <div className="mt-1">
-            <SelectorDePartida
-              valor={partidaComun}
-              partidas={partidas}
-              ocupado={piezas.some((f) => moviendo === f.id)}
-              etiqueta={`Partida de ${producto.nombre}`}
-              marca={`pr:${producto.id}`}
-              alEscoger={(pa) => alMoverDePartida(piezas.map((f) => f.id), pa)}
-            />
-          </div>
-        </td>
-      </tr>
+          <SelectorDePartida
+            valor={partidaComun}
+            partidas={partidas}
+            ocupado={piezas.some((f) => moviendo === f.id)}
+            etiqueta={`Partida de ${producto.nombre}`}
+            marca={`pr:${producto.id}`}
+            alEscoger={(pa) => alMoverDePartida(piezas.map((f) => f.id), pa)}
+          />
+        </span>
+      </div>
       {abierto &&
         piezas.map((f) => (
           <FilaDeItem
@@ -813,6 +879,8 @@ function ProductoEnLaLista({
             alSeparar={alSeparar}
             partidas={partidas}
             alMoverDePartida={alMoverDePartida}
+            avance={avance?.items[f.id]}
+            etapas={etapas}
             sangrada
           />
         ))}
@@ -1472,13 +1540,16 @@ function LimpiarCancelados({ proyectoId, alLimpiar }: { proyectoId: string; alLi
  *  esto» no tiene otra respuesta; se guarda en el ítem, no en la cabeza de
  *  quien lo canceló. */
 function Cancelador({
-  id, nombre, ocupado, alCancelar, etiqueta = "Sacar del alcance",
+  id, nombre, ocupado, alCancelar, etiqueta = "Sacar del alcance", compacto = false,
 }: {
   id: string;
   nombre: string;
   ocupado: boolean;
   alCancelar: (id: string, que: "aprobar" | "sacar", motivo?: string) => void;
   etiqueta?: string;
+  /** En el renglón de la lista (6-oct): sólo el ícono, para que el nombre
+   *  del ítem quepa. La palabra sigue en `title` y en `aria-label`. */
+  compacto?: boolean;
 }) {
   const [abierto, setAbierto] = useState(false);
   const [motivo, setMotivo] = useState("");
@@ -1490,9 +1561,12 @@ function Cancelador({
         onClick={() => setAbierto(true)}
         disabled={ocupado}
         aria-label={`${etiqueta} ${nombre}`}
-        className="text-[11px] px-2 py-1 rounded-lg border border-black/10 text-ink-muted disabled:opacity-40 inline-flex items-center gap-1"
+        title={compacto ? etiqueta : undefined}
+        className={compacto
+          ? "w-7 h-7 rounded-lg text-ink-muted hover:bg-cream hover:text-mauve-900 disabled:opacity-40 inline-flex items-center justify-center"
+          : "text-[11px] px-2 py-1 rounded-lg border border-black/10 text-ink-muted disabled:opacity-40 inline-flex items-center gap-1"}
       >
-        <IconBan size={12} /> {etiqueta}
+        <IconBan size={compacto ? 14 : 12} />{compacto ? null : <> {etiqueta}</>}
       </button>
     );
   }

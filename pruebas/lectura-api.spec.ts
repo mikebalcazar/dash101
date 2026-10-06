@@ -147,7 +147,12 @@ describe("el proyecto: cachés, partidas e ítems como los conoce la app", () =>
     expect(p.precio_venta).toBe(262000);
     expect(p.cobrado).toBe(140000);
     expect(p.pagado).toBe(33500);
-    expect(p.compromiso_total).toBe(50500);
+    /* 0.73.0: los compromisos que nacen de las fases del cronograma de
+     * quell101 (los que traen `tarea_id`) suman al compromiso; los de la
+     * siembra siguen siendo 50,500. Con los costos por pieza de 0.74.0 la
+     * cocina de la demo ya trae los suyos. */
+    const delCronograma = p.partidas.filter((x) => x.tarea_id).reduce((s, x) => s + x.monto_acordado, 0);
+    expect(p.compromiso_total).toBe(50500 + delCronograma);
     expect(p.disponible).toBe(p.cobrado - p.pagado);
     expect(p.margen_proyectado).toBe(p.precio_venta - p.compromiso_total);
     expect(dia(p.fecha_inicio).getDate()).toBe(18);
@@ -156,7 +161,8 @@ describe("el proyecto: cachés, partidas e ítems como los conoce la app", () =>
 
   it("las partidas vienen de la tabla propia, con lo pagado que calculó la API", async () => {
     const p = await laCocina();
-    expect(p.partidas).toHaveLength(2);
+    // Las dos de la siembra; las del cronograma (con `tarea_id`) van aparte.
+    expect(p.partidas.filter((x) => !x.tarea_id)).toHaveLength(2);
     const maderas = p.partidas.find((x) => x.proveedor_nombre === "Maderas del Sur")!;
     expect(maderas).toMatchObject({ monto_acordado: 42000, monto_pagado: 25000, estado: "parcial" });
     const herrajes = p.partidas.find((x) => x.proveedor_nombre === "Herrajes Aztecas")!;

@@ -14,7 +14,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { IconExternalLink, IconInfoCircle, IconX } from "@tabler/icons-react";
 import { formatMonto } from "@/lib/format";
-import { EVENTO_ABRIR_ITEM, abrirItem, archivoDeQuell, pieza, piezaDeItem, piezaDocs, urlPiezaEnQuell, type DetalleDePieza, type DocsDePieza, type PiezaDeItem } from "@/lib/pieza";
+import { EVENTO_ABRIR_ITEM, abrirItem, abrirPieza, archivoDeQuell, pieza, piezaDeItem, piezaDocs, urlPiezaEnQuell, type DetalleDePieza, type DocsDePieza, type PiezaDeItem } from "@/lib/pieza";
 
 /** El ⓘ que va junto a cada ítem en cualquier lista. */
 export function BotonVerItem({ id, className = "" }: { id: string; className?: string }) {
@@ -47,10 +47,34 @@ export function NombreDeItem({ id, children, className = "" }: { id: string; chi
   );
 }
 
+/** Lo mismo para una PIEZA del plano que todavía no es ítem (6-oct). */
+export function BotonVerPieza({ element_id, obra, className = "" }: { element_id: string; obra?: { id: string; nombre?: string }; className?: string }) {
+  return (
+    <button
+      type="button"
+      data-ver-pieza={element_id}
+      title="Ver la pieza en la obra: fotos, bitácora, pendientes y archivos"
+      aria-label="Ver la pieza en la obra"
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); abrirPieza(element_id, obra); }}
+      className={`inline-flex items-center justify-center w-5 h-5 rounded-md text-mint-900 hover:bg-mint-50 shrink-0 align-middle ${className}`}
+    >
+      <IconInfoCircle size={15} />
+    </button>
+  );
+}
+
+/** Qué se abre: un ítem (se busca su pieza) o una pieza directo. */
+type Abierto = { item_id: string } | { element_id: string; obra_id?: string; obra_nombre?: string };
+
 export function PanelItemHost() {
-  const [itemId, setItemId] = useState<string | null>(null);
+  const [abierto, setAbierto] = useState<Abierto | null>(null);
+  const itemId = abierto ? ("item_id" in abierto ? abierto.item_id : `pieza:${abierto.element_id}`) : null;
+  const setItemId = (v: null) => setAbierto(v);
   useEffect(() => {
-    const f = (e: Event) => setItemId((e as CustomEvent<{ item_id?: string }>).detail?.item_id ?? null);
+    const f = (e: Event) => {
+      const d = (e as CustomEvent<{ item_id?: string; element_id?: string; obra_id?: string; obra_nombre?: string }>).detail ?? {};
+      setAbierto(d.item_id ? { item_id: d.item_id } : d.element_id ? { element_id: d.element_id, obra_id: d.obra_id, obra_nombre: d.obra_nombre } : null);
+    };
     window.addEventListener(EVENTO_ABRIR_ITEM, f);
     return () => window.removeEventListener(EVENTO_ABRIR_ITEM, f);
   }, []);
@@ -60,8 +84,8 @@ export function PanelItemHost() {
     window.addEventListener("keydown", k);
     return () => window.removeEventListener("keydown", k);
   }, [itemId]);
-  if (!itemId) return null;
-  return <PanelItem key={itemId} itemId={itemId} onClose={() => setItemId(null)} />;
+  if (!abierto || !itemId) return null;
+  return <PanelItem key={itemId} abierto={abierto} onClose={() => setItemId(null)} />;
 }
 
 const FASE_OBRA: Record<string, string> = { produccion: "Producción", punchlist: "Punchlist" };
@@ -70,21 +94,36 @@ const fechaDia = (d?: string | null) => (d ? new Date(String(d).slice(0, 10) + "
 
 type Estado = { cargando: true } | { error: string } | { pieza: PiezaDeItem; det: DetalleDePieza; docs: DocsDePieza | null };
 
-function PanelItem({ itemId, onClose }: { itemId: string; onClose: () => void }) {
+function PanelItem({ abierto, onClose }: { abierto: Abierto; onClose: () => void }) {
   const [d, setD] = useState<Estado>({ cargando: true });
   useEffect(() => {
     let vivo = true;
     (async () => {
       try {
-        const pz = await piezaDeItem(itemId);
-        const [det, docs] = await Promise.all([pieza(pz.element_id), piezaDocs(pz.element_id).catch(() => null)]);
+        let pz: PiezaDeItem;
+        let det: DetalleDePieza;
+        let docs: DocsDePieza | null;
+        if ("item_id" in abierto) {
+          pz = await piezaDeItem(abierto.item_id);
+          [det, docs] = await Promise.all([pieza(pz.element_id), piezaDocs(pz.element_id).catch(() => null)]);
+        } else {
+          /* Una pieza sin ítem: su detalle trae casi todo; la obra la manda
+           * quien la abre, para la liga a quell101. */
+          [det, docs] = await Promise.all([pieza(abierto.element_id), piezaDocs(abierto.element_id).catch(() => null)]);
+          const e = det.element as typeof det.element & { project_id?: string; plan_id?: string; padre_id?: string | null };
+          pz = {
+            element_id: abierto.element_id, project_id: abierto.obra_id || e.project_id || "", project_name: abierto.obra_nombre || "",
+            plan_id: e.plan_id || "", plan_name: e.plan_name || "", code: e.code || "", name: e.name || "", type: e.type || "",
+            fase: e.fase || "", padre_id: e.padre_id ?? null,
+          };
+        }
         if (vivo) setD({ pieza: pz, det, docs });
       } catch (e) {
         if (vivo) setD({ error: e instanceof Error ? e.message : String(e) });
       }
     })();
     return () => { vivo = false; };
-  }, [itemId]);
+  }, [abierto]);
 
   const Seccion = ({ titulo, children }: { titulo: string; children: ReactNode }) => (
     <section className="mt-4">
@@ -135,7 +174,7 @@ function PanelItem({ itemId, onClose }: { itemId: string; onClose: () => void })
         {e.item_descripcion && <Seccion titulo="Descripción"><p className="whitespace-pre-wrap">{e.item_descripcion}</p></Seccion>}
         <Seccion titulo="En la obra">
           <p>Contratistas: {contratistas.length ? contratistas.map((c) => c.name + (c.company ? ` (${c.company})` : "")).join(", ") : "nadie todavía"}</p>
-          <p>{e.item_fecha_entrega ? `Entrega: ${fechaDia(e.item_fecha_entrega)}${e.item_entrega_falta != null ? ` · ${e.item_entrega_falta < 0 ? `${Math.abs(e.item_entrega_falta)} días tarde` : `faltan ${e.item_entrega_falta} días`}` : ""}` : "Sin fecha de entrega"}</p>
+          <p>{e.item_fecha_entrega ? `Entrega: ${fechaDia(e.item_fecha_entrega)}${e.item_entrega_falta?.dice ? ` · ${e.item_entrega_falta.dice}` : ""}` : "Sin fecha de entrega"}</p>
           {e.item_monto != null && <p>Precio del ítem: {formatMonto(Number(e.item_monto) / 100, "MXN")}{(Number(e.item_cantidad) || 1) > 1 ? ` · ${e.item_cantidad} piezas` : ""}</p>}
           {/* Los dos candados del cronograma (0.70.0). */}
           <p>Diseño: {e.diseno_definido ? `definido el ${fechaDia(e.diseno_definido)}` : "sin definir (se fecha en quell101)"}</p>
@@ -170,7 +209,7 @@ function PanelItem({ itemId, onClose }: { itemId: string; onClose: () => void })
   }
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/30" data-panel-item={itemId} onClick={(ev) => ev.target === ev.currentTarget && onClose()}>
+    <div className="fixed inset-0 z-[70] bg-black/30" data-panel-item={"item_id" in abierto ? abierto.item_id : abierto.element_id} onClick={(ev) => ev.target === ev.currentTarget && onClose()}>
       <aside role="dialog" aria-label="El ítem en la obra" className="absolute right-0 top-0 h-full w-full sm:w-[420px] max-w-full bg-white shadow-2xl overflow-y-auto p-4 sm:p-5">
         <div className="flex items-center justify-between mb-3">
           <span className="text-[11px] text-ink-muted">El ítem en la obra · sólo lectura</span>

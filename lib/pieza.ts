@@ -22,7 +22,8 @@ export interface PiezaDeItem {
 export interface ElementoDeObra {
   id: string; code: string; name: string; type: string; fase: string; resp: string; plan_name: string;
   alcance?: string; item_id?: string | null; item_descripcion?: string | null; item_monto?: number | null;
-  item_cantidad?: number | null; item_fecha_entrega?: string | null; item_entrega_falta?: number | null;
+  item_cantidad?: number | null; item_fecha_entrega?: string | null; /** La cuenta de la API (`faltaParaEntrega`): días y la frase ya dicha. */
+  item_entrega_falta?: { dias: number; dice: string; tarde: boolean } | null;
   diseno_definido?: string | null; anticipo_fecha?: string | null; anticipo_monto?: number | null;
   created_at: string; entregado_en?: string | null;
 }
@@ -74,4 +75,27 @@ export const EVENTO_ABRIR_ITEM = 'dash101:abrir-item';
 export function abrirItem(item_id: string): void {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent(EVENTO_ABRIR_ITEM, { detail: { item_id } }));
+}
+/** Abrir el panel con una PIEZA del plano que todavía no tiene ítem (6-oct,
+ *  «Juntar las piezas del plano con los ítems»: Mike, «también quiero poder
+ *  ver los detalles de quell del ítem»). La obra viaja con ella para la liga
+ *  a quell101. */
+export function abrirPieza(element_id: string, obra?: { id: string; nombre?: string }): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(EVENTO_ABRIR_ITEM, { detail: { element_id, obra_id: obra?.id, obra_nombre: obra?.nombre } }));
+}
+
+/** El avance de obra de todos los ítems de un proyecto, de un jalón (contrato
+ *  0.76.0). Para la lista con el estilo de quell101 (Mike, 6-oct). Si la obra
+ *  no contesta (sin permiso, sin red), la lista se pinta sin avance: no es
+ *  motivo para dejar de ver los ítems. */
+export async function avanceDeItems(proyecto_id: string): Promise<import('./lista-items').AvanceDeItems | null> {
+  try {
+    const r = await pedirCrudo<{ etapas: import('./lista-items').EtapaDeObra[]; items: Record<string, import('./lista-items').AvanceDeItem> }>(
+      q(`/avance-items?proyecto_id=${encodeURIComponent(proyecto_id)}`),
+    );
+    return { etapas: r.etapas ?? [], items: r.items ?? {} };
+  } catch {
+    return null;
+  }
 }

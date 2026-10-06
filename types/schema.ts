@@ -141,6 +141,9 @@ export interface ItemProyecto {
   monto: number;
   /** Cuántas piezas iguales son (contrato 0.24.0). Por omisión 1. */
   cantidad: number;
+  /** mueble, puerta, acabado, servicio… Pinta la raya de color del renglón
+   *  en la lista, con los colores de quell101 (6-oct). */
+  tipo?: string;
   /** Σ ingresos con producto_id == id — calculado por recalcularProyecto() */
   pagado: number;
   /** Lo que de los pagos se le ha repartido como anticipo (contrato 0.70.0).
