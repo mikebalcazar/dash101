@@ -833,6 +833,18 @@ test('editar los ítems del proyecto: se borra uno, se guarda, y NO vuelve', asy
   await pag.locator('[data-panel-item] button[aria-label="Cerrar"]').click();
   assert.equal(await pag.locator('[data-panel-item]').count(), 0, 'y la ✕ también');
 
+  /* Mike, 6-oct: «en dash quiero que la lista de ítems tenga el mismo estilo
+   * [que la de quell101]. Hoy en dash es muy cansado a la vista». Ya no es
+   * una tabla: un renglón por ítem con la raya del color de su tipo, el
+   * nombre, el importe y la pastilla del cobro. */
+  const lista = pag.locator('[data-lista-items]');
+  await lista.waitFor({ timeout: 10000 });
+  assert.equal(await lista.locator('table').count(), 0, 'la lista de ítems ya no es una tabla');
+  assert.ok(await lista.locator('[data-fila-item]').count() > 0, 'un renglón por ítem');
+  const primera = lista.locator('[data-fila-item]').first();
+  assert.ok(await primera.locator('i[title]').first().evaluate((el) => getComputedStyle(el).backgroundColor !== 'rgba(0, 0, 0, 0)'), 'con la raya del color de su tipo');
+  assert.match(await primera.locator('[data-cobro]').innerText(), /Cobrado|Sin cobro/, 'y la pastilla del cobro');
+
   /* Mike, 6-oct (con botones): el plan de pagos del proyecto. Se agrega una
    * parcialidad de $300 sobre un proyecto de $350: queda pendiente, el
    * resumen dice que $50 siguen sin fecha, y el flujo la cuenta. Es el
@@ -1086,7 +1098,7 @@ test('6-oct: el flujo proyectado se presenta por bloques —semana, quincena, me
   await boton.click();
   await pag.locator('[data-planeado]').first().waitFor({ timeout: 5000 });
   assert.equal(await pag.locator('[data-planeado]').count(), Number(dice[1]), 'abierto, enseña tantos como dijo');
-  assert.match(await pag.locator('[data-planeado]').first().innerText(), /OPEX|Nómina|Orden/, 'y cada uno dice de qué clase es');
+  assert.match(await pag.locator('[data-planeado]').first().innerText(), /OPEX|Nómina|Orden|Compromiso con proveedor|Cobro/, 'y cada uno dice de qué clase es (desde el 6-oct la demo trae compromisos que nacen del cronograma)');
   await boton.click();
   await pag.waitForFunction(() => document.querySelectorAll('[data-planeado]').length === 0, null, { timeout: 5000 });
 
@@ -1116,6 +1128,39 @@ test('6-oct: el flujo proyectado se presenta por bloques —semana, quincena, me
   }
 
   assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
+test('6-oct: la lista de ítems trae el avance de la obra como en quell101, y el panel se abre también con una pieza del plano (sólo lectura)', async () => {
+  const { ctx, pag, errores } = await pestana(undefined, true);
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  // Las rutas de quell contestan su JSON sin el sobre {ok, data} de la suite.
+  const quell = (ruta) => pag.evaluate(async (r) => (await fetch(`/s101${r}`, { headers: { 'X-App': 'dash101' }, credentials: 'include' })).json(), ruta);
+  let obra = null, piezas = [];
+  for (const o of ((await quell(`/orgs/${ORG}/quell/projects`)).projects ?? []).filter((x) => x.proyecto_id)) {
+    piezas = ((await quell(`/orgs/${ORG}/quell/projects/${o.id}`)).elements ?? []).filter((e) => e.type !== 'Requerimiento');
+    if (piezas.some((e) => e.item_id)) { obra = o; break; }
+  }
+  assert.ok(obra, 'la demo trae una obra ligada a un proyecto, con piezas juntadas a sus ítems');
+  await pag.goto(`${URL}/proyectos/${obra.proyecto_id}`, { waitUntil: 'load' });
+  await pag.locator('[data-lista-items]').waitFor({ timeout: 30000 });
+  // Con piezas en el plano, arriba van los recuadros por etapa y cada renglón dice su avance.
+  await pag.locator('[data-embudo]').waitFor({ timeout: 15000 });
+  assert.ok(await pag.locator('[data-avance-obra]').count() > 0, 'cada renglón con su avance de obra');
+
+  /* Mike, 6-oct, en «Juntar las piezas del plano con los ítems»: «también
+   * quiero poder ver los detalles de quell del ítem, la barra lateral». Una
+   * pieza que todavía no es ítem abre el panel con su propio identificador. */
+  const pieza = piezas[0];
+  await pag.evaluate(([e, o, n]) => window.dispatchEvent(new CustomEvent('dash101:abrir-item', { detail: { element_id: e, obra_id: o, obra_nombre: n } })), [pieza.id, obra.id, obra.name]);
+  const panel = pag.locator(`[data-panel-item="${pieza.id}"]`);
+  await panel.waitFor({ timeout: 10000 });
+  await panel.getByText(pieza.name).first().waitFor({ timeout: 15000 });
+  const dice = await panel.innerText();
+  assert.ok(!dice.includes('[object Object]'), `la entrega se dice con palabras: ${dice.slice(0, 200)}`);
+  assert.ok((await panel.locator('a[href*="/e/"]').first().getAttribute('href')).includes(pieza.id), 'y la liga abre esa pieza en quell101');
+  await pag.keyboard.press('Escape');
+  assert.deepEqual(errores, [], 'sin errores de JavaScript');
   await ctx.close();
 });
 

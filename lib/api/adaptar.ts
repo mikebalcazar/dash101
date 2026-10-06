@@ -195,7 +195,7 @@ export function item(f: FilaItem, movimientos: FilaMovimiento[], anticipos: Fila
     cantidad: Number(f.cantidad ?? 1) || 1, pagado: aPesos(pagado), anticipo: aPesos(anticipo),
     fecha_entrega: aTimestamp(f.fecha_entrega), quell_id: f.origen?.quell_id ?? null,
     partida: String(f.partida ?? ''), orden: Number(f.orden ?? 0) || 0,
-    producto_id: f.producto_id ?? null, clave: f.clave ?? null,
+    producto_id: f.producto_id ?? null, clave: f.clave ?? null, tipo: f.tipo ?? '',
     fusionados: Array.isArray(f.refs?.agrupados) ? f.refs.agrupados.length : 0,
   };
 }

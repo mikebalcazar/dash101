@@ -31,6 +31,8 @@
  * cuánto sube la venta ANTES de aplicar.
  */
 
+import { BotonVerPieza } from "@/components/panel-item";
+import { abrirPieza } from "@/lib/pieza";
 import { useEffect, useMemo, useState } from "react";
 import { IconExternalLink, IconCheck, IconAlertTriangle } from "@tabler/icons-react";
 import {
@@ -211,9 +213,17 @@ export function JuntarItemsDeLaObra({ obra, alTerminar }: { obra: Obra; alTermin
           return (
             <div key={pz.element_id} className="bg-cream/40 rounded-xl p-2.5">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs text-ink-dim flex-1 min-w-[10rem]">
-                  <b>{pz.codigo ? `${pz.codigo} · ` : ""}{pz.pieza}</b>
-                  <span className="text-ink-muted"> · {pz.tipo}</span>
+                <span className="text-xs text-ink-dim flex-1 min-w-[10rem] inline-flex items-center gap-1 flex-wrap">
+                  {/* Mike, 6-oct: «en esta pantalla también quiero poder ver
+                      los detalles de quell del ítem, la barra lateral». La
+                      pieza todavía no es ítem: el panel se abre con ella. */}
+                  <button type="button" data-abrir-pieza={pz.element_id} title="Ver la pieza en la obra"
+                    onClick={() => abrirPieza(pz.element_id, { id: obra.id, nombre: obra.nombre })}
+                    className="text-left hover:underline underline-offset-2 decoration-mint-900/40">
+                    <b>{pz.codigo ? `${pz.codigo} · ` : ""}{pz.pieza}</b>
+                  </button>
+                  <BotonVerPieza element_id={pz.element_id} obra={{ id: obra.id, nombre: obra.nombre }} />
+                  <span className="text-ink-muted">· {pz.tipo}</span>
                 </span>
                 <select
                   aria-label={`Ítem para ${pz.pieza}`}
