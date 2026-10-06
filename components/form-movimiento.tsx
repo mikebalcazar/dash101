@@ -23,6 +23,7 @@ import { crearCfdi, ligarCfdi } from "@/lib/fiscal";
 import { archivosDe, subirArchivo, urlArchivo, type ArchivoOrden } from "@/lib/ordenes";
 import { aDia, delDia } from "@/lib/api/adaptar";
 import { ACEPTA_COMPROBANTE, SoltarArchivo } from "@/components/soltar-archivo";
+import { BotonVerItem } from "@/components/panel-item";
 import {
   IconArrowLeft,
   IconArrowDownLeft,
@@ -629,6 +630,9 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
                       </option>
                     ))}
                   </select>
+                  {productoSel && (
+                    <p className="text-xs text-ink-muted mt-1 flex items-center gap-1">Ver {productoSel.nombre} en la obra <BotonVerItem id={productoSel.id} /></p>
+                  )}
                 </div>
               )}
 
@@ -661,6 +665,7 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
                                 {it.clave ? <b className="font-medium">{it.clave}</b> : null} {it.nombre}
                                 <span className="text-ink-muted"> · {formatMonto(it.monto)}{it.anticipo ? ` · ya ${formatMonto(it.anticipo)}` : ""}</span>
                               </span>
+                              <BotonVerItem id={it.id} />
                               {sel && (modoReparto === "monto" || modoReparto === "porcentaje") ? (
                                 <span className="flex items-center gap-1">
                                   {modoReparto === "monto" ? <span className="text-ink-muted">$</span> : null}

@@ -817,6 +817,22 @@ test('editar los ítems del proyecto: se borra uno, se guarda, y NO vuelve', asy
 
   await pag.goto(`${URL}/proyectos/${proyecto.id}`, { waitUntil: 'load' });
   await pag.getByText('Ítems del proyecto').first().waitFor({ timeout: 20000 });
+
+  // Mike, 6-oct: picar el ⓘ de un ítem abre el panel de la obra. Este
+  // proyecto no tiene obra en quell101, así que el panel lo dice con
+  // palabras en vez de quedarse en blanco; y Escape lo cierra.
+  await pag.locator('[data-ver-item]').first().click();
+  await pag.locator('[data-panel-item]').waitFor({ timeout: 10000 });
+  await pag.getByText(/ningún plano/).waitFor({ timeout: 15000 });
+  assert.match(await pag.locator('[data-panel-item]').innerText(), /El ítem en la obra/, 'el panel se abre desde la lista del proyecto');
+  await pag.keyboard.press('Escape');
+  assert.equal(await pag.locator('[data-panel-item]').count(), 0, 'y Escape lo cierra');
+  // También picando el nombre.
+  await pag.locator('[data-abrir-item]').first().click();
+  await pag.locator('[data-panel-item]').waitFor({ timeout: 10000 });
+  await pag.locator('[data-panel-item] button[aria-label="Cerrar"]').click();
+  assert.equal(await pag.locator('[data-panel-item]').count(), 0, 'y la ✕ también');
+
   await pag.getByRole('button', { name: /Editar la lista/ }).first().click();
 
   const renglones = pag.locator('input[placeholder^="Ítem ("]');

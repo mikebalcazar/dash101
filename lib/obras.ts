@@ -60,13 +60,15 @@ export async function desligarObra(obra_id: string): Promise<Obra> {
  *  (`#/p/<id>`, en `web/src/App.jsx` de bitacora-obra). Que el Worker se
  *  llame `bitacora-obra` y la app `quell101` es de nacimiento: el Worker no
  *  se renombra en vivo. */
-export function urlObra(obra: Obra): string {
-  const casa = apiBase().includes('staging')
+export function casaQuell(): string {
+  return apiBase().includes('staging')
     ? 'https://bitacora-obra-staging.mike-929.workers.dev'
     // Desde el 25-sep-2026 quell101 vive en su dominio propio; la de
     // workers.dev sigue viva, pero manda para allá.
     : 'https://quell101.taller101.com';
-  return `${casa}/#/p/${obra.id}`;
+}
+export function urlObra(obra: Obra): string {
+  return `${casaQuell()}/#/p/${obra.id}`;
 }
 
 /* ─────────────── los ítems, uno solo de los dos lados (0.26.0) ───────────────

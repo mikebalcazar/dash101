@@ -7,6 +7,7 @@ import { EmpresaProvider } from "@/lib/empresa-context";
 import { Sidebar } from "@/components/sidebar";
 import { Topbar } from "@/components/topbar";
 import { VersionNueva } from "@/components/version-nueva";
+import { PanelItemHost } from "@/components/panel-item";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -39,6 +40,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {children}
           </main>
           <VersionNueva />
+          {/* El panel del ítem (lo que se ve en quell), desde cualquier lista. */}
+          <PanelItemHost />
         </div>
       </div>
     </EmpresaProvider>
