@@ -24,6 +24,7 @@ import { listMovimientos } from "@/lib/movimientos";
 import {
   crearGente, crearRaya, editarRaya, genteDeRoster, getRaya, listGente, listRayas,
   listTrabajadores, marcarRecibido, pagarRaya, cancelarRaya,
+  describirPrograma, getProgramaNomina, ponerProgramaNomina,
 } from "@/lib/nomina";
 
 const CORREO = process.env.CORREO_SUPERADMIN ?? "mike@forespot.com";
@@ -118,6 +119,39 @@ describe("la raya, desde dash101", () => {
     expect(mio.total).toBe(6_400);
     expect(mio.personas).toBe(2);
     expect(mio.estado).toBe("pagada");
+  });
+});
+
+describe("la nómina programada (contrato 0.71.0)", () => {
+  /* Mike, 6-oct: «programar la nómina para que también se considere en los
+   * gastos para proyectar los flujos». Lo que mide: que el monto cruce en
+   * PESOS en los dos sentidos, que el último corte pagado llegue para
+   * proponerlo, y que un corte abierto llegue con su total para que la
+   * proyección lo use en vez de la estimación. */
+  it("antes de programarla no hay programa, pero sí el último corte pagado, en pesos", async () => {
+    const r = await getProgramaNomina();
+    expect(r.programa).toBeNull();
+    expect(r.ultimo_total, "el corte de 6,400 que se pagó arriba").toBe(6_400);
+    expect(r.borradores).toEqual([]);
+  });
+
+  it("se guarda en pesos y vuelve en pesos, y se describe con palabras", async () => {
+    const p = await ponerProgramaNomina({ activo: true, frecuencia: "semanal", dia_semana: 6, monto: 18_500.5, nota: "los sábados" });
+    expect(p).toMatchObject({ activo: true, frecuencia: "semanal", dia_semana: 6, dia_del_mes: null, monto: 18_500.5, nota: "los sábados" });
+    expect(describirPrograma(p)).toBe("cada semana, los sábados");
+    const r = await getProgramaNomina();
+    expect(r.programa!.monto, "si la conversión se cayera, aquí saldría 1,850,050 o 185.005").toBe(18_500.5);
+  });
+
+  it("un corte abierto llega con su total en pesos, para que la proyección lo use tal cual", async () => {
+    const { raya } = await crearRaya({
+      periodo_inicio: "2026-03-23", periodo_fin: "2026-03-29",
+      pagos: [{ personal_id: ids.lupe, concepto: "Semana", sueldo: 3_000 }],
+    });
+    const r = await getProgramaNomina();
+    expect(r.borradores).toEqual([{ id: raya.id, periodo_inicio: "2026-03-23", periodo_fin: "2026-03-29", total: 3_000 }]);
+    await cancelarRaya(raya.id);
+    expect((await getProgramaNomina()).borradores).toEqual([]);
   });
 });
 
