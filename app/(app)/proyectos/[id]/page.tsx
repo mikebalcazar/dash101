@@ -20,6 +20,7 @@ import { ObraDelProyecto } from "@/components/obra-del-proyecto";
 import { desglose } from "@/lib/estado-proyecto";
 import { ItemsDelProyecto } from "@/components/items-del-proyecto";
 import { FusionarProyecto } from "@/components/fusionar-proyecto";
+import { PlanDePagos } from "@/components/plan-de-pagos";
 
 const ESTADO_STYLE: Record<string, string> = {
   planeando: "bg-cream text-ink-muted",
@@ -381,6 +382,11 @@ export default function ProyectoDetallePage() {
               {formatMonto(p.precio_venta, "MXN")} − {formatMonto(p.compromiso_total, "MXN")}
             </p>
           </div>
+
+          {/* Cuándo se espera cobrar cuánto (contrato 0.72.0): el flujo
+              proyectado pone cada parcialidad en su fecha, descontando lo
+              ya cobrado en orden. Mike lo escogió con botones el 6-oct. */}
+          <PlanDePagos proyecto={p} />
 
           {/* La obra de quell101, si la hay (contrato 0.22.0). */}
           <ObraDelProyecto proyectoId={p.id!} />

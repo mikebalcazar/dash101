@@ -833,6 +833,28 @@ test('editar los ítems del proyecto: se borra uno, se guarda, y NO vuelve', asy
   await pag.locator('[data-panel-item] button[aria-label="Cerrar"]').click();
   assert.equal(await pag.locator('[data-panel-item]').count(), 0, 'y la ✕ también');
 
+  /* Mike, 6-oct (con botones): el plan de pagos del proyecto. Se agrega una
+   * parcialidad de $300 sobre un proyecto de $350: queda pendiente, el
+   * resumen dice que $50 siguen sin fecha, y el flujo la cuenta. Es el
+   * proyecto propio de esta prueba, así que escribir aquí no toca la demo. */
+  await pag.locator('[data-plan-pagos]').waitFor({ timeout: 10000 });
+  assert.equal(await pag.locator('[data-parcialidad]').count(), 0, 'nace sin plan');
+  await pag.locator('[data-plan-agregar]').click();
+  await pag.locator('[data-plan-fecha]').fill('2026-11-20');
+  await pag.locator('[data-plan-concepto]').fill('Entrega');
+  await pag.locator('[data-plan-monto]').fill('300');
+  await pag.locator('[data-plan-guardar]').click();
+  await pag.locator('[data-parcialidad]').waitFor({ timeout: 10000 });
+  assert.equal(await pag.locator('[data-parcialidad]').count(), 1);
+  assert.equal(await pag.locator('[data-parcialidad-estado]').innerText(), 'pendiente', 'nada cobrado: pendiente entera');
+  const resumen = await pag.locator('[data-plan-resumen]').innerText();
+  assert.match(resumen, /Planeado \$300 de \$350/, `el resumen suma: ${resumen}`);
+  assert.match(resumen, /\$50 por cobrar sin fecha/, 'y dice lo que falta fechar');
+  const guardada = filas(await api(pag, `/orgs/${ORG}/plan_pagos?proyecto_id=${proyecto.id}`));
+  assert.equal(guardada.length, 1);
+  assert.equal(guardada[0].monto, 300_00, 'en centavos en la API');
+  assert.equal(guardada[0].fecha, '2026-11-20');
+
   await pag.getByRole('button', { name: /Editar la lista/ }).first().click();
 
   const renglones = pag.locator('input[placeholder^="Ítem ("]');

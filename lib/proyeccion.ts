@@ -25,8 +25,13 @@
  *     Una ya vencida cae en el primer bloque; una sin fecha también, porque
  *     está pendiente hoy y no hay otro lugar donde ponerla.
  *
- * Los cobros de proyectos NO entran todavía: no tienen fecha esperada. La
- * pantalla lo dice con esas palabras en vez de inventarles una.
+ *   · los COBROS DE PROYECTOS, por el plan de pagos de cada uno (contrato
+ *     0.72.0; Mike lo escogió con botones el 6-oct): cada parcialidad entra
+ *     en su fecha, pero lo que el proyecto ya cobró se descuenta de las
+ *     parcialidades en orden de fecha, así sólo lo pendiente entra. Una
+ *     parcialidad vencida cae en el primer bloque. Lo que el proyecto tiene
+ *     por cobrar sin parcialidad que lo cubra queda SIN FECHA y no entra:
+ *     la pantalla dice cuánto es.
  *
  * EL PRIMER BLOQUE es el que contiene HOY, pero sólo cuenta lo que cae de
  * hoy en adelante: el saldo de arranque ya trae lo que pasó antes. Con
@@ -56,7 +61,7 @@ export interface Lapso {
   fin: Date;
 }
 
-export type ClasePlaneado = "opex" | "nomina" | "orden";
+export type ClasePlaneado = "opex" | "nomina" | "orden" | "cobro";
 
 /** Un cobro o un gasto que cae en una fecha. En PESOS. */
 export interface Planeado {
@@ -91,10 +96,76 @@ export interface OrdenPlaneada {
   fecha_maxima_pago: string | null;
 }
 
+/** Un cobro de proyecto que falta, ya con lo cobrado descontado. En PESOS. */
+export interface CobroPlaneado {
+  id: string;
+  nombre: string;
+  monto: number;
+  /** AAAA-MM-DD. */
+  fecha: string;
+}
+
 export interface Fuentes {
   opex: Opex[];
   nomina?: { programa: ProgramaDeNomina | null; borradores: BorradorDeRaya[] } | null;
   ordenes?: OrdenPlaneada[] | null;
+  cobros?: CobroPlaneado[] | null;
+}
+
+/* ─────────────── los cobros de proyectos ─────────────── */
+
+export interface ProyectoParaCobrar {
+  id: string;
+  nombre: string;
+  /** En PESOS. */
+  precio_venta: number;
+  /** En PESOS. */
+  cobrado: number;
+}
+
+export interface ParcialidadParaCobrar {
+  id: string;
+  proyecto_id: string;
+  concepto: string;
+  fecha: string;
+  /** En PESOS. */
+  monto: number;
+}
+
+export interface CobrosDeProyectos {
+  cobros: CobroPlaneado[];
+  /** Lo que los proyectos tienen por cobrar y ningún plan fecha. En PESOS. */
+  sin_fecha: number;
+  /** Cuántos proyectos con saldo por cobrar no tienen plan completo. */
+  proyectos_sin_fecha: number;
+}
+
+/** Lo cobrado se descuenta de las parcialidades EN ORDEN DE FECHA: la
+ *  primera se da por cobrada antes que la última. Lo que sobra de cada una
+ *  es el cobro que falta. Un proyecto cobrado de más no genera cobros
+ *  negativos ni resta: simplemente ya no tiene nada pendiente. */
+export function cobrosDeProyectos(proyectos: ProyectoParaCobrar[], plan: ParcialidadParaCobrar[]): CobrosDeProyectos {
+  const cobros: CobroPlaneado[] = [];
+  let sin_fecha = 0;
+  let proyectos_sin_fecha = 0;
+  for (const p of proyectos) {
+    const suyas = plan.filter((x) => x.proyecto_id === p.id).sort((a, b) => a.fecha.localeCompare(b.fecha) || a.id.localeCompare(b.id));
+    let cobrado = Math.max(0, p.cobrado);
+    let pendientePlaneado = 0;
+    for (const x of suyas) {
+      const aplicado = Math.min(cobrado, x.monto);
+      cobrado -= aplicado;
+      const resto = Math.round((x.monto - aplicado) * 100) / 100;
+      if (resto <= 0) continue;
+      pendientePlaneado += resto;
+      cobros.push({ id: x.id, nombre: `${p.nombre} · ${x.concepto || "Parcialidad"}`, monto: resto, fecha: x.fecha });
+    }
+    const porCobrar = Math.max(0, p.precio_venta - Math.max(0, p.cobrado));
+    const sinPlan = Math.round((porCobrar - pendientePlaneado) * 100) / 100;
+    if (sinPlan > 0) { sin_fecha += sinPlan; proyectos_sin_fecha += 1; }
+  }
+  sin_fecha = Math.round(sin_fecha * 100) / 100;
+  return { cobros: cobros.sort((a, b) => a.fecha.localeCompare(b.fecha)), sin_fecha, proyectos_sin_fecha };
 }
 
 export interface ProyeccionOpts {
@@ -298,6 +369,13 @@ export function planear(fuentes: Fuentes, hoy: Date, hasta: Date): Planeado[] {
       clase: "nomina", id: b.id, nombre: `Nómina del ${corto(delDiaLocal(b.periodo_inicio))} al ${corto(fin)}`,
       tipo: "egreso", monto: b.total, fecha: vencido ? new Date(desde) : fin, vencido,
     });
+  }
+
+  for (const cb of fuentes.cobros ?? []) {
+    const f = delDiaLocal(cb.fecha);
+    if (f > hasta) continue;
+    const vencido = f < desde;
+    salida.push({ clase: "cobro", id: cb.id, nombre: cb.nombre, tipo: "ingreso", monto: cb.monto, fecha: vencido ? new Date(desde) : f, vencido });
   }
 
   for (const o of fuentes.ordenes ?? []) {

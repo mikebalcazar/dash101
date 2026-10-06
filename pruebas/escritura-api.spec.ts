@@ -21,6 +21,7 @@ import { createCliente, getCliente, updateCliente, deleteCliente, getClienteUid 
 import { createProveedor, getProveedor, deleteProveedor } from "@/lib/proveedores";
 import { anticiposDeMovimiento, ponerAnticipos } from "@/lib/movimientos";
 import { piezaDeItem, urlPiezaEnQuell } from "@/lib/pieza";
+import { borrarParcialidad, crearParcialidad, editarParcialidad, listPlanDeProyecto, listPlanes } from "@/lib/plan-pagos";
 import { createProyecto, getProyecto, listProyectos, updateProyecto, deleteProyecto } from "@/lib/proyectos";
 import { createMovimiento, listMovimientos, deleteMovimiento } from "@/lib/movimientos";
 import { createOpex, listOpex, updateOpex, deleteOpex } from "@/lib/opex";
@@ -194,6 +195,22 @@ describe("el proyecto: precio, ítems, partidas y los cachés que la API recalcu
     const item = (await getProyecto(ids.proyecto))!.items![0].id;
     await expect(piezaDeItem(item)).rejects.toThrow(/ningún plano/);
     expect(urlPiezaEnQuell("obra 1", "pieza/2")).toBe("https://bitacora-obra-staging.mike-929.workers.dev/#/p/obra%201/e/pieza%2F2");
+  });
+
+  it("el plan de pagos del proyecto: se captura en pesos, sale por fecha, se corrige, se rechaza con palabras, y se quita (0.72.0)", async () => {
+    const entrega = await crearParcialidad({ proyecto_id: ids.proyecto, fecha: "2026-12-15", concepto: "Entrega", monto: 1_500.5 });
+    expect(entrega.monto, "en pesos ida y vuelta").toBe(1_500.5);
+    const anticipo = await crearParcialidad({ proyecto_id: ids.proyecto, fecha: "2026-10-20", concepto: "Anticipo", monto: 2_000 });
+    const lista = await listPlanDeProyecto(ids.proyecto);
+    expect(lista.map((p) => p.concepto)).toEqual(["Anticipo", "Entrega"]);
+    expect((await listPlanes()).some((p) => p.id === anticipo.id)).toBe(true);
+    const movido = await editarParcialidad(anticipo.id, { fecha: "2026-10-25", monto: 2_250 });
+    expect(movido).toMatchObject({ fecha: "2026-10-25", monto: 2_250, concepto: "Anticipo" });
+    await expect(crearParcialidad({ proyecto_id: ids.proyecto, fecha: "2026-02-31", monto: 1 })).rejects.toThrow(/día de verdad/);
+    await expect(editarParcialidad(anticipo.id, { monto: 0 })).rejects.toThrow(/mayor que cero/);
+    await borrarParcialidad(entrega.id);
+    await borrarParcialidad(anticipo.id);
+    expect(await listPlanDeProyecto(ids.proyecto)).toEqual([]);
   });
 
   it("editar: ítems por id, partidas por proveedor; el precio es la suma de los ítems", async () => {

@@ -15,7 +15,10 @@
  *     API contesta 403, esta persona no lleva la raya: la proyección sigue
  *     sin nómina y lo dice. La respuesta de la API ES la respuesta;
  *   · las órdenes de compra pendientes de pago, en su fecha máxima. Si el
- *     buzón no se puede leer (403), igual: sin ellas y dicho.
+ *     buzón no se puede leer (403), igual: sin ellas y dicho;
+ *   · los cobros de proyectos por su plan de pagos (contrato 0.72.0), con lo
+ *     ya cobrado descontado en orden de fecha. Lo por cobrar sin plan queda
+ *     sin fecha y se dice cuánto es.
  *
  * Cada renglón de la tabla se abre y enseña lo planeado en ese bloque, uno
  * por uno, con su fecha y su monto.
@@ -27,11 +30,13 @@ import { useEmpresa } from "@/lib/empresa-context";
 import { listCuentas } from "@/lib/cuentas";
 import { listOpex } from "@/lib/opex";
 import { getBuzon } from "@/lib/ordenes";
+import { listProyectos } from "@/lib/proyectos";
+import { listPlanes } from "@/lib/plan-pagos";
 import { describirPrograma, getProgramaNomina, type NominaProgramada } from "@/lib/nomina";
 import { ErrorApi } from "@/lib/api/cliente";
 import {
-  BLOQUES, etiquetaDeLapso, primerBloqueBajoUmbral, proyectar,
-  type Bloque, type BloqueProyeccion, type OrdenPlaneada, type Planeado,
+  BLOQUES, cobrosDeProyectos, etiquetaDeLapso, primerBloqueBajoUmbral, proyectar,
+  type Bloque, type BloqueProyeccion, type CobrosDeProyectos, type OrdenPlaneada, type Planeado,
 } from "@/lib/proyeccion";
 import type { Cuenta, Opex } from "@/types/schema";
 import { formatMonto } from "@/lib/format";
@@ -82,6 +87,7 @@ const CLASE: Record<Planeado["clase"], string> = {
   opex: "OPEX",
   nomina: "Nómina",
   orden: "Orden de compra",
+  cobro: "Cobro de proyecto",
 };
 
 export default function FlujoPage() {
@@ -91,6 +97,7 @@ export default function FlujoPage() {
   const [nomina, setNomina] = useState<NominaProgramada | null>(null);
   const [nominaCerrada, setNominaCerrada] = useState(false);
   const [ordenes, setOrdenes] = useState<OrdenPlaneada[] | null>(null);
+  const [cobros, setCobros] = useState<CobrosDeProyectos>({ cobros: [], sin_fecha: 0, proyectos_sin_fecha: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [bloque, setBloque] = useState<Bloque>(BLOQUE_POR_OMISION);
@@ -130,13 +137,20 @@ export default function FlujoPage() {
           })),
         (e) => { if (sinPermiso(e)) return null; throw e; },
       ),
+      Promise.all([listProyectos(), listPlanes()]).then(([ps, plan]) =>
+        cobrosDeProyectos(
+          ps.filter((p) => p.id && p.estado !== "cerrado").map((p) => ({ id: p.id!, nombre: p.nombre, precio_venta: p.precio_venta, cobrado: p.cobrado })),
+          plan,
+        ),
+      ),
     ])
-      .then(([cs, os, n, ords]) => {
+      .then(([cs, os, n, ords, cb]) => {
         setCuentas(cs);
         setOpexes(os);
         setNomina(n.n);
         setNominaCerrada(n.cerrada);
         setOrdenes(ords);
+        setCobros(cb);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Error"))
       .finally(() => setLoading(false));
@@ -146,11 +160,11 @@ export default function FlujoPage() {
   const opexActivos = useMemo(() => opexes.filter((o) => o.activo), [opexes]);
   const programa = nomina?.programa && nomina.programa.activo ? nomina.programa : null;
   const borradores = nomina?.borradores ?? [];
-  const hayFuentes = opexActivos.length > 0 || !!programa || borradores.length > 0 || (ordenes?.length ?? 0) > 0;
+  const hayFuentes = opexActivos.length > 0 || !!programa || borradores.length > 0 || (ordenes?.length ?? 0) > 0 || cobros.cobros.length > 0;
 
   const proyeccion = useMemo(
-    () => proyectar(capitalInicial, { opex: opexActivos, nomina, ordenes }, { bloque, meses }),
-    [capitalInicial, opexActivos, nomina, ordenes, bloque, meses]
+    () => proyectar(capitalInicial, { opex: opexActivos, nomina, ordenes, cobros: cobros.cobros }, { bloque, meses }),
+    [capitalInicial, opexActivos, nomina, ordenes, cobros, bloque, meses]
   );
 
   const chartData = useMemo(
@@ -445,9 +459,14 @@ export default function FlujoPage() {
               : <> · {ordenes.length} orden{ordenes.length === 1 ? "" : "es"} de compra pendiente{ordenes.length === 1 ? "" : "s"}{ordenesSinFecha > 0 && <> ({ordenesSinFecha} sin fecha máxima: cae{ordenesSinFecha === 1 ? "" : "n"} en el primer bloque)</>}</>}
             .
           </p>
-          <p>
-            Los cobros de proyectos todavía no tienen fecha esperada: de cobros sólo entran los ingresos
-            recurrentes. El primer bloque cuenta de hoy en adelante.
+          <p data-cobros-dice>
+            {cobros.cobros.length > 0
+              ? <>{cobros.cobros.length} cobro{cobros.cobros.length === 1 ? "" : "s"} de proyectos por su plan de pagos, con lo ya cobrado descontado.</>
+              : <>Ningún cobro de proyecto con fecha: se fechan en el plan de pagos de cada proyecto.</>}
+            {cobros.sin_fecha > 0 && (
+              <> <span className="font-medium">{formatMonto(cobros.sin_fecha, empresa.moneda, { short: true })} por cobrar sin fecha</span> en {cobros.proyectos_sin_fecha} proyecto{cobros.proyectos_sin_fecha === 1 ? "" : "s"}: no entra hasta que tenga plan.</>
+            )}
+            {" "}El primer bloque cuenta de hoy en adelante.
           </p>
         </div>
       </div>
