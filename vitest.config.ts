@@ -21,6 +21,9 @@ export default defineConfig({
     // `/auth/codigo`, y el segundo código invalida al primero si corren juntos.
     fileParallelism: false,
     environment: "node",
+    // Un corte de conexión con staging repite la LECTURA, nunca la escritura
+    // (6-oct; pruebas/red-de-staging.ts).
+    setupFiles: ["pruebas/red-de-staging.ts"],
     testTimeout: 30000,
     env: {
       NEXT_PUBLIC_FUENTE: "api",
