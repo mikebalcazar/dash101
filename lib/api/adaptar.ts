@@ -110,6 +110,8 @@ export interface FilaItem { id: string; proyecto_id: string | null; nombre: stri
    * (contrato 0.36.0, POST /items/:id/separar). Un renglón que no venga de
    * aquello no lo trae. */
   refs?: { agrupados?: unknown[] } | null }
+/** 0.70.0 · Lo que de un pago le toca a un ítem (el anticipo). Centavos. */
+export interface FilaMovimientoItem { id: string; movimiento_id: string; item_id: string; proyecto_id: string | null; monto: number; creado_at: string }
 export interface FilaPartida { id: string; proyecto_id: string; item_id: string | null; proveedor_id: string | null; proveedor_nombre: string | null; concepto: string | null; monto_acordado: number; monto_pagado: number; estado: 'pendiente' | 'parcial' | 'pagado' }
 export interface FilaMovimiento {
   id: string; tipo: 'ingreso' | 'egreso'; monto: number; fecha: string; cuenta_id: string;
@@ -181,13 +183,15 @@ export function partida(f: FilaPartida): PartidaProyecto {
 /** Un ítem de la suite, tal como la pantalla del proyecto lo enseña. Ojo:
  *  `producto_id` es el modelo de CATÁLOGO al que pertenece, otra cosa.
  *  `pagado` es Σ ingresos con ese `item_id`, que es lo que Firestore guardaba. */
-export function item(f: FilaItem, movimientos: FilaMovimiento[]): ItemProyecto {
+export function item(f: FilaItem, movimientos: FilaMovimiento[], anticipos: FilaMovimientoItem[] = []): ItemProyecto {
   let pagado = 0;
   for (const m of movimientos) if (m.item_id === f.id && m.tipo === 'ingreso') pagado += m.monto;
+  let anticipo = 0;
+  for (const a of anticipos) if (a.item_id === f.id) anticipo += a.monto;
   return {
     id: f.id, nombre: f.nombre, descripcion: f.descripcion ?? '', monto: aPesos(f.monto),
     // Una API vieja no manda `cantidad`; uno es lo que siempre quiso decir.
-    cantidad: Number(f.cantidad ?? 1) || 1, pagado: aPesos(pagado),
+    cantidad: Number(f.cantidad ?? 1) || 1, pagado: aPesos(pagado), anticipo: aPesos(anticipo),
     fecha_entrega: aTimestamp(f.fecha_entrega), quell_id: f.origen?.quell_id ?? null,
     partida: String(f.partida ?? ''), orden: Number(f.orden ?? 0) || 0,
     producto_id: f.producto_id ?? null, clave: f.clave ?? null,
@@ -197,7 +201,7 @@ export function item(f: FilaItem, movimientos: FilaMovimiento[]): ItemProyecto {
 
 export function proyecto(
   f: FilaProyecto,
-  partes: { partidas: FilaPartida[]; items: FilaItem[]; movimientos: FilaMovimiento[]; clientes: Map<string, FilaCliente> },
+  partes: { partidas: FilaPartida[]; items: FilaItem[]; movimientos: FilaMovimiento[]; clientes: Map<string, FilaCliente>; anticipos?: FilaMovimientoItem[] },
 ): Proyecto {
   const cli = partes.clientes.get(f.cliente_id);
   const compromiso = aPesos(f.compromiso);
@@ -206,7 +210,7 @@ export function proyecto(
   return {
     id: f.id, nombre: f.nombre, descripcion: f.descripcion ?? '', cliente_id: f.cliente_id,
     cliente_nombre: cli?.nombre ?? '', cliente_uid: cli?.portal_activo ? cli.usuario_id : null,
-    items: partes.items.filter((i) => i.proyecto_id === f.id && i.estado === 'vendido').map((i) => item(i, partes.movimientos)),
+    items: partes.items.filter((i) => i.proyecto_id === f.id && i.estado === 'vendido').map((i) => item(i, partes.movimientos, partes.anticipos ?? [])),
     precio_venta: aPesos(f.precio_venta), compromiso_total: compromiso, cobrado, pagado,
     // Las mismas fórmulas que recalcularProyecto() tenía en Firestore.
     disponible: cobrado - pagado, margen_proyectado: aPesos(f.precio_venta) - compromiso,

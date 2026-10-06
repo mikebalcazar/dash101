@@ -19,6 +19,7 @@ import { getEmpresa, updateEmpresa } from "@/lib/empresa";
 import { createCuenta, listCuentas, updateCuenta, deleteCuenta } from "@/lib/cuentas";
 import { createCliente, getCliente, updateCliente, deleteCliente, getClienteUid } from "@/lib/clientes";
 import { createProveedor, getProveedor, deleteProveedor } from "@/lib/proveedores";
+import { anticiposDeMovimiento, ponerAnticipos } from "@/lib/movimientos";
 import { createProyecto, getProyecto, listProyectos, updateProyecto, deleteProyecto } from "@/lib/proyectos";
 import { createMovimiento, listMovimientos, deleteMovimiento } from "@/lib/movimientos";
 import { createOpex, listOpex, updateOpex, deleteOpex } from "@/lib/opex";
@@ -174,6 +175,18 @@ describe("el proyecto: precio, ítems, partidas y los cachés que la API recalcu
     expect(movs[0].descripcion).toBe("Anticipo tablero"); // el más reciente primero
     expect(movs[0]).toMatchObject({ cuenta_nombre: "Caja", proyecto_nombre: "Cocina de prueba", contraparte_tipo: "proveedor" });
     expect(movs[1]).toMatchObject({ producto_nombre: "Cocina de prueba", contraparte_tipo: "cliente" });
+  });
+
+  it("el anticipo se reparte entre ítems y el ítem lo suma; más de lo que trae el pago se rechaza con palabras (0.70.0)", async () => {
+    const p0 = (await getProyecto(ids.proyecto))!;
+    const item = p0.items![0].id;
+    await ponerAnticipos(ids.ingreso, [{ item_id: item, monto: 1500 }]);
+    expect(await anticiposDeMovimiento(ids.ingreso)).toMatchObject([{ item_id: item, monto: 1500 }]);
+    expect((await getProyecto(ids.proyecto))!.items![0].anticipo).toBe(1500);
+    await expect(ponerAnticipos(ids.ingreso, [{ item_id: item, monto: 2500 }])).rejects.toThrow(/no alcanza/);
+    // Se reemplaza entero: el rechazo dejó la lista vacía; se vuelve a poner.
+    await ponerAnticipos(ids.ingreso, [{ item_id: item, monto: 1500 }]);
+    expect((await getProyecto(ids.proyecto))!.items![0].anticipo).toBe(1500);
   });
 
   it("editar: ítems por id, partidas por proveedor; el precio es la suma de los ítems", async () => {

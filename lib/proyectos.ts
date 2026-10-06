@@ -78,6 +78,7 @@ function armarItems(
       monto: p.monto,
       cantidad: p.cantidad && p.cantidad > 0 ? Math.trunc(p.cantidad) : 1,
       pagado: prevById.get(id)?.pagado ?? 0,
+      anticipo: prevById.get(id)?.anticipo ?? 0,
       fecha_entrega: p.fecha_entrega ? Timestamp.fromDate(p.fecha_entrega) : null,
       quell_id: p.quell_id ?? null,
     };
