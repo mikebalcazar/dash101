@@ -24,6 +24,7 @@
  * la empresa y el que baja el cliente digan lo mismo.
  */
 
+import { BotonVerItem, NombreDeItem } from "@/components/panel-item";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
@@ -153,8 +154,11 @@ export default function EstadoDelProyectoPage() {
               {d.items.map((i) => (
                 <tr key={i.id} className="border-b border-black/5 no-partir">
                   <td className="py-1.5 text-ink-dim">
-                    {i.clave ? <span className="text-ink-muted">{i.clave} · </span> : null}
-                    {i.nombre}
+                    <NombreDeItem id={i.id}>
+                      {i.clave ? <span className="text-ink-muted">{i.clave} · </span> : null}
+                      {i.nombre}
+                    </NombreDeItem>
+                    <BotonVerItem id={i.id} className="ml-1 no-print" />
                     {i.producto_nombre && i.producto_nombre !== i.nombre && (
                       <span className="block text-[11px] text-ink-muted">{i.producto_nombre}</span>
                     )}

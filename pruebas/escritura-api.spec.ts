@@ -20,6 +20,7 @@ import { createCuenta, listCuentas, updateCuenta, deleteCuenta } from "@/lib/cue
 import { createCliente, getCliente, updateCliente, deleteCliente, getClienteUid } from "@/lib/clientes";
 import { createProveedor, getProveedor, deleteProveedor } from "@/lib/proveedores";
 import { anticiposDeMovimiento, ponerAnticipos } from "@/lib/movimientos";
+import { piezaDeItem, urlPiezaEnQuell } from "@/lib/pieza";
 import { createProyecto, getProyecto, listProyectos, updateProyecto, deleteProyecto } from "@/lib/proyectos";
 import { createMovimiento, listMovimientos, deleteMovimiento } from "@/lib/movimientos";
 import { createOpex, listOpex, updateOpex, deleteOpex } from "@/lib/opex";
@@ -187,6 +188,12 @@ describe("el proyecto: precio, ítems, partidas y los cachés que la API recalcu
     // Se reemplaza entero: el rechazo dejó la lista vacía; se vuelve a poner.
     await ponerAnticipos(ids.ingreso, [{ item_id: item, monto: 1500 }]);
     expect((await getProyecto(ids.proyecto))!.items![0].anticipo).toBe(1500);
+  });
+
+  it("el panel del ítem: un ítem sin pieza en el plano lo dice con palabras, y la liga a quell101 apunta a la pieza (6-oct)", async () => {
+    const item = (await getProyecto(ids.proyecto))!.items![0].id;
+    await expect(piezaDeItem(item)).rejects.toThrow(/ningún plano/);
+    expect(urlPiezaEnQuell("obra 1", "pieza/2")).toBe("https://bitacora-obra-staging.mike-929.workers.dev/#/p/obra%201/e/pieza%2F2");
   });
 
   it("editar: ítems por id, partidas por proveedor; el precio es la suma de los ítems", async () => {

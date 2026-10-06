@@ -53,6 +53,7 @@ import type { ItemFuera } from "@/lib/api/leer";
 import { formatDateShort, formatMonto } from "@/lib/format";
 import type { ItemProyecto, Proyecto } from "@/types/schema";
 import type { Timestamp } from "firebase/firestore";
+import { BotonVerItem, NombreDeItem } from "@/components/panel-item";
 
 const SIN = "__sin__";
 /* La pestaña que no es partida: lo que está fuera del alcance. Mike, 2-oct:
@@ -605,9 +606,13 @@ function FilaDeItem({
               {abierta ? <IconMinus size={11} /> : <IconPlus size={11} />}
             </button>
             <div className="min-w-0">
-              <p className="text-sm font-medium text-ink-dim">
-                {fila.clave && <span className="text-ink-muted font-normal">{fila.clave} · </span>}
-                {fila.nombre}
+              {/* Mike, 6-oct: picar el ítem, o el ⓘ, abre el panel de la obra. */}
+              <p className="text-sm font-medium text-ink-dim flex items-start gap-1">
+                <NombreDeItem id={fila.id}>
+                  {fila.clave && <span className="text-ink-muted font-normal">{fila.clave} · </span>}
+                  {fila.nombre}
+                </NombreDeItem>
+                <BotonVerItem id={fila.id} />
               </p>
               {pestana === "" && fila.partida && (
                 <p className="text-[10px] text-ink-muted uppercase tracking-wide mt-0.5">{fila.partida}</p>
@@ -1254,8 +1259,11 @@ function FueraDelAlcance({
           <li key={f.id} className="py-2">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm text-ink-dim flex-1 min-w-[10rem]">
-                {f.clave ? <span className="text-ink-muted">{f.clave} · </span> : null}
-                {f.nombre}
+                <NombreDeItem id={f.id}>
+                  {f.clave ? <span className="text-ink-muted">{f.clave} · </span> : null}
+                  {f.nombre}
+                </NombreDeItem>
+                <BotonVerItem id={f.id} className="ml-1" />
                 {f.cantidad > 1 ? <span className="text-ink-muted"> · {f.cantidad} piezas</span> : null}
                 {f.descripcion ? <span className="block text-[11px] text-ink-muted">{f.descripcion}</span> : null}
                 <span className="block text-[11px] text-ink-muted">
