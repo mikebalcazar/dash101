@@ -83,7 +83,7 @@ export async function getProveedor(id: string): Promise<Proveedor | null> {
 /* ─────────────── proyectos ─────────────── */
 
 async function partesDeProyectos() {
-  const [partidas, items, movimientos, clientes] = await Promise.all([
+  const [partidas, items, movimientos, anticipos, clientes] = await Promise.all([
     listar<A.FilaPartida>('partidas'),
     /* Sólo los vivos: el adaptador tira los cancelados de todos modos, y
      * pedirlos nada más los hace ocupar lugar contra el tope de 500 de la
@@ -100,9 +100,11 @@ async function partesDeProyectos() {
      * un proyecto de hace meses salen «sin pagar». Se vio el 1-oct en la
      * empresa demo, que pasó de 500 movimientos al juntar sus registros. */
     listar<A.FilaMovimiento>('movimientos', { limite: '5000' }),
+    // 0.70.0 · los anticipos repartidos por ítem (candado del cronograma)
+    listar<A.FilaMovimientoItem>('movimiento_items', { limite: '5000' }),
     listar<A.FilaCliente>('clientes'),
   ]);
-  return { partidas, items, movimientos, clientes: porId(clientes) };
+  return { partidas, items, movimientos, clientes: porId(clientes), anticipos };
 }
 
 export async function listProyectos(): Promise<Proyecto[]> {
@@ -273,4 +275,10 @@ export async function getUserDoc(): Promise<Usuario | null> {
   const sesion = await yo();
   if (!sesion) return null;
   return A.usuario(sesion, org());
+}
+
+/** 0.70.0 · Lo que de un pago se repartió entre ítems (el anticipo). En pesos. */
+export async function anticiposDeMovimiento(movimiento_id: string): Promise<Array<{ id: string; item_id: string; monto: number }>> {
+  const filas = await listar<A.FilaMovimientoItem>('movimiento_items', { movimiento_id });
+  return filas.map((f) => ({ id: f.id, item_id: f.item_id, monto: A.aPesos(f.monto) }));
 }

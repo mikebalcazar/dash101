@@ -10,7 +10,7 @@ import { listCuentas } from "@/lib/cuentas";
 import { listClientes, createCliente } from "@/lib/clientes";
 import { listProveedores, createProveedor } from "@/lib/proveedores";
 import { listProyectos, createProyecto } from "@/lib/proyectos";
-import { createMovimiento, getMovimiento, updateMovimiento, type MovimientoInput } from "@/lib/movimientos";
+import { anticiposDeMovimiento, createMovimiento, getMovimiento, ponerAnticipos, updateMovimiento, type MovimientoInput } from "@/lib/movimientos";
 import type {
   Cuenta,
   Cliente,
@@ -85,6 +85,17 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
   const [cuentaId, setCuentaId] = useState("");
   const [contraparteId, setContraparteId] = useState("");
   const [productoId, setProductoId] = useState("");
+  /* El anticipo por ítem (contrato 0.70.0). Mike, 6-oct-2026: «a la hora de
+   * registrar un pago, se debe poder alocar cantidades a cada ítem. Puede
+   * definirse por monto, por porcentaje, o distribuir entre los ítems
+   * seleccionados». Es uno de los dos candados del cronograma de quell101:
+   * sin anticipo, la pieza corre desde hoy. Se reparte lo que se quiera del
+   * pago (no tiene que ser todo); lo que no se reparte queda al proyecto. */
+  const [repartir, setRepartir] = useState(false);
+  const [modoReparto, setModoReparto] = useState<"monto" | "porcentaje" | "proporcional" | "iguales">("monto");
+  const [selItems, setSelItems] = useState<Set<string>>(new Set());
+  const [valores, setValores] = useState<Record<string, string>>({});
+  const [teniaAnticipos, setTeniaAnticipos] = useState(false);
   const [descripcion, setDescripcion] = useState("");
   const [showNota, setShowNota] = useState(false);
   /* La factura, en tres estados y no en una palomita.
@@ -177,6 +188,13 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
         setGastoGeneral(m.categoria === CATEGORIA_GASTO_GENERAL);
         setFactura(m.facturado ? "ya" : m.requiere_factura ? "falta" : "no");
         if (m.descripcion) { setDescripcion(m.descripcion); setShowNota(true); }
+        // Lo que ya estaba repartido entre ítems, para corregirlo aquí mismo.
+        anticiposDeMovimiento(movimientoId).then((lista) => {
+          if (!vivo || !lista.length) return;
+          setTeniaAnticipos(true); setRepartir(true); setModoReparto("monto");
+          setSelItems(new Set(lista.map((a) => a.item_id)));
+          setValores(Object.fromEntries(lista.map((a) => [a.item_id, String(a.monto)])));
+        }).catch(() => { /* sin reparto, pero la pantalla sirve */ });
         archivosDe("movimientos", movimientoId).then((a) => { if (vivo) setColgados(a); }).catch(() => { /* sin lista, pero la pantalla sirve */ });
       } catch (e) {
         if (vivo) setBloqueado(e instanceof Error ? e.message : "No se pudo abrir el movimiento.");
@@ -222,6 +240,25 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
   const proyectoSel = proyectos.find((p) => p.id === proyectoId);
   const itemsDelProyecto = proyectoSel?.items ?? [];
   const productoSel = itemsDelProyecto.find((pr) => pr.id === productoId);
+
+  /* Lo que le toca a cada ítem según el modo, redondeado al centavo. Por
+   * monto: lo tecleado. Por porcentaje: ese tanto del pago. Proporcional:
+   * el pago repartido según el precio de cada ítem escogido. Iguales: el
+   * pago entre los escogidos, en partes iguales. */
+  const montoNum = parseFloat(monto) || 0;
+  const asignaciones = useMemo(() => {
+    if (!repartir) return [] as Array<{ item_id: string; monto: number }>;
+    const escogidos = itemsDelProyecto.filter((it) => selItems.has(it.id));
+    const centavos = (x: number) => Math.round(x * 100) / 100;
+    if (modoReparto === "monto") return escogidos.map((it) => ({ item_id: it.id, monto: centavos(parseFloat(valores[it.id] ?? "") || 0) }));
+    if (modoReparto === "porcentaje") return escogidos.map((it) => ({ item_id: it.id, monto: centavos(montoNum * (parseFloat(valores[it.id] ?? "") || 0) / 100) }));
+    if (modoReparto === "iguales") return escogidos.map((it) => ({ item_id: it.id, monto: escogidos.length ? centavos(montoNum / escogidos.length) : 0 }));
+    const base = escogidos.reduce((s, it) => s + (it.monto || 0), 0);
+    return escogidos.map((it) => ({ item_id: it.id, monto: base ? centavos(montoNum * (it.monto || 0) / base) : 0 }));
+  }, [repartir, itemsDelProyecto, selItems, modoReparto, valores, montoNum]);
+  const repartido = Math.round(asignaciones.reduce((s, a) => s + a.monto, 0) * 100) / 100;
+  const sobraReparto = Math.round((montoNum - repartido) * 100) / 100;
+  const escoge = (id: string, si: boolean) => setSelItems((prev) => { const n = new Set(prev); if (si) n.add(id); else n.delete(id); return n; });
 
   const fechaFacturaTocada = useRef(false);
   const ivaTocado = useRef(false);
@@ -307,6 +344,10 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
       );
       return;
     }
+    if (repartir && repartido > montoNum + 0.005) {
+      setError(`Repartiste ${formatMonto(repartido)} entre ítems y el pago es de ${formatMonto(montoNum)}. Baja algún reparto.`);
+      return;
+    }
     const cuenta = cuentas.find((c) => c.id === cuentaId);
     if (!cuenta) {
       setError("Selecciona una cuenta");
@@ -361,6 +402,13 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
       const id = movimientoId
         ? (await updateMovimiento(movimientoId, datos), movimientoId)
         : await createMovimiento(user.uid, datos);
+
+      /* El reparto del anticipo, colgado del movimiento que se acaba de
+       * guardar. Se manda entero (se reemplaza); si se quitó la marca y
+       * antes había reparto, se manda vacío para quitarlo. */
+      if (tipo === "ingreso" && !gastoGeneral && proyectoId && (repartir || teniaAnticipos)) {
+        await ponerAnticipos(id, repartir ? asignaciones.filter((a) => a.monto > 0) : []);
+      }
 
       /* Si dijo «ya se facturó», la factura se captura y se cuelga AQUÍ
        * mismo, del movimiento que se acaba de guardar. Nunca se crea otro
@@ -581,6 +629,59 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
                       </option>
                     ))}
                   </select>
+                </div>
+              )}
+
+              {/* El anticipo por ítem (contrato 0.70.0; Mike, 6-oct-2026) */}
+              {isIngreso && !gastoGeneral && itemsDelProyecto.length > 0 && (
+                <div className="rounded-xl border border-black/10 p-3 space-y-2" data-reparto>
+                  <label className="flex items-center gap-2 text-xs font-medium text-ink-dim cursor-pointer">
+                    <input type="checkbox" checked={repartir} onChange={(e) => setRepartir(e.target.checked)} />
+                    Repartir este pago como anticipo entre ítems
+                    <span className="text-ink-muted font-normal">(candado del cronograma en quell101)</span>
+                  </label>
+                  {repartir && (
+                    <>
+                      <div className="flex flex-wrap gap-1.5">
+                        {([["monto", "Por monto"], ["porcentaje", "Por porcentaje"], ["proporcional", "Proporcional al precio"], ["iguales", "En partes iguales"]] as const).map(([k, t]) => (
+                          <button key={k} type="button" onClick={() => setModoReparto(k)}
+                            className={`px-2.5 py-1 rounded-lg text-xs border transition ${modoReparto === k ? "bg-ink text-white border-ink" : "bg-white border-black/10 text-ink-dim hover:border-black/30"}`}>
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="space-y-1">
+                        {itemsDelProyecto.map((it) => {
+                          const sel = selItems.has(it.id);
+                          const a = asignaciones.find((x) => x.item_id === it.id);
+                          return (
+                            <div key={it.id} className={`flex items-center gap-2 text-xs rounded-lg px-2 py-1.5 ${sel ? "bg-mint-50" : "bg-white"}`} data-reparto-item={it.id}>
+                              <input type="checkbox" checked={sel} onChange={(e) => escoge(it.id, e.target.checked)} />
+                              <span className="flex-1 min-w-0 truncate">
+                                {it.clave ? <b className="font-medium">{it.clave}</b> : null} {it.nombre}
+                                <span className="text-ink-muted"> · {formatMonto(it.monto)}{it.anticipo ? ` · ya ${formatMonto(it.anticipo)}` : ""}</span>
+                              </span>
+                              {sel && (modoReparto === "monto" || modoReparto === "porcentaje") ? (
+                                <span className="flex items-center gap-1">
+                                  {modoReparto === "monto" ? <span className="text-ink-muted">$</span> : null}
+                                  <input type="number" min="0" step={modoReparto === "monto" ? "0.01" : "0.1"} inputMode="decimal"
+                                    value={valores[it.id] ?? ""} onChange={(e) => setValores({ ...valores, [it.id]: e.target.value })}
+                                    className="w-24 bg-white border border-black/10 rounded-lg px-2 py-1 text-xs text-right focus:outline-none focus:border-ink/40" />
+                                  {modoReparto === "porcentaje" ? <span className="text-ink-muted">%</span> : null}
+                                </span>
+                              ) : sel ? (
+                                <span className="tabular-nums text-ink-dim">{formatMonto(a?.monto ?? 0)}</span>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className={`text-xs ${sobraReparto < 0 ? "text-mauve-900" : "text-ink-muted"}`} data-reparto-total>
+                        Repartido {formatMonto(repartido)} de {formatMonto(montoNum)}
+                        {sobraReparto > 0 ? ` · ${formatMonto(sobraReparto)} quedan al proyecto sin ítem` : sobraReparto < 0 ? ` · te pasas por ${formatMonto(-sobraReparto)}` : ""}
+                      </p>
+                    </>
+                  )}
                 </div>
               )}
 

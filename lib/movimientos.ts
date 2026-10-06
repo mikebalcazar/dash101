@@ -259,3 +259,18 @@ export async function recalcularCuenta(cuentaId: string): Promise<void> {
     tx.update(cuentaRef, { saldo_actual: saldoInicial + delta });
   });
 }
+
+/* ─────────────── el anticipo por ítem (0.70.0) ─────────────── */
+export type AnticipoDeItem = { item_id: string; monto: number };
+
+/** Lo que de un pago se repartió entre ítems, en pesos. */
+export async function anticiposDeMovimiento(movimiento_id: string): Promise<Array<{ id: string; item_id: string; monto: number }>> {
+  if (fuente() !== 'api') return [];
+  return leer.anticiposDeMovimiento(movimiento_id);
+}
+
+/** Repartir el pago entre ítems (se reemplaza entero). Sólo con la suite. */
+export async function ponerAnticipos(movimiento_id: string, lista: AnticipoDeItem[]): Promise<void> {
+  if (fuente() !== 'api') throw new Error('Repartir el anticipo por ítem sólo está disponible con la suite.');
+  return escribir.ponerAnticipos(movimiento_id, lista);
+}

@@ -65,8 +65,12 @@ function enClaro(e: unknown, tabla: string): never {
         throw new Error(`La API no deja escribir ${String((d.campos as string[])?.join(', '))} en ${tabla}.`);
       case 'dinero_no_entero':
         throw new Error(`Monto inválido en ${String(d.campo)}: ${String(d.recibido)}.`);
-      case 'datos_invalidos':
+      case 'datos_invalidos': {
+        // La API contesta con palabras por campo (`errores`): se enseñan tal cual.
+        const porCampo = d.errores && typeof d.errores === 'object' ? Object.values(d.errores as Record<string, string>).join(' ') : '';
+        if (porCampo) throw new Error(porCampo);
         throw new Error(`Faltan datos${d.falta ? `: ${String(Array.isArray(d.falta) ? d.falta.join(', ') : d.falta)}` : ''}${d.pin ? `: ${String(d.pin)}` : ''}.`);
+      }
       case 'sin_sesion':
         throw new Error('La sesión terminó. Vuelve a entrar.');
     }
@@ -501,4 +505,22 @@ export async function updateOpex(id: string, d: Partial<OpexInput>): Promise<voi
 
 export async function deleteOpex(id: string): Promise<void> {
   await borrar('opex', id);
+}
+
+/* ─────────────── anticipos por ítem (0.70.0) ─────────────── */
+
+/** Repartir un pago entre ítems (Mike, 6-oct-2026: «a la hora de registrar un
+ *  pago, se debe poder alocar cantidades a cada ítem»). Se reemplaza entero:
+ *  lo que había de ese movimiento se quita y se escribe la lista nueva. La
+ *  API valida cada renglón (ingreso, ítem del mismo proyecto, la suma no pasa
+ *  del monto) y contesta con palabras si no cuadra. Se escribe de uno en uno
+ *  y en orden: si la API rechaza uno, los anteriores ya quedaron y el error
+ *  dice cuál fue; la pantalla lo enseña y la persona corrige. */
+export async function ponerAnticipos(movimiento_id: string, lista: Array<{ item_id: string; monto: number }>): Promise<void> {
+  const previos = await listar<A.FilaMovimientoItem>('movimiento_items', { movimiento_id });
+  for (const p of previos) await borrar('movimiento_items', p.id);
+  for (const a of lista) {
+    if (!(a.monto > 0)) continue;
+    await crear<A.FilaMovimientoItem>('movimiento_items', { movimiento_id, item_id: a.item_id, monto: A.aCentavos(a.monto) });
+  }
 }

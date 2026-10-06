@@ -136,6 +136,9 @@ export interface ItemProyecto {
   cantidad: number;
   /** Σ ingresos con producto_id == id — calculado por recalcularProyecto() */
   pagado: number;
+  /** Lo que de los pagos se le ha repartido como anticipo (contrato 0.70.0).
+   *  Es uno de los dos candados del cronograma de quell101. */
+  anticipo: number;
   fecha_entrega?: Timestamp | null;
   quell_id?: string | null;
   /** El capítulo bajo el que va el ítem —Cocina, Recámaras— (contrato
