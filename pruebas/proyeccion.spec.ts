@@ -17,7 +17,7 @@
 import { describe, expect, it } from "vitest";
 import type { Opex } from "@/types/schema";
 import {
-  etiquetaDeLapso, inicioDeBloque, lapsos, nominaOcurreEn, planear, primerBloqueBajoUmbral, proyectar,
+  cobrosDeProyectos, etiquetaDeLapso, inicioDeBloque, lapsos, nominaOcurreEn, planear, primerBloqueBajoUmbral, proyectar,
   siguienteBloque,
 } from "@/lib/proyeccion";
 import type { ProgramaDeNomina } from "@/lib/nomina";
@@ -178,5 +178,57 @@ describe("las órdenes de compra pendientes entran en su fecha máxima de pago",
       HOY, d("2026-10-31"),
     );
     expect(todo.map((x) => x.id)).toEqual(["a", "Renta"]);
+  });
+});
+
+describe("los cobros de proyectos entran por su plan de pagos, con lo cobrado descontado (0.72.0)", () => {
+  /* Mike escogió con botones (6-oct): «plan de pagos por proyecto». Lo que
+   * se mide: que lo cobrado cubra las parcialidades EN ORDEN DE FECHA, que
+   * lo que sobra de cada una sea el cobro que falta, que lo por cobrar sin
+   * parcialidad quede sin fecha y se diga cuánto es, y que un proyecto
+   * cobrado de más no reste ni invente cobros negativos. */
+  const cocina = { id: "p1", nombre: "Cocina", precio_venta: 1_000_000, cobrado: 450_000 };
+  const plan = [
+    { id: "c", proyecto_id: "p1", concepto: "Entrega", fecha: "2026-12-15", monto: 300_000 },
+    { id: "a", proyecto_id: "p1", concepto: "Anticipo", fecha: "2026-10-20", monto: 400_000 },
+    { id: "b", proyecto_id: "p1", concepto: "Avance", fecha: "2026-11-15", monto: 300_000 },
+  ];
+
+  it("lo cobrado cubre primero la parcialidad más vieja; lo que sobra de cada una es lo que falta", () => {
+    const r = cobrosDeProyectos([cocina], plan);
+    expect(r.cobros.map((c) => [c.id, c.monto])).toEqual([["b", 250_000], ["c", 300_000]]);
+    expect(r.cobros[0].nombre).toBe("Cocina · Avance");
+    expect(r.sin_fecha, "el plan cubre todo el precio").toBe(0);
+    expect(r.proyectos_sin_fecha).toBe(0);
+  });
+
+  it("lo por cobrar que ningún plan fecha queda sin fecha, y se dice de cuántos proyectos", () => {
+    const closet = { id: "p2", nombre: "Clóset", precio_venta: 200_000, cobrado: 0 };
+    const r = cobrosDeProyectos([cocina, closet], [...plan, { id: "d", proyecto_id: "p2", concepto: "", fecha: "2026-11-01", monto: 50_000 }]);
+    expect(r.cobros.find((c) => c.id === "d")).toMatchObject({ nombre: "Clóset · Parcialidad", monto: 50_000 });
+    expect(r.sin_fecha).toBe(150_000);
+    expect(r.proyectos_sin_fecha).toBe(1);
+    const sinPlan = cobrosDeProyectos([closet], []);
+    expect(sinPlan.cobros).toEqual([]);
+    expect(sinPlan.sin_fecha).toBe(200_000);
+  });
+
+  it("cobrado de más: nada pendiente, nada negativo", () => {
+    const r = cobrosDeProyectos([{ ...cocina, cobrado: 1_200_000 }], plan);
+    expect(r.cobros).toEqual([]);
+    expect(r.sin_fecha).toBe(0);
+  });
+
+  it("en la proyección caen en su fecha como ingreso; la vencida, en el primer bloque y marcada", () => {
+    const r = cobrosDeProyectos([{ ...cocina, cobrado: 0 }], [
+      ...plan,
+      { id: "z", proyecto_id: "p1", concepto: "Vieja", fecha: "2026-09-01", monto: 10_000 },
+    ]);
+    const p = proyectar(0, { opex: [], cobros: r.cobros }, { bloque: "mes", meses: 3, hoy: HOY });
+    expect(p[0].planeados.map((x) => [x.id, x.vencido])).toEqual([["z", true], ["a", false]]);
+    expect(p[0].ingresos).toBe(410_000);
+    expect(p[1].ingresos).toBe(300_000);
+    expect(p[2].ingresos).toBe(300_000);
+    expect(p[0].planeados.every((x) => x.clase === "cobro" && x.tipo === "ingreso")).toBe(true);
   });
 });
