@@ -292,6 +292,9 @@ export interface CensoDeCancelados {
    *  creerlo. */
   venta_antes: number;
   venta_despues: number;
+  /** Sólo al borrar UN renglón (API 0.80.0): lo que se queda en el proyecto
+   *  sin ítem en vez de detener el borrado. */
+  se_sueltan?: { movimientos: number; compromisos: number; archivos: number };
 }
 
 const censo = (proyecto_id: string, modo: 'seco' | 'borrar') =>
@@ -302,3 +305,16 @@ export const revisarCancelados = (proyecto_id: string) => censo(proyecto_id, 'se
 
 /** Hazlo. No se deshace. */
 export const borrarCancelados = (proyecto_id: string) => censo(proyecto_id, 'borrar');
+
+/* UN renglón (API 0.80.0). Mike, 7-oct, con «Sanje CC37» en pantalla:
+ * «Elimínalo, yo no encuentro dónde». Con `soltar`: el cobro, el compromiso
+ * y el archivo del ítem se quedan en el proyecto, sin ítem; sólo un avance de
+ * obra lo detiene. */
+const uno = (proyecto_id: string, item_id: string, modo: 'seco' | 'borrar') =>
+  pedir<CensoDeCancelados>(`${base(proyecto_id)}/borrar-cancelados`, { method: 'POST', body: { modo, ids: [item_id], soltar: true } });
+
+/** Qué pasaría con ese renglón. No escribe nada. */
+export const revisarUnSacado = (proyecto_id: string, item_id: string) => uno(proyecto_id, item_id, 'seco');
+
+/** Bórralo. No se deshace. */
+export const borrarUnSacado = (proyecto_id: string, item_id: string) => uno(proyecto_id, item_id, 'borrar');

@@ -44,7 +44,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { IconArrowUp, IconArrowDown, IconCheck, IconX, IconArrowsSort, IconLayersSubtract, IconThumbUp, IconBan, IconChevronDown, IconChevronRight, IconArrowsSplit, IconEdit, IconPlus, IconMinus, IconTrash, IconAlertTriangle } from "@tabler/icons-react";
 import {
-  acomodar, agrupables, agrupar, aprobarItem, asignarProducto, bitacoraAlcance, borrarCancelados,
+  acomodar, agrupables, agrupar, aprobarItem, asignarProducto, bitacoraAlcance, borrarCancelados, borrarUnSacado, revisarUnSacado,
   NOMBRE_MOVIMIENTO_ALCANCE, productosDelProyecto, revisarCancelados, sacarItem, separarItem, separarProducto,
   type CensoDeCancelados, type GrupoDeItems, type ItemUnico, type MovimientoAlcance, type Producto,
 } from "@/lib/items-grupo";
@@ -1343,7 +1343,7 @@ function FueraDelAlcance({
                 </span>
               </span>
               <span className="text-sm text-ink-dim tabular-nums">{formatMonto(f.monto, "MXN")}</span>
-              <span className="flex gap-1.5">
+              <span className="flex flex-wrap justify-end gap-1.5">
                 <button
                   type="button"
                   onClick={() => alMover(f.id, "aprobar")}
@@ -1354,6 +1354,9 @@ function FueraDelAlcance({
                 </button>
                 {!f.sacado && (
                   <Cancelador id={f.id} nombre={f.nombre} ocupado={moviendo === f.id} alCancelar={alMover} etiqueta="Sacar" />
+                )}
+                {f.sacado && (
+                  <BorrarRenglon proyectoId={proyectoId} id={f.id} nombre={f.nombre} alBorrar={alLimpiar} />
                 )}
                 <button
                   type="button"
@@ -1530,6 +1533,87 @@ function LimpiarCancelados({ proyectoId, alLimpiar }: { proyectoId: string; alLi
       )}
       {error && <p className="text-xs text-mauve-900">{error}</p>}
     </div>
+  );
+}
+
+/** Borrar UN renglón sacado del alcance, ahí mismo (API 0.80.0).
+ *
+ *  Mike, 7-oct, con «Sanje CC37» —sacado el 20-sep, $1,440,000— en pantalla:
+ *  «Elimínalo, yo no encuentro dónde». El botón de abajo barre el proyecto
+ *  entero y vive al final de la lista; éste va en el renglón.
+ *
+ *  Dos pasos, porque no se deshace: primero pregunta a la API qué pasaría
+ *  —sin escribir— y lo dice: si se borra, y qué se queda en el proyecto
+ *  (un ítem viejo de «toda la obra» casi siempre trae el anticipo; ese
+ *  cobro NO se borra, se queda en el proyecto sin ítem). Si algo lo detiene
+ *  —un avance de obra— lo dice y no ofrece borrar. */
+function BorrarRenglon({ proyectoId, id, nombre, alBorrar }: {
+  proyectoId: string; id: string; nombre: string; alBorrar: () => void;
+}) {
+  const [censo, setCenso] = useState<CensoDeCancelados | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+  const [error, setError] = useState("");
+
+  const revisar = async () => {
+    setOcupado(true); setError("");
+    try { setCenso(await revisarUnSacado(proyectoId, id)); }
+    catch (e) { setError(e instanceof Error ? e.message : "No se pudo revisar."); }
+    finally { setOcupado(false); }
+  };
+  const borrar = async () => {
+    setOcupado(true); setError("");
+    try { await borrarUnSacado(proyectoId, id); setCenso(null); alBorrar(); }
+    catch (e) { setError(e instanceof Error ? e.message : "No se pudo borrar."); }
+    finally { setOcupado(false); }
+  };
+  const cerrar = () => { setCenso(null); setError(""); };
+
+  if (!censo && !error) {
+    return (
+      <button
+        type="button" onClick={revisar} disabled={ocupado}
+        aria-label={`Borrar ${nombre}`}
+        className="text-[11px] px-2 py-1 rounded-lg border border-black/10 text-mauve-900 disabled:opacity-40 inline-flex items-center gap-1"
+      >
+        <IconTrash size={12} /> {ocupado ? "Revisando…" : "Borrar"}
+      </button>
+    );
+  }
+
+  const seVa = !!censo?.se_van.some((x) => x.id === id);
+  const detiene = censo?.se_quedan.find((x) => x.id === id)?.porque ?? [];
+  const s = censo?.se_sueltan;
+  const sueltan = s ? [
+    s.movimientos ? `${s.movimientos} movimiento${s.movimientos === 1 ? "" : "s"} de dinero` : "",
+    s.compromisos ? `${s.compromisos} compromiso${s.compromisos === 1 ? "" : "s"} con proveedor` : "",
+    s.archivos ? `${s.archivos} archivo${s.archivos === 1 ? "" : "s"}` : "",
+  ].filter(Boolean) : [];
+  const piezas = censo?.se_van.find((x) => x.id === id)?.piezas ?? 0;
+
+  return (
+    <span role="group" aria-label={`Borrar ${nombre}`} className="basis-full mt-1 bg-cream rounded-lg px-2 py-1.5 text-[11px] text-ink-dim flex flex-wrap items-center gap-2">
+      {error ? (
+        <span className="text-mauve-900 flex-1">{error}</span>
+      ) : seVa ? (
+        <>
+          <span className="flex-1 min-w-[12rem]">
+            Se borra <b>para siempre</b>; no cambia el precio de venta.
+            {sueltan.length ? <> Se queda{sueltan.length > 1 ? "n" : ""} en el proyecto, sin ítem: {sueltan.join(", ")}.</> : null}
+            {piezas ? <> {piezas} pieza{piezas === 1 ? "" : "s"} del plano se queda{piezas === 1 ? "" : "n"} sin ítem.</> : null}
+          </span>
+          <button type="button" onClick={borrar} disabled={ocupado}
+            className="bg-mauve-900 text-white px-2 py-1 rounded-lg inline-flex items-center gap-1 disabled:opacity-40">
+            <IconTrash size={12} /> {ocupado ? "Borrando…" : "Borrar para siempre"}
+          </button>
+        </>
+      ) : (
+        <span className="flex-1">
+          <IconAlertTriangle size={12} className="inline mr-1" />
+          No se puede borrar{detiene.length ? `: trae ${detiene.join(", ")}` : ""}.
+        </span>
+      )}
+      <button type="button" onClick={cerrar} aria-label="Cerrar" className="text-ink-muted px-1"><IconX size={12} /></button>
+    </span>
   );
 }
 

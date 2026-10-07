@@ -28,7 +28,7 @@ import { createCliente } from "@/lib/clientes";
 import { createCuenta } from "@/lib/cuentas";
 import { createMovimiento } from "@/lib/movimientos";
 import { createProyecto, getProyecto } from "@/lib/proyectos";
-import { aprobarItem, borrarCancelados, sacarItem, revisarCancelados } from "@/lib/items-grupo";
+import { aprobarItem, borrarCancelados, borrarUnSacado, revisarUnSacado, sacarItem, revisarCancelados } from "@/lib/items-grupo";
 
 const CORREO = process.env.CORREO_SUPERADMIN ?? "mike@forespot.com";
 const ORG = `bc-${(process.env.GITHUB_RUN_ID ?? Date.now().toString(36)).toString().toLowerCase().slice(-12)}`;
@@ -161,5 +161,35 @@ describe("lo que trae dinero se queda", () => {
   it("en «Fuera de alcance» ya sólo queda, de los sacados, el que no se pudo borrar", async () => {
     const fuera = await fueraDeAlcance(ids.proyecto);
     expect(fuera.filter((x) => x.sacado).map((x) => x.id)).toEqual([conCobro]);
+  });
+});
+
+/* El «Borrar» del renglón (API 0.80.0). Mike, 7-oct, con «Sanje CC37» en
+ * pantalla: «Elimínalo, yo no encuentro dónde». Es justo el que se quedó
+ * arriba: el sacado con su anticipo cobrado. Aquí sí se va, y el cobro se
+ * queda en el proyecto, sin ítem. */
+describe("borrar un renglón, aunque traiga su anticipo", () => {
+  let conCobro = "", otro = "";
+
+  beforeAll(async () => {
+    conCobro = (await fueraDeAlcance(ids.proyecto)).filter((x) => x.sacado)[0].id;
+    otro = await cancelado("Otro sacado que no se toca", 1_000);
+  });
+
+  it("revisar el renglón dice que se va y qué se queda en el proyecto, sin escribir", async () => {
+    const r = await revisarUnSacado(ids.proyecto, conCobro);
+    expect(r.se_van.map((x) => x.id)).toEqual([conCobro]);
+    expect(r.se_sueltan).toEqual({ movimientos: 1, compromisos: 0, archivos: 0 });
+    expect(await vive(conCobro)).toBe(true);
+  });
+
+  it("borrarlo se lleva ese renglón y nada más; el cobro sigue en el proyecto", async () => {
+    const r = await borrarUnSacado(ids.proyecto, conCobro);
+    expect(r.borrados).toBe(1);
+    expect(await vive(conCobro)).toBe(false);
+    expect(await vive(otro)).toBe(true);
+    const movs = await pedir<{ filas: Array<{ item_id: string | null; proyecto_id: string; monto: number }> }>(`/orgs/${ORG}/movimientos?proyecto_id=${ids.proyecto}`);
+    expect(movs.filas.map((m) => [m.item_id, m.monto])).toEqual([[null, 200_000]]);
+    expect(await venta()).toBe(12_000);
   });
 });
