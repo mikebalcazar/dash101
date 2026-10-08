@@ -123,7 +123,7 @@ export default function AceptarInvitacionPage() {
         <div className="flex items-center mb-8 justify-center">
           {/* El logotipo oficial, el mismo del escaparate. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/marca/dash101.svg" alt="dash101" className="h-8" />
+          <img src="/marca/dash101-claro.svg" alt="dash101" className="h-8" />
         </div>
 
         <div className="bg-white border border-black/5 rounded-3xl p-7">
