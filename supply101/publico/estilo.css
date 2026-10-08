@@ -1,63 +1,102 @@
 /* supply101 — pensado para un teléfono en la mano, en una ferretería, con
  * una sola mano libre. Una columna, botones grandes, nada que se corte.
  *
- * Identidad de la suite: azul #0080C1, y cifras tabulares para que las
- * columnas de dinero cuadren a la vista. Sin fuentes de fuera: en el celular
- * de quien pide, una fuente que tarda es una pantalla en blanco. */
+ * El look de la suite (Mike, 8-oct-2026: «pásalo a todas»): el de cost101
+ * —fondo azul que baja de la luz a la noche, tarjetas de vidrio, botones
+ * redondos— con la tipografía y el logo de dash y quell. Las fuentes viajan
+ * con la app (publico/fonts/): nada se pide a Google, porque en el celular de
+ * quien pide una fuente que tarda es una pantalla en blanco. Los NOMBRES de
+ * las variables no cambiaron; cambia lo que valen. Al imprimir vuelven los
+ * claros (al final). */
+
+/* Tipografía de la suite 101: cifras en Fira Sans —alineadas, se leen de un
+   golpe—, texto en Raleway. "Cifras" va primero en la pila y sólo cubre
+   dígitos y signos de medida, así que los números caen en Fira solos. */
+@font-face{font-family:"Cifras";src:url("fonts/fira-cifras-400.woff2") format("woff2");font-weight:400 500;font-display:swap;unicode-range:U+0030-0039,U+00B0,U+00B1,U+00D7,U+0025}
+@font-face{font-family:"Cifras";src:url("fonts/fira-cifras-600.woff2") format("woff2");font-weight:600 900;font-display:swap;unicode-range:U+0030-0039,U+00B0,U+00B1,U+00D7,U+0025}
+@font-face{font-family:"Raleway";src:url("fonts/raleway-400.woff2") format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"Raleway";src:url("fonts/raleway-500.woff2") format("woff2");font-weight:500;font-display:swap}
+@font-face{font-family:"Raleway";src:url("fonts/raleway-600.woff2") format("woff2");font-weight:600;font-display:swap}
+@font-face{font-family:"Raleway";src:url("fonts/raleway-700.woff2") format("woff2");font-weight:700;font-display:swap}
+@font-face{font-family:"Raleway";src:url("fonts/raleway-800.woff2") format("woff2");font-weight:800;font-display:swap}
 
 :root {
-  --marca: #0080C1;
-  --marca-suave: #E4F2FA;
-  --fondo: #F5F7F8;
-  --sup: #FFFFFF;
-  --linea: #E2E7EA;
-  --tinta: #16222B;
-  --tinta-2: #5A6976;
-  --bien: #1E7A4C;
-  --bien-suave: #E2F3EA;
-  --mal: #A32D2D;
-  --mal-suave: #F8E5E5;
-  --pend: #8A6100;
-  --pend-suave: #FBF0D8;
-  --cuerpo: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color-scheme: dark;
+  --marca: #3AA3DC;            /* el azul de la marca, sobre oscuro */
+  --marca-suave: #17323F;
+  --fondo: rgba(255,255,255,.045);   /* superficie apagada */
+  --sup: rgba(255,255,255,.06);      /* campos */
+  --vidrio: linear-gradient(180deg, rgba(255,255,255,.085), rgba(255,255,255,.035));
+  --borde-vidrio: rgba(255,255,255,.13);
+  --linea: rgba(255,255,255,.10);
+  --tinta: #e8eef2;
+  --tinta-2: #a9c0ce;
+  --tenue: rgba(232,238,242,.55);
+  --bien: #5CC28E;
+  --bien-suave: #163527;
+  --mal: #F0A08A;
+  --mal-suave: #3a2320;
+  --pend: #E0A35A;
+  --pend-suave: rgba(224,163,90,.16);
+  --info: #86c9ec;
+  --cuerpo: "Cifras", "Raleway", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
 body {
-  margin: 0; background: var(--fondo); color: var(--tinta);
+  margin: 0; min-height: 100vh; color: var(--tinta);
+  background: #060d13 radial-gradient(130% 70% at 50% -12%, #2a9be0 0%, #0a6aa6 22%, #0b3655 48%, #07141e 72%, #05090d 100%) fixed;
   font-family: var(--cuerpo); font-size: 16px; line-height: 1.45;
+  font-variant-numeric: lining-nums;
 }
+a { color: var(--info); }
 
 .pag { max-width: 560px; margin: 0 auto; padding: 16px 16px 48px; }
 
 header.barra {
   display: flex; align-items: center; gap: 10px;
-  padding: 14px 16px; background: var(--sup); border-bottom: 1px solid var(--linea);
+  padding: 10px 16px; background: rgba(5,12,18,.38); border-bottom: 1px solid rgba(255,255,255,.08);
+  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
   position: sticky; top: 0; z-index: 5;
 }
-header.barra .logo {
-  width: 34px; height: 34px; border-radius: 10px; flex: 0 0 auto;
-  background: var(--marca); color: #fff; display: flex; align-items: center;
-  justify-content: center; font-weight: 700; font-size: 13px; letter-spacing: .02em;
+/* El logotipo oficial, en trazos, para fondo oscuro: palabra en blanco, aro y
+   «101» en #3AA3DC. Sustituye al «s101» hechizo. */
+header.barra .logo { height: 28px; width: auto; flex: 0 0 auto; display: block; }
+.logo-entrada { display: block; height: 36px; width: auto; margin: 8px 0 22px; }
+header.barra button.liso {
+  padding: 7px 14px; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.07);
+  border-radius: 999px; color: #fff; font-size: 13px;
 }
+header.barra button.liso:hover { background: rgba(255,255,255,.14); }
+#lista { margin-top: 16px; }
 header.barra .quien { flex: 1; min-width: 0; font-size: 12px; color: var(--tinta-2); }
 header.barra .quien b { display: block; color: var(--tinta); font-size: 14px; font-weight: 600; }
 header.barra .quien span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-h1 { font-size: 20px; margin: 0 0 2px; font-weight: 650; letter-spacing: -0.01em; }
+h1 { font-size: 20px; margin: 0 0 2px; font-weight: 600; letter-spacing: -0.01em; }
 h2 { font-size: 15px; margin: 22px 0 8px; font-weight: 600; }
 p.sub { margin: 0 0 16px; color: var(--tinta-2); font-size: 13px; }
 
-label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 4px; }
+label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 4px; color: var(--tinta-2); }
 label .pista { display: block; font-weight: 400; color: var(--tinta-2); font-size: 12px; }
 
 input, select, textarea, button { font: inherit; }
 input, select, textarea {
-  width: 100%; padding: 12px; border: 1px solid var(--linea); border-radius: 12px;
-  background: var(--sup); color: var(--tinta);
+  width: 100%; padding: 12px; border: 1px solid rgba(255,255,255,.14); border-radius: 12px;
+  background: var(--sup); color: inherit;
 }
-input:focus, select:focus, textarea:focus { outline: 2px solid var(--marca-suave); border-color: var(--marca); }
+input:hover, select:hover, textarea:hover { border-color: rgba(255,255,255,.3); }
+input:focus, select:focus, textarea:focus { outline: 2px solid rgba(58,163,220,.35); border-color: var(--marca); }
+select option { background: #0f1b24; color: #e8eef2; }
+::placeholder { color: rgba(232,238,242,.45); }
+input[type="file"] { color: var(--tinta-2); }
+input[type="file"]::file-selector-button {
+  font: inherit; font-weight: 600; margin-right: 10px; padding: 6px 12px; cursor: pointer;
+  border-radius: 999px; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.07); color: var(--tinta);
+}
+input[type="checkbox"] { accent-color: var(--marca); }
+input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(.85); }
 input.cifra { text-align: right; font-variant-numeric: tabular-nums; }
 input.grande { font-size: 26px; padding: 14px; font-weight: 600; }
 .fila { display: flex; gap: 10px; }
@@ -68,24 +107,31 @@ input.grande { font-size: 26px; padding: 14px; font-weight: 600; }
 
 button.b, a.b {
   display: block; width: 100%; text-align: center; text-decoration: none;
-  padding: 14px; border: 0; border-radius: 12px; background: var(--marca); color: #fff;
+  padding: 14px; border: 0; border-radius: 999px; background: #fff; color: #0b1b26;
   font-weight: 600; cursor: pointer; margin-top: 18px;
 }
+button.b:hover, a.b:hover { background: #e3f2fb; }
 button.b:disabled { opacity: .45; cursor: default; }
-button.b.claro, a.b.claro { background: var(--sup); color: var(--tinta); border: 1px solid var(--linea); }
+button.b.claro, a.b.claro { background: rgba(255,255,255,.07); color: var(--tinta); border: 1px solid rgba(255,255,255,.16); }
+button.b.claro:hover, a.b.claro:hover { background: rgba(255,255,255,.14); }
 button.liso {
-  background: none; border: 0; color: var(--marca); font-size: 14px; padding: 8px 0;
+  background: none; border: 0; color: var(--info); font-size: 14px; padding: 8px 0;
   cursor: pointer; font-weight: 600;
 }
 
-.tarjeta { background: var(--sup); border: 1px solid var(--linea); border-radius: 16px; padding: 14px; }
-.lista { background: var(--sup); border: 1px solid var(--linea); border-radius: 16px; overflow: hidden; }
+.tarjeta, .lista {
+  background: var(--vidrio); border: 1px solid var(--borde-vidrio); border-radius: 20px;
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+}
+.tarjeta { padding: 14px; }
+.lista { overflow: hidden; }
 .lista a.renglon {
   display: flex; gap: 12px; padding: 14px; border-bottom: 1px solid var(--linea);
   text-decoration: none; color: inherit;
 }
 .lista a.renglon:last-child { border-bottom: 0; }
-.lista a.renglon:active { background: var(--fondo); }
+.lista a.renglon:hover, .lista a.renglon:active { background: rgba(255,255,255,.05); }
 .renglon .texto { flex: 1; min-width: 0; }
 .renglon .texto b { display: block; font-weight: 600; font-size: 15px; }
 .renglon .texto small { color: var(--tinta-2); font-size: 12px; display: block; }
@@ -93,25 +139,25 @@ button.liso {
 .renglon .plata small { display: block; font-weight: 400; color: var(--tinta-2); font-size: 11px; }
 
 .marca {
-  display: inline-block; border-radius: 8px; padding: 2px 8px; font-size: 12px; font-weight: 600;
-  background: var(--marca-suave); color: #05506F;
+  display: inline-block; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 600;
+  background: var(--marca-suave); color: var(--info);
 }
 .marca.bien { background: var(--bien-suave); color: var(--bien); }
 .marca.mal { background: var(--mal-suave); color: var(--mal); }
 .marca.pend { background: var(--pend-suave); color: var(--pend); }
-.marca.gris { background: var(--fondo); color: var(--tinta-2); }
+.marca.gris { background: rgba(255,255,255,.08); color: var(--tinta-2); }
 
-.aviso { border-radius: 12px; padding: 10px 12px; font-size: 13px; margin: 12px 0; }
-.aviso.mal { background: var(--mal-suave); color: var(--mal); }
-.aviso.bien { background: var(--bien-suave); color: var(--bien); }
-.aviso.gris { background: var(--sup); border: 1px solid var(--linea); color: var(--tinta-2); }
+.aviso { border-radius: 14px; padding: 10px 12px; font-size: 13px; margin: 12px 0; }
+.aviso.mal { background: var(--mal-suave); color: var(--mal); border: 1px solid rgba(240,160,138,.28); }
+.aviso.bien { background: var(--bien-suave); color: var(--bien); border: 1px solid rgba(92,194,142,.25); }
+.aviso.gris { background: var(--fondo); border: 1px solid var(--linea); color: var(--tinta-2); }
 
 .vacio { text-align: center; padding: 36px 20px; color: var(--tinta-2); font-size: 14px; }
 .vacio b { display: block; color: var(--tinta); font-size: 15px; margin-bottom: 4px; }
 
 .papel { display: block; margin-top: 10px; }
 .papel img { width: 100%; border-radius: 12px; border: 1px solid var(--linea); }
-.papel .pdf { display: flex; gap: 8px; align-items: center; color: var(--marca); font-weight: 600; font-size: 14px; }
+.papel .pdf { display: flex; gap: 8px; align-items: center; color: var(--info); font-weight: 600; font-size: 14px; }
 
 dl.datos { margin: 0; }
 dl.datos div { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--linea); }
@@ -128,15 +174,15 @@ ol.historia small { color: var(--tinta-2); display: block; }
 
 /* El selector compra / reembolso (0.47.0): dos botones que se ven como
    pestañas. El apagado es el de compra cuando la API dice que no. */
-.opciones { display: flex; gap: 6px; background: var(--fondo); border: 1px solid var(--linea); border-radius: 12px; padding: 4px; }
-.opcion { flex: 1; padding: 10px; border: 0; border-radius: 9px; background: transparent; color: var(--tinta-2); font-weight: 600; }
-.opcion[aria-checked="true"] { background: var(--tinta); color: #fff; }
+.opciones { display: flex; gap: 6px; background: var(--fondo); border: 1px solid var(--linea); border-radius: 999px; padding: 4px; }
+.opcion { flex: 1; padding: 10px; border: 0; border-radius: 999px; background: transparent; color: var(--tinta-2); font-weight: 600; cursor: pointer; }
+.opcion[aria-checked="true"] { background: rgba(255,255,255,.14); color: #fff; }
 .opcion:disabled { opacity: .4; }
-button.b.claro { background: var(--sup); color: var(--tinta); border: 1px solid var(--linea); margin-top: 8px; }
+button.b.claro { margin-top: 8px; }
 
 /* alta de proveedor (29-sep-2026) */
-.campo-mal { border-color: var(--mal) !important; outline: 2px solid var(--mal-suave); }
-a.liga { display: inline-block; margin-top: 6px; font-size: 13px; color: var(--marca); }
+.campo-mal { border-color: var(--mal) !important; outline: 2px solid rgba(240,160,138,.25); }
+a.liga { display: inline-block; margin-top: 6px; font-size: 13px; color: var(--info); }
 
 /* Cuentas del proveedor y documentos de respaldo (30-sep-2026). */
 .pv-cuenta { border: 1px solid var(--linea); border-radius: 12px; padding: 10px; margin-top: 8px; position: relative; }
@@ -152,3 +198,18 @@ a.liga { display: inline-block; margin-top: 6px; font-size: 13px; color: var(--m
    botón para recargar cuando la persona termine lo que traía. */
 #aviso-version { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 5000; display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 8px; background: #1d1f20; color: #fff; font-size: 13px; line-height: 1.35; box-shadow: 0 8px 24px rgba(0,0,0,.3); max-width: calc(100vw - 32px); }
 #aviso-version button { border: 0; border-radius: 4px; padding: 6px 12px; background: #C6FF3D; color: #1d1f20; font-weight: 700; cursor: pointer; font: inherit; font-weight: 700; white-space: nowrap; }
+
+/* Al imprimir vuelve el papel: hoja blanca, tinta oscura, sin barra. El vidrio
+   es para la pantalla. */
+@media print {
+  :root {
+    color-scheme: light;
+    --marca: #0080C1; --marca-suave: #E4F2FA; --fondo: #F5F7F8; --sup: #FFFFFF; --vidrio: #fff;
+    --borde-vidrio: #E2E7EA; --linea: #E2E7EA; --tinta: #16222B; --tinta-2: #5A6976; --tenue: #5A6976;
+    --bien: #1E7A4C; --bien-suave: #E2F3EA; --mal: #A32D2D; --mal-suave: #F8E5E5;
+    --pend: #8A6100; --pend-suave: #FBF0D8; --info: #05506F;
+  }
+  body { background: #fff !important; color: #16222B; }
+  header.barra, #aviso-version, button.liso, button.b, a.b { display: none !important; }
+  .tarjeta, .lista { -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; }
+}

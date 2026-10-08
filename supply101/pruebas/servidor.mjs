@@ -21,7 +21,7 @@ const PUERTO = Number(process.argv[2] || process.env.PUERTO || 8798);
 
 const TIPOS = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png',
+  '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2',
   '.json': 'application/json',
 };
 

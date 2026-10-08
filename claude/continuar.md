@@ -10,6 +10,19 @@ no se pudo medir desde aquí y se dice cómo se mide.
 
 ---
 
+# 8-oct-2026 · supply101 con el look de cost101
+
+Mike: todas las plataformas con el aspecto de cost101 y la tipografía y el
+logo de dash/quell (dash101 lo estrenó en #148). En supply101 todo vive en
+`supply101/publico/estilo.css` —las variables conservan sus nombres y cambian
+de valor; `@media print` regresa los claros— y en `index.html`: el «s101»
+hechizo se fue y la barra lleva `supply101-claro.svg` (28 px; 36 px en las
+pantallas de entrada). Las fuentes viajan en `supply101/publico/fonts/`
+(copiadas de `public/fonts/`, con sus licencias): Cifras + Raleway, nada de
+Google. Si se agrega un color, que sea sobre oscuro.
+
+---
+
 # 12-sep-2026 · Playwright contra staging encontró que los dos Workers se estrellaban en el navegador
 
 Lo pidió el chat de dash101 (muro, 22:45) y Mike lo eligió por botones. La
