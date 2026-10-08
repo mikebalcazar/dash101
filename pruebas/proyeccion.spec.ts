@@ -18,7 +18,7 @@ import { describe, expect, it } from "vitest";
 import type { Opex } from "@/types/schema";
 import {
   cobrosDeProyectos, compromisosDeProyectos, etiquetaDeLapso, inicioDeBloque, lapsos, nominaOcurreEn, planear, primerBloqueBajoUmbral, proyectar,
-  siguienteBloque,
+  rondaParaCubrir, siguienteBloque,
 } from "@/lib/proyeccion";
 import type { ProgramaDeNomina } from "@/lib/nomina";
 
@@ -261,5 +261,90 @@ describe("los compromisos con proveedores entran en su fecha esperada, con lo pa
     expect(p[0].egresos).toBe(21_000);
     expect(p[1].egresos).toBe(30_000);
     expect(p[0].planeados.every((x) => x.clase === "compromiso" && x.tipo === "egreso")).toBe(true);
+  });
+});
+
+describe("los préstamos de investor101 entran al flujo: lo que va a salir y lo que va a entrar (0.82.0)", () => {
+  /* Mike, 8-oct: «esto se tiene que reflejar en la proyección de flujos de
+   * dash». Lo que se mide: que el pago a un inversionista caiga como egreso
+   * en su fecha y el depósito aceptado como ingreso en la suya; que un pago
+   * vencido caiga en el primer bloque marcado «vencido»; y que un depósito
+   * cuya fecha estimada ya pasó NO se llame vencido —nadie le debe nada a la
+   * empresa—, sino «por confirmar». */
+  const prestamos = [
+    { id: "dep", nombre: "PRE-000001 · depósito de Ana", tipo: "ingreso" as const, monto: 50_000, fecha: "2026-10-09" },
+    { id: "pago", nombre: "PRE-000001 · pago 1 de 1 a Ana", tipo: "egreso" as const, monto: 51_050, fecha: "2026-10-30" },
+    { id: "viejo", nombre: "PRE-000000 · pago 2 de 2 a Beto", tipo: "egreso" as const, monto: 5_200, fecha: "2026-10-01" },
+    { id: "tarde", nombre: "PRE-000002 · depósito de Caro", tipo: "ingreso" as const, monto: 20_000, fecha: "2026-10-02" },
+    { id: "lejos", nombre: "PRE-000003 · pago 9 de 9", tipo: "egreso" as const, monto: 1, fecha: "2028-01-01" },
+  ];
+
+  it("cada uno en su fecha y con su signo; lo vencido y lo por confirmar, en el primer bloque y dicho", () => {
+    const p = proyectar(10_000, { opex: [], prestamos }, { bloque: "semana", meses: 1, hoy: HOY });
+    const todos = p.flatMap((b) => b.planeados);
+    expect(todos.every((x) => x.clase === "prestamo")).toBe(true);
+    expect(todos.map((x) => x.id).sort()).toEqual(["dep", "pago", "tarde", "viejo"]); // «lejos» queda fuera del horizonte
+    const de = (id: string) => todos.find((x) => x.id === id)!;
+    expect([de("viejo").tipo, de("viejo").vencido, de("viejo").por_confirmar, dia(de("viejo").fecha)]).toEqual(["egreso", true, false, "2026-10-06"]);
+    expect([de("tarde").tipo, de("tarde").vencido, de("tarde").por_confirmar, dia(de("tarde").fecha)]).toEqual(["ingreso", false, true, "2026-10-06"]);
+    expect([de("dep").vencido, de("dep").por_confirmar, dia(de("dep").fecha)]).toEqual([false, false, "2026-10-09"]);
+    // La semana de hoy: entran 50,000 + 20,000 y salen 5,200.
+    expect([p[0].ingresos, p[0].egresos, p[0].saldo_final]).toEqual([70_000, 5_200, 74_800]);
+    // Y la semana del 26 de octubre sale el pago con su interés.
+    const cuarta = p.find((b) => b.planeados.some((x) => x.id === "pago"))!;
+    expect(dia(cuarta.inicio)).toBe("2026-10-26");
+    expect(cuarta.saldo_final).toBe(74_800 - 51_050);
+  });
+
+  it("sin la fuente (quien mira no dirige la empresa) la proyección sale igual, sin préstamos", () => {
+    const con = proyectar(0, { opex: [], prestamos: null }, { bloque: "mes", meses: 2, hoy: HOY });
+    expect(con.every((b) => b.planeados.length === 0)).toBe(true);
+  });
+});
+
+describe("cubrir un hueco del flujo con una ronda de investor101", () => {
+  /* Mike, 8-oct: «taller tiene un periodo de falta de flujo (necesita pagar
+   * 30k durante las siguientes 3 semanas (90k total)) (…) desde dash donde
+   * tenemos déficit de flujos, poder seleccionar esa parte y generar una
+   * ronda de inversión para cubrir ese flujo». Su ejemplo, tal cual: tres
+   * nóminas de 30 mil, sin dinero en la cuenta, y un cobro grande después. */
+  const fuentes = {
+    opex: [opex({ nombre: "Nómina", monto: 30_000, frecuencia: "semanal", dia_semana: 5, fecha_inicio: ts("2026-10-01"), fecha_fin: ts("2026-10-23") as never })],
+    cobros: [{ id: "c", nombre: "Obra · Finiquito", monto: 150_000, fecha: "2026-11-05" }],
+  };
+  const p = proyectar(0, fuentes, { bloque: "semana", meses: 2, hoy: HOY });
+
+  it("el ejemplo: tres semanas a 30 mil dejan un hueco de 90 mil, que se recupera con el cobro", () => {
+    expect(p.slice(0, 5).map((b) => b.saldo_final)).toEqual([-30_000, -60_000, -90_000, -90_000, 60_000]);
+    const r = rondaParaCubrir(p, [0, 1, 2], HOY)!;
+    expect(r.deficit).toBe(90_000);
+    expect(r.fecha_inicio).toBe("2026-10-06"); // el hueco ya empezó: el dinero hace falta hoy
+    expect([r.desde, r.hasta]).toEqual(["2026-10-06", "2026-10-25"]);
+    expect(r.se_recupera).toBe(true);
+    expect(r.fecha_vencimiento).toBe("2026-11-08"); // el cierre de la semana en que entra el cobro
+  });
+
+  it("marcando sólo una parte, la ronda cubre lo más hondo de ESA parte, y el dinero hace falta el día antes", () => {
+    const r = rondaParaCubrir(p, [1], HOY)!;
+    expect(r.deficit).toBe(60_000);
+    expect(r.fecha_inicio).toBe("2026-10-11"); // el domingo antes de la semana del 12
+    expect([r.desde, r.hasta]).toEqual(["2026-10-12", "2026-10-18"]);
+    // No importa en qué orden se marquen.
+    expect(rondaParaCubrir(p, [2, 0], HOY)!.deficit).toBe(90_000);
+  });
+
+  it("si en el horizonte el saldo no vuelve, propone treinta días después y lo dice", () => {
+    const sin = proyectar(0, { opex: fuentes.opex }, { bloque: "semana", meses: 2, hoy: HOY });
+    const r = rondaParaCubrir(sin, [0, 1, 2], HOY)!;
+    expect(r.se_recupera).toBe(false);
+    expect(r.fecha_vencimiento).toBe("2026-11-24"); // 25-oct + 30 días
+  });
+
+  it("sin nada marcado, o marcando bloques que no cierran en negativo, no hay ronda que proponer", () => {
+    expect(rondaParaCubrir(p, [], HOY)).toBeNull();
+    expect(rondaParaCubrir(p, [4, 5], HOY)).toBeNull();
+    // Los centavos del hueco se redondean hacia arriba: se pide lo que alcanza.
+    const fino = proyectar(-1000.4, { opex: [] }, { bloque: "semana", meses: 1, hoy: HOY });
+    expect(rondaParaCubrir(fino, [0], HOY)!.deficit).toBe(1001);
   });
 });

@@ -33,6 +33,13 @@
  *     por cobrar sin parcialidad que lo cubra queda SIN FECHA y no entra:
  *     la pantalla dice cuánto es.
  *
+ *   · los PRÉSTAMOS de investor101 (contrato 0.82.0; Mike, 8-oct: «esto se
+ *     tiene que reflejar en la proyección de flujos de dash»): cada pago
+ *     pendiente a un inversionista entra como gasto en su fecha, y cada
+ *     depósito aceptado que todavía no llega, como cobro. Un pago vencido
+ *     cae en el primer bloque; un depósito cuya fecha estimada ya pasó
+ *     también, marcado «por confirmar»: está aceptado y falta que llegue.
+ *
  * EL PRIMER BLOQUE es el que contiene HOY, pero sólo cuenta lo que cae de
  * hoy en adelante: el saldo de arranque ya trae lo que pasó antes. Con
  * bloques de un año, contar enero cuando ya es octubre restaría dos veces.
@@ -61,7 +68,7 @@ export interface Lapso {
   fin: Date;
 }
 
-export type ClasePlaneado = "opex" | "nomina" | "orden" | "cobro" | "compromiso";
+export type ClasePlaneado = "opex" | "nomina" | "orden" | "cobro" | "compromiso" | "prestamo";
 
 /** Un cobro o un gasto que cae en una fecha. En PESOS. */
 export interface Planeado {
@@ -77,6 +84,8 @@ export interface Planeado {
   vencido?: boolean;
   /** Una orden sin fecha máxima de pago: cae en el primer bloque. */
   sin_fecha?: boolean;
+  /** Un depósito de investor101 aceptado que todavía no llega. */
+  por_confirmar?: boolean;
 }
 
 export interface BloqueProyeccion extends Lapso {
@@ -114,12 +123,25 @@ export interface CompromisoPlaneado {
   fecha: string;
 }
 
+/** Lo que un préstamo de investor101 pone en el flujo: un pago que va a
+ *  salir (`egreso`) o un depósito aceptado que va a entrar (`ingreso`). En
+ *  PESOS. */
+export interface PrestamoPlaneado {
+  id: string;
+  nombre: string;
+  tipo: "ingreso" | "egreso";
+  monto: number;
+  /** AAAA-MM-DD. */
+  fecha: string;
+}
+
 export interface Fuentes {
   opex: Opex[];
   nomina?: { programa: ProgramaDeNomina | null; borradores: BorradorDeRaya[] } | null;
   ordenes?: OrdenPlaneada[] | null;
   cobros?: CobroPlaneado[] | null;
   compromisos?: CompromisoPlaneado[] | null;
+  prestamos?: PrestamoPlaneado[] | null;
 }
 
 /* ─────────────── los compromisos con proveedores ───────────────
@@ -441,6 +463,18 @@ export function planear(fuentes: Fuentes, hoy: Date, hasta: Date): Planeado[] {
     salida.push({ clase: "compromiso", id: cp.id, nombre: cp.nombre, tipo: "egreso", monto: cp.monto, fecha: vencido ? new Date(desde) : f, vencido });
   }
 
+  for (const pr of fuentes.prestamos ?? []) {
+    const f = delDiaLocal(pr.fecha);
+    if (f > hasta) continue;
+    const pasada = f < desde;
+    salida.push({
+      clase: "prestamo", id: pr.id, nombre: pr.nombre, tipo: pr.tipo, monto: pr.monto, fecha: pasada ? new Date(desde) : f,
+      // Un pago que ya debió salir está vencido; un depósito cuya fecha
+      // estimada pasó no está «vencido»: falta confirmar que llegó.
+      vencido: pasada && pr.tipo === "egreso", por_confirmar: pasada && pr.tipo === "ingreso",
+    });
+  }
+
   for (const o of fuentes.ordenes ?? []) {
     const f = o.fecha_maxima_pago ? delDiaLocal(o.fecha_maxima_pago) : null;
     const vencido = !!f && f < desde;
@@ -477,4 +511,54 @@ export function proyectar(saldoInicial: number, fuentes: Fuentes, opts?: Proyecc
 /** El primer bloque donde el saldo cae bajo el umbral, o null si nunca. */
 export function primerBloqueBajoUmbral(proyeccion: BloqueProyeccion[], umbral = 0): BloqueProyeccion | null {
   return proyeccion.find((b) => b.saldo_final < umbral) ?? null;
+}
+
+/* ─────────────── cubrir un hueco con una ronda de investor101 ───────────────
+ *
+ * Mike, 8-oct-2026: «desde dash donde tenemos déficit de flujos, poder
+ * seleccionar esa parte y generar una ronda de inversión para cubrir ese
+ * flujo (…) y que desde investor101 podamos detallar, ajustar el monto total
+ * y generar la ronda».
+ *
+ * De los bloques escogidos sale lo que la ronda necesita para nacer en
+ * borrador: cuánto falta, para cuándo, y cuándo se podría pagar de regreso.
+ * Es una propuesta: en investor101 se ajusta todo. */
+
+export interface RondaPropuesta {
+  /** Lo más hondo que cae el saldo en los bloques escogidos. En PESOS, > 0. */
+  deficit: number;
+  /** Cuándo hace falta el dinero: el día antes de que el saldo cruce cero
+   *  por primera vez en lo escogido, y nunca antes de hoy. AAAA-MM-DD. */
+  fecha_inicio: string;
+  /** Hasta dónde llega el hueco escogido. AAAA-MM-DD. */
+  desde: string;
+  hasta: string;
+  /** Cuándo se podría pagar: el cierre del primer bloque posterior en que
+   *  el saldo, ya SIN el préstamo, vuelve a ser positivo; si en el horizonte
+   *  no vuelve, treinta días después del hueco. AAAA-MM-DD. */
+  fecha_vencimiento: string;
+  /** Si el saldo se recupera dentro del horizonte. */
+  se_recupera: boolean;
+}
+
+export function rondaParaCubrir(proyeccion: BloqueProyeccion[], indices: number[], hoy: Date = new Date()): RondaPropuesta | null {
+  const escogidos = proyeccion.filter((b) => indices.includes(b.index)).sort((a, b) => a.index - b.index);
+  if (!escogidos.length) return null;
+  const masHondo = Math.min(...escogidos.map((b) => b.saldo_final));
+  if (masHondo >= 0) return null;
+  const hoy0 = medianoche(hoy);
+  const primero = escogidos[0], ultimo = escogidos[escogidos.length - 1];
+  const primerNegativo = escogidos.find((b) => b.saldo_final < 0)!;
+  const antes = new Date(primerNegativo.inicio.getTime() - DIA_MS);
+  const inicio = antes < hoy0 ? hoy0 : antes;
+  const vuelve = proyeccion.find((b) => b.index > ultimo.index && b.saldo_final >= 0);
+  const vence = vuelve ? medianoche(vuelve.fin) : new Date(medianoche(ultimo.fin).getTime() + 30 * DIA_MS);
+  return {
+    deficit: Math.ceil(-masHondo),
+    fecha_inicio: diaTexto(inicio),
+    desde: diaTexto(primero.inicio < hoy0 ? hoy0 : primero.inicio),
+    hasta: diaTexto(ultimo.fin),
+    fecha_vencimiento: diaTexto(vence <= inicio ? new Date(inicio.getTime() + 30 * DIA_MS) : vence),
+    se_recupera: !!vuelve,
+  };
 }

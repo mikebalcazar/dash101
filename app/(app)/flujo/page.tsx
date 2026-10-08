@@ -25,8 +25,20 @@
  *     queda sin fecha). Una orden pendiente que ya apunta a la partida se le
  *     resta, para no contar dos veces.
  *
+ *   · los préstamos de investor101 (contrato 0.82.0; Mike, 8-oct): cada
+ *     pago pendiente a un inversionista sale en su fecha, y cada depósito
+ *     aceptado que todavía no llega, entra. Si la API contesta 403 —quien
+ *     mira no dirige la empresa, o no hay investor101— no entran y se dice.
+ *
  * Cada renglón de la tabla se abre y enseña lo planeado en ese bloque, uno
  * por uno, con su fecha y su monto.
+ *
+ * CUBRIR UN HUECO (Mike, 8-oct: «desde dash donde tenemos déficit de flujos,
+ * poder seleccionar esa parte y generar una ronda de inversión para cubrir
+ * ese flujo»): los bloques que cierran en negativo traen una casilla. Con
+ * alguno marcado aparece la propuesta —cuánto falta y para cuándo— y un
+ * botón que deja la ronda EN BORRADOR en investor101, donde se le pone tasa,
+ * se ajusta el monto y se avisa. Aquí no se le avisa a nadie.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -42,9 +54,10 @@ import type { FilaPartida } from "@/lib/api/adaptar";
 import { aPesos } from "@/lib/api/adaptar";
 import { describirPrograma, getProgramaNomina, type NominaProgramada } from "@/lib/nomina";
 import { ErrorApi } from "@/lib/api/cliente";
+import { crearRondaDesdeElFlujo, getFlujoDeInversion, prestamosParaElFlujo, sinInversion, type RondaBorrador } from "@/lib/inversion";
 import {
-  BLOQUES, cobrosDeProyectos, compromisosDeProyectos, etiquetaDeLapso, primerBloqueBajoUmbral, proyectar,
-  type Bloque, type BloqueProyeccion, type CobrosDeProyectos, type CompromisosDeProyectos, type OrdenPlaneada, type Planeado,
+  BLOQUES, cobrosDeProyectos, compromisosDeProyectos, etiquetaDeLapso, primerBloqueBajoUmbral, proyectar, rondaParaCubrir,
+  type Bloque, type BloqueProyeccion, type CobrosDeProyectos, type CompromisosDeProyectos, type OrdenPlaneada, type Planeado, type PrestamoPlaneado,
 } from "@/lib/proyeccion";
 import type { Cuenta, Opex } from "@/types/schema";
 import { formatMonto } from "@/lib/format";
@@ -97,6 +110,7 @@ const CLASE: Record<Planeado["clase"], string> = {
   orden: "Orden de compra",
   cobro: "Cobro de proyecto",
   compromiso: "Compromiso con proveedor",
+  prestamo: "Préstamo (investor101)",
 };
 
 export default function FlujoPage() {
@@ -113,6 +127,15 @@ export default function FlujoPage() {
   const [bloque, setBloque] = useState<Bloque>(BLOQUE_POR_OMISION);
   const [meses, setMeses] = useState(12);
   const [abierto, setAbierto] = useState<number | null>(null);
+  /* investor101: `null` = no se pudo leer (no dirige, o la empresa no la
+   * tiene): no entra, y tampoco se ofrece cubrir huecos con una ronda. */
+  const [prestamos, setPrestamos] = useState<PrestamoPlaneado[] | null>(null);
+  const [marcados, setMarcados] = useState<number[]>([]);
+  const [nombreRonda, setNombreRonda] = useState("");
+  const [montoRonda, setMontoRonda] = useState("");
+  const [creando, setCreando] = useState(false);
+  const [errorRonda, setErrorRonda] = useState("");
+  const [rondaHecha, setRondaHecha] = useState<RondaBorrador | null>(null);
 
   useEffect(() => {
     const b = recordado("flujo_bloque");
@@ -149,8 +172,10 @@ export default function FlujoPage() {
         (e) => { if (sinPermiso(e)) return null; throw e; },
       ),
       Promise.all([listProyectos(), listPlanes(), listar<FilaPartida>("partidas", { limite: "5000" })]),
+      getFlujoDeInversion().then(prestamosParaElFlujo, (e) => { if (sinInversion(e)) return null; throw e; }),
     ])
-      .then(([cs, os, n, ords, [ps, plan, partidas]]) => {
+      .then(([cs, os, n, ords, [ps, plan, partidas], prs]) => {
+        setPrestamos(prs);
         setCuentas(cs);
         setOpexes(os);
         setNomina(n.n);
@@ -178,12 +203,15 @@ export default function FlujoPage() {
   const opexActivos = useMemo(() => opexes.filter((o) => o.activo), [opexes]);
   const programa = nomina?.programa && nomina.programa.activo ? nomina.programa : null;
   const borradores = nomina?.borradores ?? [];
-  const hayFuentes = opexActivos.length > 0 || !!programa || borradores.length > 0 || (ordenes?.length ?? 0) > 0 || cobros.cobros.length > 0 || compromisos.compromisos.length > 0;
+  const hayFuentes = opexActivos.length > 0 || !!programa || borradores.length > 0 || (ordenes?.length ?? 0) > 0 || cobros.cobros.length > 0 || compromisos.compromisos.length > 0 || (prestamos?.length ?? 0) > 0;
 
   const proyeccion = useMemo(
-    () => proyectar(capitalInicial, { opex: opexActivos, nomina, ordenes, cobros: cobros.cobros, compromisos: compromisos.compromisos }, { bloque, meses }),
-    [capitalInicial, opexActivos, nomina, ordenes, cobros, compromisos, bloque, meses]
+    () => proyectar(capitalInicial, { opex: opexActivos, nomina, ordenes, cobros: cobros.cobros, compromisos: compromisos.compromisos, prestamos }, { bloque, meses }),
+    [capitalInicial, opexActivos, nomina, ordenes, cobros, compromisos, prestamos, bloque, meses]
   );
+  const propuesta = useMemo(() => rondaParaCubrir(proyeccion, marcados), [proyeccion, marcados]);
+  const pagosDePrestamos = (prestamos ?? []).filter((x) => x.tipo === "egreso").length;
+  const depositosDePrestamos = (prestamos ?? []).filter((x) => x.tipo === "ingreso").length;
 
   const chartData = useMemo(
     () =>
@@ -208,8 +236,32 @@ export default function FlujoPage() {
   const nombreHorizonte = HORIZONTES.find((h) => h.meses === meses)?.nombre ?? `${meses} meses`;
   const ordenesSinFecha = (ordenes ?? []).filter((o) => !o.fecha_maxima_pago).length;
 
-  const escogerBloque = (v: Bloque) => { setBloque(v); setAbierto(null); recordar("flujo_bloque", v); };
-  const escogerMeses = (m: number) => { setMeses(m); setAbierto(null); recordar("flujo_meses", m); };
+  const escogerBloque = (v: Bloque) => { setBloque(v); setAbierto(null); setMarcados([]); recordar("flujo_bloque", v); };
+  const escogerMeses = (m: number) => { setMeses(m); setAbierto(null); setMarcados([]); recordar("flujo_meses", m); };
+  const marcar = (i: number) => { setRondaHecha(null); setErrorRonda(""); setMontoRonda(""); setMarcados((antes) => (antes.includes(i) ? antes.filter((x) => x !== i) : [...antes, i])); };
+  /** Del primer bloque en negativo al más hondo: el hueco entero, de un toque. */
+  const marcarElHueco = () => {
+    const primero = proyeccion.find((p) => p.saldo_final < 0);
+    const hondo = saldoMinBloque;
+    if (!primero || !hondo) return;
+    setRondaHecha(null); setErrorRonda(""); setMontoRonda("");
+    setMarcados(proyeccion.filter((p) => p.index >= primero.index && p.index <= Math.max(primero.index, hondo.index) && p.saldo_final < 0).map((p) => p.index));
+  };
+  const generarRonda = async () => {
+    if (!propuesta) return;
+    const monto = montoRonda.trim() ? Number(montoRonda.replace(/[$,\s]/g, "")) : propuesta.deficit;
+    if (!Number.isFinite(monto) || monto <= 0) { setErrorRonda("El monto no se entiende como una cantidad."); return; }
+    setCreando(true); setErrorRonda("");
+    try {
+      const r = await crearRondaDesdeElFlujo({
+        nombre: nombreRonda.trim() || `Cubrir el flujo del ${formatFecha(new Date(`${propuesta.desde}T12:00:00`))} al ${formatFecha(new Date(`${propuesta.hasta}T12:00:00`))}`,
+        monto, fecha_inicio: propuesta.fecha_inicio, fecha_vencimiento: propuesta.fecha_vencimiento,
+        origen: { desde: propuesta.desde, hasta: propuesta.hasta, deficit: propuesta.deficit },
+      });
+      setRondaHecha(r); setMarcados([]); setNombreRonda(""); setMontoRonda("");
+    } catch (e) { setErrorRonda(e instanceof Error ? e.message : "Error"); }
+    finally { setCreando(false); }
+  };
 
   if (loadingEmpresa || loading) return <div className="text-sm text-ink-muted">Cargando…</div>;
 
@@ -402,7 +454,76 @@ export default function FlujoPage() {
               <strong>{formatMonto(primeraNeg.saldo_final, empresa.moneda)}</strong>.
               Ábrelo en la tabla para ver qué gastos lo cruzan.
             </p>
+            {prestamos !== null && (
+              <button
+                type="button" data-cubrir-hueco onClick={marcarElHueco}
+                className="mt-2 inline-flex items-center gap-1.5 bg-mauve-900 text-cream rounded-xl px-3 py-1.5 text-xs font-medium"
+              >
+                Cubrirlo con una ronda de inversión
+              </button>
+            )}
           </div>
+        </div>
+      )}
+
+      {/* La ronda que se dejó en borrador */}
+      {rondaHecha && (
+        <div data-ronda-hecha className="bg-mint-50 rounded-2xl p-4 mb-4 text-sm">
+          <p className="font-medium text-mint-900">Quedó en borrador la ronda {rondaHecha.folio}: {rondaHecha.nombre}</p>
+          <p className="text-xs text-mint-label mt-0.5">
+            Todavía no se le avisa a nadie. En investor101 le pones la tasa, ajustas el monto y la abres.
+          </p>
+          <a
+            href={rondaHecha.url || "#"} target="_blank" rel="noopener" data-abrir-ronda
+            className="mt-2 inline-flex items-center gap-1.5 bg-ink text-cream rounded-xl px-3 py-1.5 text-xs font-medium"
+          >
+            Terminarla en investor101
+          </a>
+        </div>
+      )}
+
+      {/* La propuesta, con lo marcado */}
+      {propuesta && prestamos !== null && (
+        <div data-propuesta className="bg-white border border-mauve-900/20 rounded-2xl p-4 mb-4">
+          <p className="text-sm font-medium text-ink-dim">
+            Ronda para cubrir {marcados.length} bloque{marcados.length === 1 ? "" : "s"}: faltan{" "}
+            <span data-deficit className="tabular-nums">{formatMonto(propuesta.deficit, empresa.moneda)}</span>
+          </p>
+          <p className="text-xs text-ink-muted mt-0.5">
+            El dinero haría falta el {formatFecha(new Date(`${propuesta.fecha_inicio}T12:00:00`))}.{" "}
+            {propuesta.se_recupera
+              ? <>El saldo vuelve a positivo hacia el {formatFecha(new Date(`${propuesta.fecha_vencimiento}T12:00:00`))}: se propone pagar entonces.</>
+              : <>En este horizonte el saldo no vuelve a positivo: se propone pagar el {formatFecha(new Date(`${propuesta.fecha_vencimiento}T12:00:00`))}, y conviene revisarlo.</>}
+          </p>
+          <div className="grid gap-2 sm:grid-cols-[1fr_10rem_auto] mt-3 items-end">
+            <label className="text-xs text-ink-muted">
+              Nombre de la ronda
+              <input
+                data-nombre-ronda value={nombreRonda} onChange={(e) => setNombreRonda(e.target.value)} maxLength={120}
+                placeholder={`Cubrir el flujo del ${formatFecha(new Date(`${propuesta.desde}T12:00:00`))} al ${formatFecha(new Date(`${propuesta.hasta}T12:00:00`))}`}
+                className="bg-white border border-black/10 rounded-xl px-3 py-2 text-sm w-full mt-1 focus:outline-none"
+              />
+            </label>
+            <label className="text-xs text-ink-muted">
+              Monto
+              <input
+                data-monto-ronda value={montoRonda} onChange={(e) => setMontoRonda(e.target.value)} inputMode="decimal"
+                placeholder={String(propuesta.deficit)}
+                className="bg-white border border-black/10 rounded-xl px-3 py-2 text-sm w-full mt-1 tabular-nums focus:outline-none"
+              />
+            </label>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setMarcados([])} className="border border-black/10 text-ink-dim rounded-xl px-3 py-2 text-sm">Quitar</button>
+              <button
+                type="button" data-generar-ronda disabled={creando} onClick={generarRonda}
+                className="bg-ink text-cream rounded-xl px-4 py-2 text-sm font-medium disabled:opacity-50"
+              >
+                {creando ? "Creando…" : "Generar la ronda"}
+              </button>
+            </div>
+          </div>
+          <p className="text-[11px] text-ink-muted mt-2">Nace en borrador en investor101: ahí se detalla, se ajusta y se abre.</p>
+          {errorRonda && <p data-error-ronda className="text-xs text-mauve-900 mt-2">{errorRonda}</p>}
         </div>
       )}
 
@@ -494,6 +615,13 @@ export default function FlujoPage() {
             )}
             {" "}El primer bloque cuenta de hoy en adelante.
           </p>
+          <p data-prestamos-dice>
+            {prestamos === null
+              ? <>Los préstamos de investor101 no entran: los ve quien dirige la empresa.</>
+              : prestamos.length > 0
+              ? <>{pagosDePrestamos} pago{pagosDePrestamos === 1 ? "" : "s"} a inversionistas por salir{depositosDePrestamos > 0 && <> y {depositosDePrestamos} depósito{depositosDePrestamos === 1 ? "" : "s"} aceptado{depositosDePrestamos === 1 ? "" : "s"} por entrar</>} (<Link href="/inversion" className="underline">Préstamos</Link>).</>
+              : <>Ningún préstamo de investor101 pendiente. Un bloque que cierra en negativo se puede marcar para cubrirlo con una ronda.</>}
+          </p>
         </div>
       </div>
 
@@ -523,6 +651,8 @@ export default function FlujoPage() {
                   moneda={empresa.moneda}
                   abierto={abierto === s.index}
                   alternar={() => setAbierto(abierto === s.index ? null : s.index)}
+                  marcado={marcados.includes(s.index)}
+                  marcar={prestamos !== null ? () => marcar(s.index) : null}
                 />
               ))}
             </tbody>
@@ -534,9 +664,11 @@ export default function FlujoPage() {
 }
 
 function FilaBloque({
-  s, bloque, moneda, abierto, alternar,
+  s, bloque, moneda, abierto, alternar, marcado, marcar,
 }: {
   s: BloqueProyeccion; bloque: Bloque; moneda: string; abierto: boolean; alternar: () => void;
+  /** Marcado para cubrirlo con una ronda. `marcar` nulo = no se ofrece. */
+  marcado: boolean; marcar: (() => void) | null;
 }) {
   const neg = s.saldo_final < 0;
   const activity = s.planeados.length > 0;
@@ -547,7 +679,15 @@ function FilaBloque({
         className={`border-t border-black/5 ${neg ? "bg-mauve-50/40" : ""} ${activity ? "cursor-pointer hover:bg-cream/30" : ""}`}
         onClick={activity ? alternar : undefined}
       >
-        <td className="px-4 py-2 text-xs text-ink-muted">{s.index + 1}</td>
+        <td className="px-4 py-2 text-xs text-ink-muted">
+          {neg && marcar ? (
+            <input
+              type="checkbox" data-marcar-bloque={s.index} checked={marcado} title="Cubrir este bloque con una ronda de inversión"
+              aria-label={`Cubrir ${etiquetaDeLapso(bloque, s)} con una ronda`}
+              onClick={(e) => e.stopPropagation()} onChange={marcar} className="accent-[#5C485E] w-4 h-4 align-middle"
+            />
+          ) : s.index + 1}
+        </td>
         <td className="px-4 py-2 text-xs text-ink-dim">
           <button
             type="button"
@@ -602,6 +742,7 @@ function FilaBloque({
                     {p.vencido && <span className="ml-1.5 text-[10px] px-1.5 py-px rounded-full bg-mauve-50 text-mauve-900">vencido</span>}
                     {p.sin_fecha && <span className="ml-1.5 text-[10px] px-1.5 py-px rounded-full bg-cream text-ink-muted">sin fecha máxima</span>}
                     {p.estimado && <span className="ml-1.5 text-[10px] px-1.5 py-px rounded-full bg-cream text-ink-muted">estimado</span>}
+                    {p.por_confirmar && <span className="ml-1.5 text-[10px] px-1.5 py-px rounded-full bg-cream text-ink-muted">por confirmar</span>}
                   </span>
                   <span className="text-[10px] text-ink-muted flex-shrink-0 hidden sm:inline">{CLASE[p.clase]}</span>
                   <span className={`tabular-nums flex-shrink-0 ${p.tipo === "ingreso" ? "text-mint-900" : "text-mauve-900"}`}>

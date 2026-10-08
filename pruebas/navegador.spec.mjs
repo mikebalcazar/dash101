@@ -1720,6 +1720,45 @@ test('1-oct: la pantalla del cliente abre con su estado de cuenta, con PDF, Exce
   await ctx.close();
 });
 
+test('8-oct: los préstamos de investor101 salen en el flujo y en «Préstamos», en pesos y con lo que dice la API (sólo lectura)', async () => {
+  /* Mike, 8-oct: «esto se tiene que reflejar en la proyección de flujos de
+   * dash», y los pagos a inversionistas se registran aquí.
+   *
+   * SÓLO SE LEE: la demo no se toca (pagar y confirmar depósitos se miden
+   * en `inversion-api.spec.ts`, con una empresa propia). Lo que se afirma
+   * se le pregunta a la API con la misma galleta: cuántos pagos y depósitos
+   * hay, y cuánto suman EN PESOS. Si la pantalla dijera centavos, la suma
+   * saldría cien veces mayor y aquí truena. */
+  const { ctx, pag, errores } = await pestana(undefined, true);
+  await pag.goto(`${URL}/flujo`, { waitUntil: 'load' });
+  await pag.locator('[data-fuentes]').waitFor({ timeout: 20000 });
+  const flujo = await api(pag, `/orgs/${ORG}/inversion/flujo`);
+  const dice = await pag.locator('[data-prestamos-dice]').innerText();
+  if (flujo.pagos.length + flujo.depositos.length > 0) {
+    assert.match(dice, new RegExp(`^${flujo.pagos.length} pago`), `la nota del flujo cuenta los pagos a inversionistas: «${dice}»`);
+  } else {
+    assert.match(dice, /Ningún préstamo de investor101 pendiente/, `sin préstamos, la nota lo dice: «${dice}»`);
+  }
+  assert.doesNotMatch(dice, /no entran/, 'quien dirige la empresa sí los ve');
+
+  await pag.goto(`${URL}/inversion`, { waitUntil: 'load' });
+  await pag.locator('[data-total-prestamos]').waitFor({ timeout: 20000 });
+  const pagos = filas(await api(pag, `/orgs/${ORG}/inversion/pagos`));
+  const centavos = pagos.reduce((s, g) => s + g.total, 0);
+  const pintado = Number((await pag.locator('[data-total-prestamos]').innerText()).replace(/[^0-9.]/g, ''));
+  assert.equal(pintado, centavos / 100, `«Hay por pagar» está en pesos: ${pintado} contra ${centavos} centavos`);
+  assert.equal(await pag.locator('[data-pago]').count(), pagos.length, 'un renglón por pago pendiente');
+  assert.equal(await pag.locator('[data-deposito]').count(), flujo.depositos.length, 'un renglón por depósito por confirmar');
+  assert.equal(await pag.locator('aside button[title="Préstamos"]').count(), 1, 'el menú trae «Préstamos»');
+
+  await pag.setViewportSize({ width: 390, height: 844 });
+  const barrido = await pag.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  assert.ok(barrido <= 1, `a 390 puntos «Préstamos» no barre a lo ancho (${barrido} px)`);
+
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
 test('un código equivocado NO entra', async () => {
   const { ctx, pag } = await pestana();
   await pedirCodigoConPaciencia(pag, CORREO);
