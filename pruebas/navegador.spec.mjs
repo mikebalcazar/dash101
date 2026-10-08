@@ -1740,7 +1740,7 @@ test('8-oct: los préstamos de investor101 salen en el flujo y en «Préstamos»
   if (flujo.pagos.length + flujo.depositos.length > 0) {
     assert.match(dice, new RegExp(`^${flujo.pagos.length} pago`), `la nota del flujo cuenta los pagos a inversionistas: «${dice}»`);
   } else {
-    assert.match(dice, /Ningún préstamo de investor101 pendiente/, `sin préstamos, la nota lo dice: «${dice}»`);
+    assert.match(dice, /Ningún préstamo de patron101 pendiente/, `sin préstamos, la nota lo dice: «${dice}»`);
   }
   assert.doesNotMatch(dice, /no entran/, 'quien dirige la empresa sí los ve');
 

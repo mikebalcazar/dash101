@@ -76,7 +76,7 @@ export default function InversionPage() {
         <p className="text-sm font-medium text-ink-dim mb-1">Los préstamos no se abren desde tu cuenta</p>
         <p className="text-xs text-ink-muted max-w-sm mx-auto">
           Lo que la empresa debe a quienes le prestaron lo lleva quien la dirige (dueño o administración), y sólo si la
-          empresa tiene investor101.
+          empresa tiene patron101.
         </p>
       </div>
     );
@@ -97,7 +97,7 @@ export default function InversionPage() {
           href={urlInvestor()} target="_blank" rel="noopener"
           className="inline-flex items-center gap-1.5 border border-black/10 text-ink-dim rounded-xl px-3 py-1.5 text-xs font-medium hover:bg-cream"
         >
-          Rondas y tablas en investor101 <IconExternalLink size={13} />
+          Rondas y tablas en patron101 <IconExternalLink size={13} />
         </a>
       </div>
 
@@ -199,7 +199,7 @@ export default function InversionPage() {
                           <span className="tabular-nums font-medium">{clabeLegible(g.clabe)}</span> · a nombre de {g.beneficiario || g.inversionista_nombre}
                         </>
                       ) : (
-                        <>Este inversionista no tiene cuenta registrada. Se le agrega en investor101, en su ficha.</>
+                        <>Este inversionista no tiene cuenta registrada. Se le agrega en patron101, en su ficha.</>
                       )}
                     </div>
                     <FormaDeDinero
@@ -210,7 +210,7 @@ export default function InversionPage() {
                         let papel = "";
                         if (archivo) {
                           try { await subirComprobanteDePago(g.prestamo_id, g.id, archivo); } catch (e) {
-                            papel = ` El comprobante no se pudo subir (${e instanceof Error ? e.message : "error"}): súbelo desde investor101.`;
+                            papel = ` El comprobante no se pudo subir (${e instanceof Error ? e.message : "error"}): súbelo desde patron101.`;
                           }
                         }
                         hecho(`Pago ${g.numero} de ${g.de} a ${g.inversionista_nombre} registrado.${r.liquidado ? " Con éste el préstamo quedó liquidado." : ""}${papel}`);
