@@ -35,7 +35,14 @@ on:
     paths-ignore:
       - 'claude/**'
       - '**.md'
+  # `solo_staging`: publica staging y NO producción. Para enseñarle a Mike una
+  # muestra desde una rama antes de decidir (8-oct-2026, el estilo de cost101).
   workflow_dispatch:
+    inputs:
+      solo_staging:
+        description: 'Publicar sólo staging (una muestra; producción no se toca)'
+        type: boolean
+        default: false
 
 concurrency:
   group: despliegue-dash101
@@ -48,7 +55,8 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       # La decisión escrita; la variable del repositorio manda si existe.
-      ORG_PRODUCCION: ${{ vars.ORG_PRODUCCION || 'forespot' }}
+      # Con `solo_staging` queda vacía y los pasos de producción no corren.
+      ORG_PRODUCCION: ${{ inputs.solo_staging != true && (vars.ORG_PRODUCCION || 'forespot') || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

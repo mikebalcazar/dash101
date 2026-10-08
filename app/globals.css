@@ -20,35 +20,93 @@
 @font-face{font-family:"Sansation";src:url("/fonts/sansation-700.woff2") format("woff2");font-weight:700;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 @font-face{font-family:"Sansation";src:url("/fonts/sansation-700-ext.woff2") format("woff2");font-weight:700;font-display:swap;unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
 
-/* Los mismos tonos que `tailwind.config.ts`, para lo que no pasa por
- * Tailwind. Si se cambia uno, se cambian los dos: son la misma paleta. */
+/* Los tonos de la suite, como canales RGB para que Tailwind les ponga
+ * opacidad (`bg-ink/10`). 8-oct-2026: el look de cost101 —azul oscuro, vidrio,
+ * botones redondos— con la tipografía y el logo de siempre. Los NOMBRES no
+ * cambiaron; cambia lo que valen. Al imprimir vuelven los claros (abajo). */
 :root {
-  --color-bg: #F3F6F8;
-  --color-cream: #E9EEF2;
-  --color-ink: #122733;
-  --color-ink-dim: #152028;
-  --color-ink-muted: #4B5A66;
-  --color-mint-50: #DDF1E6;
-  --color-mint-900: #1E7A4C;
-  --color-mauve-50: #F7E4DE;
-  --color-mauve-900: #A0472C;
-  --color-sky-50: #D9EEF8;
-  --color-sky-900: #05506F;
-  --color-marca: #0080C1;
+  color-scheme: dark;
+  --c-bg: 15 27 36;          /* #0f1b24 */
+  --c-cream: 22 36 46;       /* #16242e, superficie apagada */
+  --c-ink: 232 238 242;      /* #e8eef2: la tinta, y el claro de los botones */
+  --c-ink-dim: 232 238 242;
+  --c-ink-muted: 169 192 206;/* #a9c0ce */
+  --c-mint-50: 22 53 39;     /* #163527 */
+  --c-mint-900: 92 194 142;  /* #5CC28E */
+  --c-mint-label: 127 211 166;
+  --c-mauve-50: 58 35 32;    /* #3a2320 */
+  --c-mauve-900: 240 160 138;/* #F0A08A */
+  --c-mauve-label: 233 179 163;
+  --c-sky-50: 23 50 63;      /* #17323F */
+  --c-sky-900: 134 201 236;  /* #86c9ec */
+  --c-sky-label: 95 182 228;
+  --c-marca: 58 163 220;     /* #3AA3DC: el azul de la marca sobre oscuro */
+  --c-marca-claro: 134 201 236;
+  --c-negro: 255 255 255;    /* lo que era sombra (black/5) es luz */
+  /* Para lo que no pasa por Tailwind. */
+  --color-bg: rgb(var(--c-bg));
+  --color-cream: rgb(var(--c-cream));
+  --color-ink: rgb(var(--c-ink));
+  --color-ink-dim: rgb(var(--c-ink-dim));
+  --color-ink-muted: rgb(var(--c-ink-muted));
+  --color-mint-50: rgb(var(--c-mint-50));
+  --color-mint-900: rgb(var(--c-mint-900));
+  --color-mauve-50: rgb(var(--c-mauve-50));
+  --color-mauve-900: rgb(var(--c-mauve-900));
+  --color-sky-50: rgb(var(--c-sky-50));
+  --color-sky-900: rgb(var(--c-sky-900));
+  --color-marca: rgb(var(--c-marca));
 }
 
 html, body {
   font-family: "Cifras", "Raleway", system-ui, -apple-system, "Segoe UI", sans-serif;
   font-variant-numeric: lining-nums;
-  background: var(--color-bg);
   color: var(--color-ink-dim);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+/* El fondo de cost101: un degradado azul que baja de la luz a la noche. */
+body {
+  min-height: 100vh;
+  background: #060d13 radial-gradient(130% 70% at 50% -12%, #2a9be0 0%, #0a6aa6 22%, #0b3655 48%, #07141e 72%, #05090d 100%) fixed;
+}
 
 * {
-  border-color: rgba(42, 46, 58, 0.08);
+  border-color: rgba(255, 255, 255, 0.1);
 }
+
+/* ─────────────── el vidrio de cost101 ───────────────
+ * Las tarjetas (`bg-white`) son vidrio sobre el degradado; lo traslúcido
+ * (`bg-white/50`) es un velo apenas visible. Las superficies apagadas
+ * (`bg-cream`, `bg-bg`) se vuelven vidrio más tenue. Sin tocar cuarenta
+ * pantallas: las clases son las mismas. */
+.bg-white {
+  background: linear-gradient(180deg, rgba(255,255,255,.085), rgba(255,255,255,.035)) !important;
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+.bg-white\/50, .bg-white\/60, .bg-white\/70 { background-color: rgba(255,255,255,.05) !important; }
+.bg-cream, .bg-bg { background-color: rgba(255,255,255,.045) !important; }
+/* El velo detrás de un diálogo sigue siendo oscuro. */
+.bg-black\/30 { background-color: rgba(3,10,16,.6) !important; }
+/* Los campos: vidrio claro, esquinas de 12, como cost101. */
+input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea {
+  color: inherit;
+}
+input.bg-white, select.bg-white, textarea.bg-white,
+input.bg-bg, select.bg-bg, textarea.bg-bg,
+input.bg-cream, select.bg-cream, textarea.bg-cream {
+  background: rgba(255,255,255,.06) !important;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+select option { background: #0f1b24; color: #e8eef2; }
+::placeholder { color: rgba(232,238,242,.45); }
+/* Los botones de acción: redondos, el principal en blanco con tinta oscura
+ * (`bg-ink text-cream` ya da eso con los tonos nuevos). */
+button.bg-ink, a.bg-ink, button.bg-marca, a.bg-marca { border-radius: 999px; }
+button.bg-ink:hover, a.bg-ink:hover { background-color: #e3f2fb; }
+/* Los títulos, en Raleway con peso, como cost101. */
+h1 { font-weight: 600; letter-spacing: -.01em; }
 
 /* La marca y los titulos de pagina, en Sansation. Sus cifras se quedan en
    Sansation: cuando el lienzo escribe la marca, la marca no se toca. */
@@ -70,6 +128,17 @@ html, body {
  * sin que una tabla se parta a la mitad entre dos hojas.
  */
 @media print {
+  /* En papel vuelven los tonos claros de siempre. */
+  :root {
+    color-scheme: light;
+    --c-bg: 243 246 248; --c-cream: 233 238 242; --c-ink: 18 39 51; --c-ink-dim: 21 32 40; --c-ink-muted: 75 90 102;
+    --c-mint-50: 221 241 230; --c-mint-900: 30 122 76; --c-mint-label: 46 107 75;
+    --c-mauve-50: 247 228 222; --c-mauve-900: 160 71 44; --c-mauve-label: 138 83 64;
+    --c-sky-50: 217 238 248; --c-sky-900: 5 80 111; --c-sky-label: 11 108 147;
+    --c-marca: 0 128 193; --c-marca-claro: 58 163 220; --c-negro: 0 0 0;
+  }
+  * { border-color: rgba(42, 46, 58, 0.12) !important; }
+  .bg-white, .bg-cream, .bg-bg { background: #fff !important; -webkit-backdrop-filter: none; backdrop-filter: none; }
   /* Lo que sólo sirve para navegar no va en el papel. */
   .print\:hidden,
   aside,

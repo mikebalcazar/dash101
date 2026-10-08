@@ -177,7 +177,7 @@ export default function DashboardPage() {
           </div>
           <div className="w-20 h-20 rounded-full bg-sky-50 flex items-center justify-center shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/marca/dash101-aro.svg" alt="" className="h-9" />
+            <img src="/marca/dash101-aro-claro.svg" alt="" className="h-9" />
           </div>
         </div>
       </section>

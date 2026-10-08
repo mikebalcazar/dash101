@@ -91,9 +91,9 @@ export function Sidebar() {
         * Master. */}
       <div className="flex items-center mb-4 sm:px-1 h-9">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/marca/dash101.svg" alt="dash101" className="hidden sm:block h-5" />
+        <img src="/marca/dash101-claro.svg" alt="dash101" className="hidden sm:block h-5" />
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/marca/dash101-aro.svg" alt="dash101" className="sm:hidden h-7 mx-auto" />
+        <img src="/marca/dash101-aro-claro.svg" alt="dash101" className="sm:hidden h-7 mx-auto" />
       </div>
 
       {items.map((item) => {

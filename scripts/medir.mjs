@@ -45,8 +45,10 @@ const VERSION_ESPERADA = process.env.VERSION_ESPERADA || '';
 const ORG_STAGING = process.env.ORG_STAGING || 'demo';
 const ORG_PROD = process.env.ORG_PROD || 'forespot';
 
-/** El logotipo oficial, el mismo del escaparate. */
-const LOGOTIPO = '/marca/dash101.svg';
+/** El logotipo oficial, el mismo del escaparate, en su versión sobre fondo
+ *  oscuro (8-oct-2026, el estilo de cost101): la palabra en blanco y el aro
+ *  en el azul de la marca sobre oscuro. */
+const LOGOTIPO = '/marca/dash101-claro.svg';
 
 const FUENTES = [
   '/fonts/fira-cifras-400.woff2',
