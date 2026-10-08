@@ -429,7 +429,10 @@ test('pedir una compra desde el celular, pagarla, y que el que la pidió lo vea'
   // `/ordenes/nueva` también casa con «/ordenes/algo»: hay que esperar a que
   // deje de ser la pantalla del formulario.
   await pag.waitForURL((u) => /\/ordenes\/[^/]+$/.test(u.pathname) && !u.pathname.endsWith('/nueva'), { timeout: 30000 });
-  await pag.waitForTimeout(1000);
+  /* Se espera a que la orden SE PINTE, no un segundo fijo: el 8-oct staging
+   * tardó más que eso y la prueba leyó «Cargando…» en vez del folio —salió
+   * roja sin que nada estuviera mal, y detuvo una publicación—. */
+  await pag.getByText(/OC-\d+/).first().waitFor({ timeout: 30000 });
   const dice = await texto(pag);
   assert.match(dice, /OC-\d+/, 'la orden trae folio');
   assert.match(dice, /\$1,160\.00/, 'el total en PESOS, no en centavos');
