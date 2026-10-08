@@ -20,8 +20,8 @@ import { bajar, entrarDePrueba, listar, pedir } from "@/lib/api/cliente";
 import { createCuenta, listCuentas } from "@/lib/cuentas";
 import type { FilaMovimiento } from "@/lib/api/adaptar";
 import {
-  confirmarDeposito, crearRondaDesdeElFlujo, getFlujoDeInversion, listPagosDePrestamos, pagarPagoDePrestamo, prestamosParaElFlujo,
-  sinInversion, subirComprobanteDePago,
+  confirmarDeposito, crearRondaDesdeElFlujo, deshacerPagoDePrestamo, getFlujoDeInversion, listPagosDePrestamos, listPagosHechos,
+  pagarPagoDePrestamo, prestamosParaElFlujo, sinInversion, subirComprobanteDePago,
 } from "@/lib/inversion";
 import { proyectar } from "@/lib/proyeccion";
 
@@ -120,6 +120,21 @@ describe("pagar desde dash101", () => {
     expect(r.headers.get("content-type")).toBe("application/pdf");
     expect(new Uint8Array(await r.arrayBuffer())).toEqual(bytes);
     await expect(subirComprobanteDePago(ids.prestamo, ids.pagos[0], new File(["x"], "x.exe", { type: "application/x-msdownload" }))).rejects.toThrow();
+  });
+
+  it("un pago registrado sale en «Pagos registrados» y se deshace con su motivo (contrato 0.83.0)", async () => {
+    const hechos = await listPagosHechos();
+    expect(hechos.map((g) => g.id)).toEqual([ids.pagos[0]]);
+    expect(hechos[0]).toMatchObject({ folio: "PRE-000001", numero: 1, de: 2, pagado_fecha: hoy, capital: 10_000, interes: 400, total: 10_400 });
+    await expect(deshacerPagoDePrestamo(ids.pagos[0], "")).rejects.toThrow(/por qué/);
+    await deshacerPagoDePrestamo(ids.pagos[0], "Lo capturé en la cuenta equivocada");
+    expect(await listPagosHechos()).toEqual([]);
+    expect((await listPagosDePrestamos()).map((g) => g.id)).toEqual(ids.pagos);
+    expect((await listCuentas())[0].saldo_actual, "sus dos egresos se fueron").toBe(21_000);
+    await expect(deshacerPagoDePrestamo(ids.pagos[0], "otra vez")).rejects.toThrow(/ya estaba deshecho/);
+    // Se vuelve a registrar, como debió ser.
+    await pagarPagoDePrestamo(ids.pagos[0], { cuenta_id: ids.banco, fecha: hoy });
+    expect((await listCuentas())[0].saldo_actual).toBe(21_000 - 10_400);
   });
 
   it("con el último pago el préstamo se liquida y el flujo queda limpio", async () => {

@@ -251,6 +251,15 @@ export const CATEGORIA_AJUSTE = "ajuste_conciliacion";
  *  un concepto de gastos generales en el tipo de egreso». */
 export const CATEGORIA_GASTO_GENERAL = "gasto_general";
 
+/** Préstamos de patron101 (por dentro investor101, contrato 0.82.0): lo que
+ *  entra de un préstamo NO es ingreso y lo que se le devuelve de capital NO es
+ *  gasto; el interés SÍ es gasto (financiero). En el saldo de las cuentas y en
+ *  el flujo los tres cuentan, porque el dinero sí se movió. Mismos valores que
+ *  suite101-api/schema/tipos.ts. */
+export const CATEGORIA_PRESTAMO_RECIBIDO = "prestamo_recibido";
+export const CATEGORIA_PRESTAMO_CAPITAL = "prestamo_capital";
+export const CATEGORIA_PRESTAMO_INTERES = "prestamo_interes";
+
 /** Una conciliación: la foto de un corte. No se edita nunca. */
 export interface Conciliacion {
   id: string;

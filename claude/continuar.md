@@ -10,6 +10,27 @@ no se pudo medir desde aquí y se dice cómo se mide.
 
 ---
 
+# 8-oct-2026 (noche) · patron101 en los reportes y «deshacer pago»
+
+Encargo del chat que construyó patron101 (Drive
+`suite101/patron101/encargo-integrar-patron101.md`), trabajos 3 y 4, con la
+API 0.83.0 (suite101-api #285).
+
+- **Movimientos**, el resumen del mes: `prestamo_recibido` no suma a
+  ingresos ni `prestamo_capital` a egresos; salen en su propio renglón
+  («Préstamos (no son ingreso ni gasto)», `data-prestamos-mes`). El interés
+  (`prestamo_interes`) sigue en egresos. Las constantes viven en
+  `types/schema.ts`, con los mismos valores que la API.
+- **Lo fiscal**: el cuadre lo calcula la API; desde 0.83.0 ya no cuenta esas
+  dos categorías. El saldo de las cuentas, el inicio y el flujo no cambian:
+  el dinero sí se movió.
+- **Préstamos** (`/inversion`): lista «Pagos registrados» (API
+  `?estado=pagado`) con «Deshacer», que pide el motivo. Se borran los dos
+  egresos, el pago vuelve a «por pagar» y el motivo queda en la bitácora del
+  préstamo (lo ve quien prestó).
+- Medido: `inversion-api.spec` 9/9 contra la API 0.83.0 en local (el
+  deshacer de punta a punta, con el saldo de vuelta); tsc limpio.
+
 # 8-oct-2026 · supply101 con el look de cost101
 
 Mike: todas las plataformas con el aspecto de cost101 y la tipografía y el
