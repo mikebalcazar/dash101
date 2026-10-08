@@ -153,10 +153,19 @@ export async function crearRondaDesdeElFlujo(d: {
   } catch (e) { return enClaro(e); }
 }
 
-/** investor101 vive en el mismo dominio con otro nombre: dash101.x → investor101.x */
+/** A dónde vive la app de quienes prestan, desde donde esté dash101.
+ *
+ *  PARA LA GENTE SE LLAMA patron101 (Mike, 8-oct-2026: «esta plataforma se va
+ *  a llamar patron101»); por dentro —app, llave, Worker, repo— sigue siendo
+ *  `investor101`, que no se renombra. Por eso en el dominio propio la casa es
+ *  patron101.taller101.com y en workers.dev (staging) el Worker conserva su
+ *  nombre: dash101-staging.x → investor101-staging.x. */
+export function hostDePatron(host: string): string {
+  return host.replace(/^dash101/, host.endsWith('.taller101.com') ? 'patron101' : 'investor101');
+}
 export function urlInvestor(ruta = ''): string {
   if (typeof window === 'undefined') return '';
-  return `${window.location.protocol}//${window.location.host.replace(/^dash101/, 'investor101')}/${ruta ? `#/${ruta}` : ''}`;
+  return `${window.location.protocol}//${hostDePatron(window.location.host)}/${ruta ? `#/${ruta}` : ''}`;
 }
 
 /** Lo del flujo, dicho como lo espera `lib/proyeccion.ts`. */

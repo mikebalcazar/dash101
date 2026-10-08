@@ -110,7 +110,7 @@ const CLASE: Record<Planeado["clase"], string> = {
   orden: "Orden de compra",
   cobro: "Cobro de proyecto",
   compromiso: "Compromiso con proveedor",
-  prestamo: "Préstamo (investor101)",
+  prestamo: "Préstamo (patron101)",
 };
 
 export default function FlujoPage() {
@@ -471,13 +471,13 @@ export default function FlujoPage() {
         <div data-ronda-hecha className="bg-mint-50 rounded-2xl p-4 mb-4 text-sm">
           <p className="font-medium text-mint-900">Quedó en borrador la ronda {rondaHecha.folio}: {rondaHecha.nombre}</p>
           <p className="text-xs text-mint-label mt-0.5">
-            Todavía no se le avisa a nadie. En investor101 le pones la tasa, ajustas el monto y la abres.
+            Todavía no se le avisa a nadie. En patron101 le pones la tasa, ajustas el monto y la abres.
           </p>
           <a
             href={rondaHecha.url || "#"} target="_blank" rel="noopener" data-abrir-ronda
             className="mt-2 inline-flex items-center gap-1.5 bg-ink text-cream rounded-xl px-3 py-1.5 text-xs font-medium"
           >
-            Terminarla en investor101
+            Terminarla en patron101
           </a>
         </div>
       )}
@@ -522,7 +522,7 @@ export default function FlujoPage() {
               </button>
             </div>
           </div>
-          <p className="text-[11px] text-ink-muted mt-2">Nace en borrador en investor101: ahí se detalla, se ajusta y se abre.</p>
+          <p className="text-[11px] text-ink-muted mt-2">Nace en borrador en patron101: ahí se detalla, se ajusta y se abre.</p>
           {errorRonda && <p data-error-ronda className="text-xs text-mauve-900 mt-2">{errorRonda}</p>}
         </div>
       )}
@@ -617,10 +617,10 @@ export default function FlujoPage() {
           </p>
           <p data-prestamos-dice>
             {prestamos === null
-              ? <>Los préstamos de investor101 no entran: los ve quien dirige la empresa.</>
+              ? <>Los préstamos de patron101 no entran: los ve quien dirige la empresa.</>
               : prestamos.length > 0
               ? <>{pagosDePrestamos} pago{pagosDePrestamos === 1 ? "" : "s"} a inversionistas por salir{depositosDePrestamos > 0 && <> y {depositosDePrestamos} depósito{depositosDePrestamos === 1 ? "" : "s"} aceptado{depositosDePrestamos === 1 ? "" : "s"} por entrar</>} (<Link href="/inversion" className="underline">Préstamos</Link>).</>
-              : <>Ningún préstamo de investor101 pendiente. Un bloque que cierra en negativo se puede marcar para cubrirlo con una ronda.</>}
+              : <>Ningún préstamo de patron101 pendiente. Un bloque que cierra en negativo se puede marcar para cubrirlo con una ronda.</>}
           </p>
         </div>
       </div>
