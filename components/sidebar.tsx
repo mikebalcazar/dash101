@@ -22,6 +22,7 @@ import {
   IconReceiptTax,
   IconCash,
   IconCoins,
+  IconBuildingBank,
 } from "@tabler/icons-react";
 
 /* El menú lleva el nombre al lado del ícono desde el 20-sep (lo pidió Mike):
@@ -45,6 +46,9 @@ const items: NavItem[] = [
   // Mike, 30-sep-2026: «un módulo de accionistas donde se registren pagos a
   // los accionistas como retiro de utilidades».
   { href: "/accionistas", icon: IconCoins, label: "Accionistas" },
+  // Mike, 8-oct-2026: lo que se le debe a quienes le prestaron (investor101).
+  // Aquí se confirman los depósitos y se registran los pagos.
+  { href: "/inversion", icon: IconBuildingBank, label: "Préstamos" },
   { href: "/fiscal", icon: IconReceiptTax, label: "Fiscal" },
   { href: "/conciliacion", icon: IconScale, label: "Conciliación" },
   { href: "/flujo", icon: IconChartLine, label: "Flujo" },
