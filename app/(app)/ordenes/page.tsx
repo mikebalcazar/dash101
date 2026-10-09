@@ -14,7 +14,8 @@
  *     si hay, lo suyo que fue devuelto o rechazado;
  *   · quien sólo PIDE ve lo suyo, con el mismo orden: por pagar, pagadas,
  *     rechazadas. Las devueltas van hasta arriba con su motivo, porque son
- *     las únicas que le piden algo.
+ *     las únicas que le piden algo. Las que canceló desde supply101
+ *     (contrato 0.86.0) van al final, sin total: ya no son dinero.
  *
  * Los reembolsos van en la misma lista, con su marca: son el mismo papel
  * con otro folio (RE-). El buzón por pestañas (/ordenes/buzon) sigue
@@ -32,7 +33,7 @@ import { IconPlus, IconReceiptRefund, IconShoppingCart } from "@tabler/icons-rea
 
 /** Las devueltas primero; dentro de cada grupo, la más nueva arriba. */
 const ORDEN_DE_LA_LISTA: Record<Orden["estado"], number> = {
-  devuelta: 0, en_buzon: 1, pagada: 2, rechazada: 3,
+  devuelta: 0, en_buzon: 1, pagada: 2, rechazada: 3, cancelada: 4,
 };
 
 const masNueva = (a: Orden, b: Orden) => ORDEN_DE_LA_LISTA[a.estado] - ORDEN_DE_LA_LISTA[b.estado] || b.creado_at.localeCompare(a.creado_at);
@@ -131,6 +132,9 @@ export default function OrdenesPage() {
   const miasPagadas = ordenadas.filter((o) => o.estado === "pagada");
   const miasRechazadas = ordenadas.filter((o) => o.estado === "rechazada");
   const miasDevueltas = ordenadas.filter((o) => o.estado === "devuelta" || o.estado === "rechazada");
+  // 0.86.0 · Las que cancelé desde supply101: ni por pagar ni pagadas, al
+  // final y sin total, porque ya no son dinero.
+  const miasCanceladas = ordenadas.filter((o) => o.estado === "cancelada");
   const suma = (filas: Orden[]) => filas.reduce((s, o) => s + o.monto, 0);
 
   return (
@@ -180,6 +184,11 @@ export default function OrdenesPage() {
           <Seccion id="pagadas" titulo="Pagadas" cuantas={pagadas.filas.length} total={pagadas.total} moneda={moneda} vacio="Todavía no se ha pagado ninguna.">
             <FilasBuzon filas={pagadas.filas} />
           </Seccion>
+          {miasCanceladas.length > 0 && (
+            <Seccion id="canceladas" titulo="Lo mío que cancelé" cuantas={miasCanceladas.length} moneda={moneda} vacio="">
+              <FilasMias filas={miasCanceladas} />
+            </Seccion>
+          )}
         </>
       ) : mias.length === 0 ? (
         <div className="bg-white border border-black/5 rounded-2xl p-10 text-center">
@@ -200,6 +209,11 @@ export default function OrdenesPage() {
           {miasRechazadas.length > 0 && (
             <Seccion id="rechazadas" titulo="Rechazadas" cuantas={miasRechazadas.length} moneda={moneda} vacio="">
               <FilasMias filas={miasRechazadas} />
+            </Seccion>
+          )}
+          {miasCanceladas.length > 0 && (
+            <Seccion id="canceladas" titulo="Canceladas" cuantas={miasCanceladas.length} moneda={moneda} vacio="">
+              <FilasMias filas={miasCanceladas} />
             </Seccion>
           )}
         </>

@@ -24,7 +24,7 @@ import { createProveedor } from "@/lib/proveedores";
 import { createProyecto } from "@/lib/proyectos";
 import {
   clabeLegible, corregirOrden, crearOrden, desglosar, devolverOrden, getBuzon, getPermisosOrdenes, getResumenOrdenes,
-  listContadores, listMisOrdenes, listOrdenesPagadas, listPartidasDe, marcarContador, pagarOrden, vencida, verOrden,
+  cancelarOrden, listContadores, listMisOrdenes, listOrdenesPagadas, listPartidasDe, marcarContador, pagarOrden, vencida, verOrden,
 } from "@/lib/ordenes";
 import {
   crearCfdi, getCuadre, getIva, ligarCfdi, listCfdi, listPendientes, cancelarCfdi,
@@ -229,6 +229,49 @@ describe("devolver y corregir", () => {
     expect(r.eventos.map((e) => e.que)).toEqual(
       expect.arrayContaining(["creada", "devuelta", "corregida"]),
     );
+  });
+});
+
+/* 0.86.0 · Cancelar (Mike, 9-oct-2026: «en supply, hay que poner un botón
+ * para cancelar una orden que ya no se necesita»). El botón está en
+ * supply101; aquí se mide lo que las pantallas de dash101 reciben: que la
+ * cancelada salga del buzón y de su total en PESOS, que siga en lo mío con
+ * su estado, y que no se pueda pagar. */
+describe("cancelar", () => {
+  it("quien la pidió la cancela: sale del buzón y de su total, y sigue en lo suyo", async () => {
+    const antes = await getBuzon();
+    const o = await crearOrden({
+      proveedor_nombre: "Clavos SA", concepto: "Clavos que ya no hacen falta",
+      monto: 321.5, con_factura: false, fecha_maxima_pago: dia(2),
+    });
+    const con = await getBuzon();
+    expect(con.total).toBeCloseTo(antes.total + 321.5, 2);
+
+    const c = await cancelarOrden(o.id, "Ya los trajo el cliente");
+    expect(c.estado).toBe("cancelada");
+    expect(c.monto, "en pesos").toBe(321.5);
+    expect(c.folio).toBe(o.folio);
+
+    const despues = await getBuzon();
+    expect(despues.filas.some((f) => f.id === o.id)).toBe(false);
+    expect(despues.total).toBeCloseTo(antes.total, 2);
+    expect((await getResumenOrdenes()).compras.total).toBeCloseTo(despues.filas.filter((f) => f.tipo === "compra").reduce((s, f) => s + f.monto, 0), 2);
+
+    const mia = (await listMisOrdenes()).find((f) => f.id === o.id);
+    expect(mia?.estado).toBe("cancelada");
+    const r = await verOrden(o.id);
+    expect(r.eventos.at(-1)?.que).toBe("cancelada");
+    expect(r.eventos.at(-1)?.nota).toBe("Ya los trajo el cliente");
+  });
+
+  it("una cancelada no se paga, y una pagada no se cancela", async () => {
+    const o = await crearOrden({ proveedor_nombre: "Clavos SA", concepto: "Otra que sobra", monto: 10, con_factura: false });
+    await cancelarOrden(o.id);
+    await expect(pagarOrden(o.id, { cuenta_id: ids.banco })).rejects.toMatchObject({ error: "orden_no_esta_en_buzon" });
+
+    const p = await crearOrden({ proveedor_nombre: "Clavos SA", concepto: "Ésta sí se pagó", monto: 10, con_factura: false });
+    await pagarOrden(p.id, { cuenta_id: ids.banco });
+    await expect(cancelarOrden(p.id)).rejects.toMatchObject({ error: "orden_no_se_puede_cancelar" });
   });
 });
 

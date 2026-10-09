@@ -15,7 +15,10 @@ import { aCentavos, aPesos } from './api/adaptar';
 import { listar, pedir } from './api/cliente';
 import { apiBase, org } from './fuente';
 
-export type EstadoOrden = 'en_buzon' | 'devuelta' | 'pagada' | 'rechazada';
+/** `cancelada` desde el contrato 0.86.0 (9-oct-2026): la canceló quien la
+ *  pidió desde supply101 porque ya no se necesita. No se paga, no se
+ *  devuelve, no se rechaza y no cuenta como dinero que se debe. */
+export type EstadoOrden = 'en_buzon' | 'devuelta' | 'pagada' | 'rechazada' | 'cancelada';
 
 /** Contrato 0.47.0 · Una compra se le paga a un proveedor; un reembolso se le
  *  regresa a quien puso el dinero. Mike, 28-sep-2026: «poner una opción en el
@@ -56,12 +59,14 @@ export interface Orden {
   nota_contador: string | null;
   movimiento_id: string | null;
   creado_at: string;
+  /** La última vez que cambió: al cancelarse, cuándo se canceló. */
+  actualizado_at?: string | null;
   pagada_at: string | null;
 }
 
 export interface EventoOrden {
   id: string;
-  que: 'creada' | 'devuelta' | 'corregida' | 'pagada' | 'rechazada' | 'contador';
+  que: 'creada' | 'devuelta' | 'corregida' | 'pagada' | 'rechazada' | 'contador' | 'nominas' | 'cancelada';
   quien_nombre: string | null;
   nota: string | null;
   ts: string;
@@ -270,6 +275,12 @@ export const devolverOrden = (id: string, nota: string) =>
 export const rechazarOrden = (id: string, nota: string) =>
   pedir<{ orden: FilaOrden }>(`${base()}/${id}/rechazar`, { method: 'POST', body: { nota } }).then((r) => orden(r.orden));
 
+/** Contrato 0.86.0 · Quien la pidió la cancela (sólo en el buzón o
+ *  devuelta; el servidor lo revisa). El botón vive en supply101; aquí está
+ *  para las pruebas y para quien lo necesite después. */
+export const cancelarOrden = (id: string, nota?: string) =>
+  pedir<FilaOrden>(`${base()}/${id}/cancelar`, { method: 'POST', body: nota ? { nota } : {} }).then(orden);
+
 /* ─────────────── quién puede pagar ─────────────── */
 
 export async function listContadores(): Promise<Contador[]> {
@@ -300,6 +311,7 @@ export const ESTADO_ORDEN: Record<EstadoOrden, string> = {
   devuelta: 'Devuelta para corregir',
   pagada: 'Pagada',
   rechazada: 'Rechazada',
+  cancelada: 'Cancelada',
 };
 
 /* ─────────────── las partidas de un proyecto ───────────────

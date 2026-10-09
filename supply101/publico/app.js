@@ -66,6 +66,7 @@ const DICHO = {
   datos_invalidos: 'Faltan datos o alguno no cuadra.',
   desglose_no_cuadra: 'El subtotal más el IVA tiene que dar el total exacto.',
   orden_no_esta_devuelta: 'Esta orden ya no se puede corregir: cambió de estado.',
+  orden_no_se_puede_cancelar: 'Esta orden ya no se puede cancelar: cambió de estado.',
   compras_no_autorizadas: 'Tu usuario no está autorizado para compras. Puedes pedir un reembolso.',
   no_encontrado: 'No se encontró.',
 };
@@ -120,8 +121,13 @@ const ESTADO = {
   devuelta: { texto: 'Te la devolvieron', clase: 'marca pend' },
   pagada: { texto: 'Pagada', clase: 'marca bien' },
   rechazada: { texto: 'Rechazada', clase: 'marca mal' },
+  /* 9-oct-2026 · la canceló quien la pidió: ya no se va a pagar. Apagada a
+   * propósito, para que no compita con lo que todavía está vivo. */
+  cancelada: { texto: 'Cancelada', clase: 'marca apagada' },
 };
-const ORDEN_LISTA = { devuelta: 0, en_buzon: 1, pagada: 2, rechazada: 3 };
+const ORDEN_LISTA = { devuelta: 0, en_buzon: 1, pagada: 2, rechazada: 3, cancelada: 4 };
+/** Se cancela mientras nadie la ha pagado ni rechazado (contrato 0.86.0). */
+const SE_CANCELA = ['en_buzon', 'devuelta'];
 
 /* ─────────────── el estado de la app ─────────────── */
 
@@ -767,6 +773,7 @@ $('f-pedir').onsubmit = async (ev) => {
 const QUE = {
   creada: 'La pediste', devuelta: 'Te la devolvieron', corregida: 'La corregiste',
   pagada: 'La pagaron', rechazada: 'La rechazaron', contador: 'Cambió quién puede pagar',
+  cancelada: 'La cancelaste',
 };
 
 async function verDetalle(id) {
@@ -783,6 +790,11 @@ async function verDetalle(id) {
   est.orden = o;
   const e = ESTADO[o.estado] || { texto: o.estado, clase: 'marca gris' };
   const reembolso = o.tipo === 'reembolso';
+  /* Cancelar es de quien la pidió (el servidor lo vuelve a revisar: 403
+   * solo_quien_la_pidio). Quien paga también abre la orden aquí, y a ése no
+   * se le ofrece. */
+  const yo = est.yo?.usuario?.id;
+  const puedeCancelar = SE_CANCELA.includes(o.estado) && !!yo && String(o.solicitante_usuario_id) === String(yo);
   const cotizaciones = (r.archivos || []).filter((a) => a.de !== 'pago');
   const comprobantes = (r.archivos || []).filter((a) => a.de === 'pago');
 
@@ -803,8 +815,10 @@ async function verDetalle(id) {
       <dl class="datos">
         <div><dt>${reembolso ? 'Cuánto se te regresa' : 'Cuánto'}</dt><dd><b>${pesos(o.monto, o.moneda)}</b></dd></div>
         ${o.con_factura ? `<div><dt>Subtotal e IVA</dt><dd>${pesos(o.subtotal, o.moneda)} + ${pesos(o.iva, o.moneda)}</dd></div>` : ''}
-        <div><dt>${o.estado === 'pagada' ? 'Se pagó el' : 'Se tiene que pagar'}</dt><dd>${
-          o.estado === 'pagada' ? escapar(String(o.pagada_at || '').slice(0, 10)) : escapar(o.fecha_maxima_pago || 'sin fecha')}</dd></div>
+        <div><dt>${o.estado === 'pagada' ? 'Se pagó el' : o.estado === 'cancelada' ? 'Se canceló el' : 'Se tiene que pagar'}</dt><dd>${
+          o.estado === 'pagada' ? escapar(String(o.pagada_at || '').slice(0, 10))
+            : o.estado === 'cancelada' ? escapar(String(o.actualizado_at || '').slice(0, 10))
+              : escapar(o.fecha_maxima_pago || 'sin fecha')}</dd></div>
         <div><dt>Con factura</dt><dd>${o.con_factura ? 'sí' : 'no'}</dd></div>
       </dl>
     </div>
@@ -812,7 +826,21 @@ async function verDetalle(id) {
     ${o.nota_contador ? `<p class="aviso ${o.estado === 'rechazada' ? 'mal' : 'gris'}">
       <b>Quien paga dice:</b> «${escapar(o.nota_contador)}»</p>` : ''}
 
+    ${o.estado === 'cancelada' ? `<p class="aviso gris" id="dice-cancelada">La cancelaste. Ya no se va a pagar.</p>` : ''}
+
     ${o.estado === 'devuelta' ? `<button class="b" id="b-corregir" type="button">Corregirla y volver a mandarla</button>` : ''}
+
+    ${puedeCancelar ? `<button class="b claro cancelar" id="b-cancelar" type="button">Cancelar orden</button>
+      <div class="tarjeta confirma oculto" id="confirma-cancelar" role="group" aria-labelledby="confirma-t">
+        <p id="confirma-t"><b>¿Cancelar ${escapar(o.folio)}?</b> Ya no se va a pagar.</p>
+        <label for="cancelar-nota">Por qué (opcional)</label>
+        <textarea id="cancelar-nota" rows="2" maxlength="500" placeholder="Ya no hace falta, se consiguió por otro lado…"></textarea>
+        <p class="aviso mal oculto" id="err-cancelar"></p>
+        <div class="fila">
+          <button class="b peligro" id="b-si-cancelar" type="button">Sí, cancelarla</button>
+          <button class="b claro" id="b-no-cancelar" type="button">No</button>
+        </div>
+      </div>` : ''}
 
     ${comprobantes.length ? `<h2>El comprobante del pago</h2>
       <p class="sub">${reembolso ? 'Con esto sabes de dónde y cuándo te lo regresaron.' : 'Con esto le reclamas al proveedor si dice que no le llegó.'}</p>
@@ -832,6 +860,42 @@ async function verDetalle(id) {
    * barra seguiría diciendo `#/orden/…` mientras se ve el formulario, y
    * «atrás» saltaría hasta la lista en vez de regresar a la orden. */
   if (bc) bc.onclick = () => { est.orden = o; irA(`/corregir/${o.id}`, HONDURA.corregir); };
+
+  /* Cancelar (Mike, 9-oct-2026: «un botón para cancelar una orden que ya no
+   * se necesita»). Se confirma aquí mismo, no con `window.confirm`: en el
+   * teléfono ése sale con letra chica, sin decir qué folio, y no deja
+   * escribir el porqué. Después la orden se vuelve a pintar ya cancelada. */
+  const bx = $('b-cancelar');
+  if (bx) {
+    const caja = $('confirma-cancelar');
+    bx.onclick = () => {
+      ver('b-cancelar', false);
+      ver('confirma-cancelar', true);
+      decir('err-cancelar', '');
+      caja.scrollIntoView({ block: 'nearest' });
+    };
+    $('b-no-cancelar').onclick = () => {
+      ver('confirma-cancelar', false);
+      ver('b-cancelar', true);
+      $('cancelar-nota').value = '';
+    };
+    $('b-si-cancelar').onclick = async () => {
+      const si = $('b-si-cancelar');
+      const antes = si.textContent;
+      si.disabled = true; $('b-no-cancelar').disabled = true;
+      si.textContent = 'Cancelando…';
+      decir('err-cancelar', '');
+      try {
+        const nota = $('cancelar-nota').value.trim();
+        await pedir(`/orgs/${est.org.id}/ordenes/${o.id}/cancelar`, { method: 'POST', body: nota ? { nota } : {} });
+        await verDetalle(o.id);
+      } catch (e) {
+        decir('err-cancelar', enPalabras(e));
+        si.disabled = false; $('b-no-cancelar').disabled = false;
+        si.textContent = antes;
+      }
+    };
+  }
 }
 
 /* ─────────────── las direcciones ─────────────── */

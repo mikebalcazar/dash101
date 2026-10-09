@@ -254,6 +254,12 @@ jobs:
       # antes (la primera vez corrió sin Chromium y tiró la publicación).
       - name: El alta de proveedor de supply101
         run: node supply101/pruebas/el-proveedor-nuevo.mjs
+      # Cancelar una orden que ya no se necesita (9-oct-2026, contrato
+      # 0.86.0): el botón sólo en lo mío en el buzón o devuelto, la
+      # confirmación en su lugar (sin window.confirm), y «Cancelada» después.
+      # Con la API fingida, como la de arriba.
+      - name: Cancelar una orden en supply101
+        run: node supply101/pruebas/la-orden-se-cancela.mjs
       - name: Con un navegador, contra staging
         id: navegador
         continue-on-error: true

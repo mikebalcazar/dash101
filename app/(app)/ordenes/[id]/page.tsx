@@ -35,6 +35,8 @@ const QUE: Record<EventoOrden["que"], string> = {
   pagada: "La pagó",
   rechazada: "La rechazó",
   contador: "Cambió quién puede pagar",
+  nominas: "Cambió quién puede ver la raya",
+  cancelada: "La canceló",
 };
 
 export default function OrdenPage() {
@@ -180,6 +182,13 @@ export default function OrdenPage() {
           </span>
         </div>
 
+        {orden.estado === "cancelada" && (
+          <p className="mt-3 text-xs text-ink-muted border border-black/10 rounded-xl px-3 py-2" data-cancelada>
+            {orden.tipo === "reembolso" ? "Lo canceló" : "La canceló"} quien {orden.tipo === "reembolso" ? "lo" : "la"} pidió
+            {orden.actualizado_at ? ` el ${orden.actualizado_at.slice(0, 10)}` : ""}. Ya no se va a pagar.
+          </p>
+        )}
+
         {orden.nota_contador && (
           <p className="mt-3 text-xs text-ink-dim bg-cream rounded-xl px-3 py-2">
             <span className="text-ink-muted">Nota de quien paga: </span>«{orden.nota_contador}»
@@ -190,7 +199,9 @@ export default function OrdenPage() {
       {/* Mike, 5-oct-2026: «ahí mismo en la orden aparezcan los datos
           bancarios o de pago del proveedor para hacer ese pago». Un reembolso
           no: ése se le regresa a quien puso el dinero. */}
-      {orden.tipo === "compra" && <ParaPagarle orden={orden} proveedor={proveedor} />}
+      {/* Una cancelada (0.86.0) ya no se paga: ni datos para pagarle. Los
+          botones de pagar, devolver y rechazar sólo salen en el buzón. */}
+      {orden.tipo === "compra" && orden.estado !== "cancelada" && <ParaPagarle orden={orden} proveedor={proveedor} />}
 
       {archivos.length > 0 && (
         <div className="bg-white border border-black/5 rounded-2xl p-4 mb-4">
