@@ -84,8 +84,27 @@ function enClaro(e: unknown): never {
     if (e.error === 'pago_ya_hecho') throw new Error('Ese pago ya estaba registrado.');
     if (e.error === 'prestamo_ya_arranco') throw new Error('Ese depósito ya estaba confirmado.');
     if (e.error === 'prestamo_no_activo') throw new Error('El préstamo todavía no arranca: falta confirmar su depósito.');
+    if (e.error === 'pago_no_esta_hecho') throw new Error('Ese pago ya estaba deshecho.');
   }
   throw e;
+}
+
+/** Un pago ya registrado (0.83.0): de aquí se deshace uno capturado por
+ *  error. */
+export interface PagoRegistrado extends PagoDePrestamo {
+  /** AAAA-MM-DD: el día que se pagó. */
+  pagado_fecha: string;
+}
+
+/** Los pagos ya registrados, el más reciente arriba. */
+export async function listPagosHechos(): Promise<PagoRegistrado[]> {
+  return (await pedir<{ filas: Fila[] }>(`${base()}/pagos?estado=pagado`)).filas.map((f) => pago(f) as PagoRegistrado);
+}
+
+/** Deshacer un pago capturado por error: se borran sus egresos, el pago
+ *  vuelve a pendiente y queda en la bitácora del préstamo con el motivo. */
+export async function deshacerPagoDePrestamo(id: string, motivo: string): Promise<void> {
+  try { await pedir(`${base()}/pagos/${encodeURIComponent(id)}/deshacer`, { method: 'POST', body: { motivo } }); } catch (e) { return enClaro(e); }
 }
 
 /** Lo que va al flujo proyectado: lo que va a salir y lo que va a entrar. */

@@ -15,6 +15,10 @@
  *     fecha. Pagar deja dos egresos —capital e interés, que no son lo mismo:
  *     devolver lo prestado no es un gasto, el interés sí— y avisa por correo
  *     a quien prestó. El comprobante se cuelga del pago y lo ve en su cuenta.
+ *   · PAGOS REGISTRADOS (8-oct, encargo de patron101): los ya hechos, el más
+ *     reciente arriba. Uno capturado por error se deshace con su motivo: se
+ *     borran sus dos egresos, vuelve a «por pagar» y queda en la bitácora del
+ *     préstamo.
  *
  * Las rondas, las ofertas y las tablas se llevan en investor101; aquí sólo
  * se mueve el dinero. Lo abre quien dirige la empresa: a los demás la API
@@ -26,12 +30,12 @@ import { useEmpresa } from "@/lib/empresa-context";
 import { listCuentas } from "@/lib/cuentas";
 import { clabeLegible } from "@/lib/ordenes";
 import {
-  confirmarDeposito, getFlujoDeInversion, listPagosDePrestamos, pagarPagoDePrestamo, sinInversion, subirComprobanteDePago, urlInvestor,
-  type DepositoPorRecibir, type PagoDePrestamo,
+  confirmarDeposito, deshacerPagoDePrestamo, getFlujoDeInversion, listPagosDePrestamos, listPagosHechos, pagarPagoDePrestamo, sinInversion,
+  subirComprobanteDePago, urlInvestor, type DepositoPorRecibir, type PagoDePrestamo, type PagoRegistrado,
 } from "@/lib/inversion";
 import type { Cuenta } from "@/types/schema";
 import { formatMontoExact } from "@/lib/format";
-import { IconAlertTriangle, IconBuildingBank, IconExternalLink } from "@tabler/icons-react";
+import { IconAlertTriangle, IconArrowBackUp, IconBuildingBank, IconExternalLink } from "@tabler/icons-react";
 
 const hoyTexto = () => {
   const d = new Date();
@@ -47,6 +51,7 @@ export default function InversionPage() {
   const { empresa, loading: cargandoEmpresa } = useEmpresa();
   const [pagos, setPagos] = useState<PagoDePrestamo[]>([]);
   const [depositos, setDepositos] = useState<DepositoPorRecibir[]>([]);
+  const [hechos, setHechos] = useState<PagoRegistrado[]>([]);
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
   const [cargando, setCargando] = useState(true);
   const [cerrado, setCerrado] = useState(false);
@@ -59,6 +64,8 @@ export default function InversionPage() {
     try {
       const [p, f, c] = await Promise.all([listPagosDePrestamos(), getFlujoDeInversion(), listCuentas()]);
       setPagos(p); setDepositos(f.depositos); setCuentas(c); setCerrado(false); setError("");
+      // La lista de los ya hechos es aparte: si no llega, lo demás sigue.
+      setHechos(await listPagosHechos().catch(() => []));
     } catch (e) {
       if (sinInversion(e)) setCerrado(true);
       else setError(e instanceof Error ? e.message : "Error");
@@ -223,7 +230,73 @@ export default function InversionPage() {
           </ul>
         </div>
       )}
+
+      {hechos.length > 0 && (
+        <div className="bg-white border border-black/5 rounded-2xl overflow-hidden mt-4" data-hechos>
+          <div className="px-4 py-2 bg-cream/50 text-xs text-ink-muted uppercase tracking-wide font-medium">Pagos registrados</div>
+          <ul className="divide-y divide-black/5">
+            {hechos.map((g) => (
+              <li key={g.id} data-hecho={g.id} className="px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-ink-dim truncate">{g.inversionista_nombre}</p>
+                    <p className="text-[11px] text-ink-muted">
+                      {g.folio} · pago {g.numero} de {g.de} · pagado el {fecha(g.pagado_fecha)}
+                    </p>
+                  </div>
+                  <p className="text-sm font-medium text-ink-dim tabular-nums">{formatMontoExact(g.total)}</p>
+                  <button
+                    data-deshacer onClick={() => setAbierto(abierto === `d:${g.id}` ? null : `d:${g.id}`)}
+                    className="inline-flex items-center gap-1 border border-black/10 text-ink-dim rounded-xl px-3 py-1.5 text-xs font-medium hover:bg-cream"
+                  >
+                    <IconArrowBackUp size={13} /> Deshacer
+                  </button>
+                </div>
+                {abierto === `d:${g.id}` && (
+                  <Deshacer
+                    alConfirmar={async (motivo) => {
+                      await deshacerPagoDePrestamo(g.id, motivo);
+                      hecho(`Pago ${g.numero} de ${g.de} a ${g.inversionista_nombre} deshecho: sus egresos se borraron y vuelve a estar por pagar.`);
+                    }}
+                  />
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
+  );
+}
+
+/** Deshacer un pago pide por qué: queda en la bitácora del préstamo, que
+ *  también ve quien prestó. */
+function Deshacer({ alConfirmar }: { alConfirmar: (motivo: string) => Promise<void> }) {
+  const [motivo, setMotivo] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [err, setErr] = useState("");
+  return (
+    <form
+      className="mt-3 bg-cream/40 rounded-xl px-3 py-3 space-y-2" data-forma-deshacer
+      onSubmit={async (ev) => {
+        ev.preventDefault();
+        if (!motivo.trim()) { setErr("Di por qué se deshace."); return; }
+        setGuardando(true); setErr("");
+        try { await alConfirmar(motivo.trim()); } catch (e) { setErr(e instanceof Error ? e.message : "Error"); setGuardando(false); }
+      }}
+    >
+      <label className="block text-xs text-ink-dim" htmlFor="deshacer-motivo">Por qué se deshace</label>
+      <textarea
+        id="deshacer-motivo" value={motivo} onChange={(e) => setMotivo(e.target.value)} maxLength={500} rows={2}
+        placeholder="Por ejemplo: lo capturé en la cuenta equivocada"
+        className="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm"
+      />
+      <p className="text-[11px] text-ink-muted">Se borran sus dos egresos (capital e interés), el pago vuelve a «por pagar» y el motivo queda en la bitácora del préstamo.</p>
+      {err && <p className="text-xs text-mauve-900">{err}</p>}
+      <button type="submit" disabled={guardando} className="bg-ink text-cream rounded-xl px-3 py-1.5 text-xs font-medium disabled:opacity-50">
+        {guardando ? "Deshaciendo…" : "Deshacer el pago"}
+      </button>
+    </form>
   );
 }
 

@@ -14,7 +14,7 @@ import {
   recalcularCuenta,
 } from "@/lib/movimientos";
 import type { Movimiento, TipoMovimiento } from "@/types/schema";
-import { CATEGORIA_AJUSTE, CATEGORIA_GASTO_GENERAL } from "@/types/schema";
+import { CATEGORIA_AJUSTE, CATEGORIA_GASTO_GENERAL, CATEGORIA_PRESTAMO_CAPITAL, CATEGORIA_PRESTAMO_RECIBIDO } from "@/types/schema";
 import { formatMonto, formatDateShort } from "@/lib/format";
 import { Timestamp } from "firebase/firestore";
 import {
@@ -163,11 +163,15 @@ export default function MovimientosPage() {
         acc.sin_identificar += m.tipo === "egreso" ? m.monto : -m.monto;
         return acc;
       }
+      // Un préstamo que entra no es ingreso, y el capital que se devuelve no
+      // es gasto: van aparte. El interés sí es gasto y se queda en egresos.
+      if (m.categoria === CATEGORIA_PRESTAMO_RECIBIDO) { acc.prestamo_recibido += m.monto; return acc; }
+      if (m.categoria === CATEGORIA_PRESTAMO_CAPITAL) { acc.prestamo_capital += m.monto; return acc; }
       if (m.tipo === "ingreso") acc.ingresos += m.monto;
       else if (m.tipo === "egreso") acc.egresos += m.monto;
       return acc;
     },
-    { ingresos: 0, egresos: 0, sin_identificar: 0 }
+    { ingresos: 0, egresos: 0, sin_identificar: 0, prestamo_recibido: 0, prestamo_capital: 0 }
   );
 
   return (
@@ -185,6 +189,14 @@ export default function MovimientosPage() {
               −{formatMonto(totalesMes.egresos, empresa.moneda, { short: true })}
             </span>
           </p>
+          {(totalesMes.prestamo_recibido !== 0 || totalesMes.prestamo_capital !== 0) && (
+            <p className="text-[11px] text-ink-muted mt-0.5" data-prestamos-mes>
+              Préstamos (no son ingreso ni gasto): recibido{" "}
+              <span className="text-mint-900">+{formatMonto(totalesMes.prestamo_recibido, empresa.moneda, { short: true })}</span>
+              {" · "}capital devuelto{" "}
+              <span className="text-mauve-900">−{formatMonto(totalesMes.prestamo_capital, empresa.moneda, { short: true })}</span>
+            </p>
+          )}
           {totalesMes.sin_identificar !== 0 && (
             <p className="text-[11px] text-ink-muted mt-0.5">
               Sin identificar (conciliación):{" "}
