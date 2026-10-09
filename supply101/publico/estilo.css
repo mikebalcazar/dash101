@@ -146,6 +146,9 @@ button.liso {
 .marca.mal { background: var(--mal-suave); color: var(--mal); }
 .marca.pend { background: var(--pend-suave); color: var(--pend); }
 .marca.gris { background: rgba(255,255,255,.08); color: var(--tinta-2); }
+/* Cancelada (9-oct-2026): sin relleno, sólo el contorno y la tinta tenue. Se
+   lee como «ya no cuenta» sin parecer error ni pendiente. */
+.marca.apagada { background: transparent; color: var(--tenue); box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); }
 
 .aviso { border-radius: 14px; padding: 10px 12px; font-size: 13px; margin: 12px 0; }
 .aviso.mal { background: var(--mal-suave); color: var(--mal); border: 1px solid rgba(240,160,138,.28); }
@@ -179,6 +182,20 @@ ol.historia small { color: var(--tinta-2); display: block; }
 .opcion[aria-checked="true"] { background: rgba(255,255,255,.14); color: #fff; }
 .opcion:disabled { opacity: .4; }
 button.b.claro { margin-top: 8px; }
+
+/* Cancelar una orden (9-oct-2026). El botón va abajo, apartado de
+   «Corregirla», con la altura de todos (≥ 48 px) para atinarle con el pulgar.
+   La confirmación es una tarjeta en su lugar; «Sí, cancelarla» va en el tono
+   de lo que no se deshace. */
+button.b.cancelar { margin-top: 18px; color: var(--mal); border-color: rgba(240,160,138,.35); }
+.confirma { margin-top: 18px; }
+.confirma p { margin: 0 0 4px; }
+.confirma label { margin-top: 10px; }
+.confirma textarea { resize: vertical; min-height: 64px; }
+.confirma .fila { margin-top: 12px; }
+.confirma .fila button.b { margin-top: 0; min-height: 48px; }
+button.b.peligro { background: var(--mal); color: #2a0f0a; }
+button.b.peligro:hover { background: #f4b4a2; }
 
 /* alta de proveedor (29-sep-2026) */
 .campo-mal { border-color: var(--mal) !important; outline: 2px solid rgba(240,160,138,.25); }

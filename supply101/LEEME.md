@@ -18,8 +18,10 @@ Hace tres cosas:
 1. **Pedir una compra**: cuánto, qué, a quién, para qué proyecto —o gasto
    general—, para cuándo, y la foto de la cotización. El IVA se separa solo y
    se puede corregir.
-2. **Ver en qué va**: esperando pago, devuelta con su motivo, pagada o
-   rechazada. Una devuelta se corrige y vuelve con el mismo folio.
+2. **Ver en qué va**: esperando pago, devuelta con su motivo, pagada,
+   rechazada o cancelada. Una devuelta se corrige y vuelve con el mismo
+   folio. Una que ya no se necesita la **cancela quien la pidió**, mientras
+   está esperando pago o devuelta (9-oct-2026, contrato 0.86.0).
 3. **Abrir el comprobante** del pago, que es con lo que se le reclama al
    proveedor.
 
@@ -65,6 +67,7 @@ retroceder, para no sacarlo de supply101.
 ## Cómo se prueba aquí
 
     node supply101/pruebas/el-atras.mjs          # sin red y sin navegador
+    node supply101/pruebas/la-orden-se-cancela.mjs   # cancelar, con la API fingida
 
     node supply101/pruebas/servidor.mjs 8798     # el Worker, en esta máquina
     URL_SUPPLY=http://127.0.0.1:8798 node --test supply101/pruebas/supply.spec.mjs

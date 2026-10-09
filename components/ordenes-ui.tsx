@@ -14,6 +14,9 @@ const COLOR: Record<Orden["estado"], string> = {
   devuelta: "bg-mauve-50 text-mauve-900",
   pagada: "bg-mint-50 text-mint-900",
   rechazada: "bg-cream text-ink-muted",
+  // 0.86.0 · la canceló quien la pidió: sin relleno, sólo el contorno.
+  // Ya no cuenta, y no tiene por qué competir con lo que sigue vivo.
+  cancelada: "bg-transparent text-ink-muted border border-black/10",
 };
 
 export function Estado({ orden }: { orden: Orden }) {

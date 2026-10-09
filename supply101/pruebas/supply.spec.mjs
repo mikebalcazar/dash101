@@ -203,6 +203,39 @@ test('se pide un reembolso desde el mismo formulario, y sale con folio RE-', asy
   assert.match(await pag.locator('#b-pedir').innerText(), /Pedir la compra/);
 });
 
+/* 0.86.0 · Cancelar una compra que ya no se necesita. Mike, 9-oct: «en
+ * supply, hay que poner un botón para cancelar una orden que ya no se
+ * necesita». Contra la API de verdad: el botón, la confirmación en su lugar,
+ * «Cancelada» después, y que la API la tenga cancelada con el porqué. */
+test('una compra que ya no se necesita se cancela, con confirmación y su porqué', async () => {
+  await pag.goto(`${URL}/#/pedir`, { waitUntil: 'load' });
+  await pag.getByLabel('Cuánto es').fill('99');
+  await pag.getByLabel('Qué se compra').fill('Compra de supply101 que se cancela');
+  await pag.locator('#con-factura').uncheck();
+  await pag.getByRole('button', { name: 'Pedir la compra' }).click();
+  await pag.waitForFunction(() => location.hash.startsWith('#/orden/'), { timeout: 30000 });
+  await pag.getByRole('button', { name: 'Cancelar orden' }).waitFor({ timeout: 15000 });
+  const id = await pag.evaluate(() => location.hash.replace('#/orden/', ''));
+  const suFolio = (await pag.locator('#detalle .sub').first().innerText()).match(/OC-\d+/)[0];
+
+  await pag.getByRole('button', { name: 'Cancelar orden' }).click();
+  assert.match(await pag.locator('#confirma-cancelar').innerText(), new RegExp(`¿Cancelar ${suFolio}\\? Ya no se va a pagar\\.`));
+  await pag.getByLabel('Por qué (opcional)').fill('Ya no hace falta (prueba de supply101)');
+  await pag.getByRole('button', { name: 'Sí, cancelarla' }).click();
+  await pag.locator('#detalle .marca.apagada', { hasText: 'Cancelada' }).waitFor({ timeout: 15000 });
+  assert.equal(await pag.getByRole('button', { name: 'Cancelar orden' }).count(), 0, 'ya no se ofrece cancelarla');
+
+  const r = await api(`/orgs/${ORG}/ordenes/${id}`);
+  assert.equal(r.orden.estado, 'cancelada', 'la API la tiene cancelada');
+  assert.equal(r.eventos.at(-1).que, 'cancelada');
+  assert.equal(r.eventos.at(-1).nota, 'Ya no hace falta (prueba de supply101)');
+
+  await pag.goto(`${URL}/#/`, { waitUntil: 'load' });
+  const renglon = pag.locator('#lista .renglon', { hasText: suFolio });
+  await renglon.waitFor({ timeout: 20000 });
+  assert.match(await renglon.innerText(), /Cancelada/, '«Mis compras» dice Cancelada');
+});
+
 test('la compra sale en mis compras, y a 390 no hay barrido ni errores', async () => {
   await pag.goto(`${URL}/#/`, { waitUntil: 'load' });
   // Dentro de la lista, no en cualquier parte: el detalle sigue en el DOM,

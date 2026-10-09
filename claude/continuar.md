@@ -10,6 +10,30 @@ no se pudo medir desde aquí y se dice cómo se mide.
 
 ---
 
+# 9-oct-2026 · supply101: cancelar una orden que ya no se necesita
+
+Mike: «en supply, hay que poner un botón para cancelar una orden que ya no
+se necesita». Con la API 0.86.0 (suite101-api #291, org/0045: estado y
+evento `cancelada`, `POST /orgs/:o/ordenes/:id/cancelar`).
+
+- **supply101**: en una orden MÍA en el buzón o devuelta sale «Cancelar
+  orden» (ancho completo, 53 px de alto). Confirma en su lugar, sin
+  `window.confirm`: «¿Cancelar OC-…? Ya no se va a pagar.», «Por qué
+  (opcional)» y «Sí, cancelarla» / «No». Después la orden dice «Cancelada»
+  (chip `.marca.apagada`: sin relleno, contorno y tinta tenue) y «Mis
+  compras» la pone al final. Quien paga también abre órdenes aquí: a él no
+  se le ofrece. Se mide en `supply101/pruebas/la-orden-se-cancela.mjs`
+  (API fingida, 390×844, corre en `publicar.yml`) y contra staging en
+  `supply.spec.mjs`.
+- **dash101**: `EstadoOrden` gana `cancelada` («Cancelada», chip sin
+  relleno). Sin botones de pagar/devolver/rechazar (sólo salen en el buzón)
+  ni «Para pagarle». En Compras, sección «Canceladas» / «Lo mío que
+  cancelé», al final y sin total. El flujo y el inicio ya la dejaban fuera
+  (leen el buzón). `cancelarOrden` en `lib/ordenes.ts`; el botón NO está en
+  dash101 (no se pidió).
+
+---
+
 # 8-oct-2026 (noche) · patron101 en los reportes y «deshacer pago»
 
 Encargo del chat que construyó patron101 (Drive
