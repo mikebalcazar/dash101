@@ -121,8 +121,10 @@ h1 { font-weight: 600; letter-spacing: -.01em; }
 .monto-fila {
   font-size: 1rem; line-height: 1.4; font-weight: 600;
   font-variant-numeric: tabular-nums lining-nums;
-  text-align: right; white-space: nowrap; flex-shrink: 0; min-width: 7rem;
+  text-align: right; white-space: nowrap; flex-shrink: 0;
 }
+/* En el teléfono no hay ancho fijo: le quitaría lugar al concepto. Igual
+   quedan alineados, porque todos terminan donde empiezan las acciones. */
 @media (min-width: 640px) { .monto-fila { font-size: 1.0625rem; min-width: 9rem; } }
 /* Las acciones del renglón ocupan siempre el mismo ancho: si un renglón no
    trae el ícono de la orden, su lugar queda vacío y el monto no se mueve. */
