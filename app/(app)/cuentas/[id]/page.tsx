@@ -179,7 +179,7 @@ export default function CuentaDetallePage() {
                     {m.proyecto_nombre ? ` · ${m.proyecto_nombre}` : ""}
                   </p>
                 </div>
-                <p className={`text-sm font-medium tabular-nums whitespace-nowrap ${m.tipo === "ingreso" ? "text-mint-900" : "text-mauve-900"}`}>
+                <p className={`monto-fila ${m.tipo === "ingreso" ? "text-mint-900" : "text-mauve-900"}`}>
                   {m.tipo === "ingreso" ? "+" : "−"}{formatMonto(m.monto, cuenta!.moneda)}
                 </p>
               </Link>
