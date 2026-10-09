@@ -179,28 +179,33 @@ export default function MovimientosPage() {
       <div className="flex justify-between items-baseline mb-4">
         <div>
           <h2 className="text-lg font-medium text-ink-dim">Movimientos</h2>
-          <p className="text-xs text-ink-muted mt-0.5">
-            {empresa.nombre} · Mes:{" "}
-            <span className="text-mint-900">
-              +{formatMonto(totalesMes.ingresos, empresa.moneda, { short: true })}
-            </span>{" "}
-            /{" "}
-            <span className="text-mauve-900">
-              −{formatMonto(totalesMes.egresos, empresa.moneda, { short: true })}
+          <p className="text-xs text-ink-muted mt-0.5">{empresa.nombre} · este mes</p>
+          <p className="mt-1 flex items-baseline gap-4 flex-wrap" data-totales-mes>
+            <span className="text-xs text-ink-muted">
+              Ingresos{" "}
+              <span className="text-base font-semibold tabular-nums text-mint-900">
+                +{formatMonto(totalesMes.ingresos, empresa.moneda, { short: true })}
+              </span>
+            </span>
+            <span className="text-xs text-ink-muted">
+              Egresos{" "}
+              <span className="text-base font-semibold tabular-nums text-mauve-900">
+                −{formatMonto(totalesMes.egresos, empresa.moneda, { short: true })}
+              </span>
             </span>
           </p>
           {(totalesMes.prestamo_recibido !== 0 || totalesMes.prestamo_capital !== 0) && (
-            <p className="text-[11px] text-ink-muted mt-0.5" data-prestamos-mes>
+            <p className="text-xs text-ink-muted mt-1" data-prestamos-mes>
               Préstamos (no son ingreso ni gasto): recibido{" "}
-              <span className="text-mint-900">+{formatMonto(totalesMes.prestamo_recibido, empresa.moneda, { short: true })}</span>
+              <span className="font-semibold tabular-nums text-mint-900">+{formatMonto(totalesMes.prestamo_recibido, empresa.moneda, { short: true })}</span>
               {" · "}capital devuelto{" "}
-              <span className="text-mauve-900">−{formatMonto(totalesMes.prestamo_capital, empresa.moneda, { short: true })}</span>
+              <span className="font-semibold tabular-nums text-mauve-900">−{formatMonto(totalesMes.prestamo_capital, empresa.moneda, { short: true })}</span>
             </p>
           )}
           {totalesMes.sin_identificar !== 0 && (
-            <p className="text-[11px] text-ink-muted mt-0.5">
+            <p className="text-xs text-ink-muted mt-0.5">
               Sin identificar (conciliación):{" "}
-              <span className="text-mauve-900">
+              <span className="font-semibold tabular-nums text-mauve-900">
                 {formatMonto(totalesMes.sin_identificar, empresa.moneda, { short: true })}
               </span>
             </p>
@@ -319,10 +324,11 @@ export default function MovimientosPage() {
                     {m.proyecto_nombre && ` · ${m.proyecto_nombre}`}
                   </p>
                 </div>
-                <p className={`text-sm font-medium whitespace-nowrap ${meta.montoColor}`}>
+                <p className={`monto-fila ${meta.montoColor}`} data-monto>
                   {meta.prefix}
                   {formatMonto(m.monto, empresa.moneda)}
                 </p>
+                <div className="acciones-fila" data-acciones>
                 {/* El egreso que dejó una orden pagada lleva a la orden. Va aquí,
                     entre las acciones, y no dentro del renglón del concepto: ese
                     renglón se recorta con `truncate` y en el teléfono el botón
@@ -338,6 +344,7 @@ export default function MovimientosPage() {
                     <IconExternalLink size={14} />
                   </button>
                 )}
+                {!(deOrden(m) && m.id) && <span className="hueco" aria-hidden />}
                 {/* Corregir, antes que borrar: es lo que casi siempre se quiere.
                     Una transferencia no se corrige —son dos movimientos
                     espejo—, así que ahí sólo queda el bote. */}
@@ -350,6 +357,7 @@ export default function MovimientosPage() {
                     <IconPencil size={14} />
                   </Link>
                 )}
+                {m.transfer_id && <span className="hueco" aria-hidden />}
                 <button
                   onClick={() => handleDelete(m)}
                   disabled={deletingId === m.id}
@@ -358,6 +366,7 @@ export default function MovimientosPage() {
                 >
                   <IconTrash size={14} />
                 </button>
+                </div>
               </div>
             );
           })}

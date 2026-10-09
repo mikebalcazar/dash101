@@ -490,7 +490,7 @@ export default function DashboardPage() {
                       {m.proyecto_nombre && ` · ${m.proyecto_nombre}`}
                     </p>
                   </div>
-                  <p className={`text-sm font-medium whitespace-nowrap ${meta.montoColor}`}>
+                  <p className={`monto-fila ${meta.montoColor}`}>
                     {meta.prefix}
                     {formatMonto(m.monto, empresa.moneda)}
                   </p>

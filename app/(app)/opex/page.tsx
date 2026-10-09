@@ -202,7 +202,7 @@ export default function OpexPage() {
                   </p>
                 </Link>
                 <div className="text-right">
-                  <p className={`text-sm font-medium ${montoColor}`}>
+                  <p className={`monto-fila ${montoColor}`}>
                     {o.tipo === "ingreso" ? "+" : "−"}
                     {formatMonto(o.monto, o.moneda)}
                   </p>
