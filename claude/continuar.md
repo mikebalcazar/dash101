@@ -10,6 +10,38 @@ no se pudo medir desde aquí y se dice cómo se mide.
 
 ---
 
+# 10-oct-2026 · reembolsos: la cuenta de quien pide, obligatoria, y visible al pagar (API 0.92.0)
+
+Mike mandó una captura: en un reembolso, «Dónde lo compraste» abría la ficha
+del proveedor con sus cuentas y se leía como «paga aquí». Con botones decidió:
+**un reembolso se paga SÓLO a quien lo pidió** (nada de cuentas de terceros);
+la cuenta se exige al pedir si no está guardada; y quien paga la ve para
+copiarla al banco. Detalle en `suite101-api/muro/2026-10-10-0100-…`.
+
+- **supply101**: en modo reembolso sale «A qué cuenta te lo regresamos». Sin
+  cuenta guardada (`/ordenes/permisos` → `cuenta_reembolso`), la forma va
+  abierta: CLABE (se revisa el verificador antes de mandar), banco, a nombre
+  de quién; viaja en `cuenta` con el POST. Con cuenta, la tarjeta y
+  «Cambiar la cuenta». Al corregir, la cuenta que se enseña es la de la
+  orden. La ficha del proveedor **no se ofrece en reembolso**. La orden dice
+  «A qué cuenta». Medido en `supply101/pruebas/la-cuenta-del-reembolso.mjs`
+  (API fingida, 390×844; en `publicar.yml`).
+- **dash101**: la orden de un reembolso trae «Para reembolsarle» con nombre,
+  correo, banco, CLABE legible con «Copiar» y a nombre de quién
+  (`reembolso_a` de la API). Un reembolso de antes de la 0050 lo dice en vez
+  de inventar una cuenta. `lib/ordenes.ts`: `ReembolsoA`,
+  `CuentaDeReembolso`, `guardarCuentaReembolso()`, `cuenta` en `OrdenInput`.
+- `pruebas/ordenes-api.spec.ts` (staging): el reembolso sin cuenta da
+  `falta_cuenta_reembolso`, una CLABE mala no se guarda, con la guardada entra
+  y `verOrden` trae `reembolso_a`.
+
+Pendiente visto de paso, sin tocar: `verPedir` conserva el proveedor que ya
+estaba escogido en el `<select>` aunque se abra a corregir OTRA orden
+(«si entre tanto alguien ya escogió algo, se respeta»); al corregir puede
+colarse el proveedor de la orden anterior.
+
+---
+
 # 9-oct-2026 · supply101: cancelar una orden que ya no se necesita
 
 Mike: «en supply, hay que poner un botón para cancelar una orden que ya no

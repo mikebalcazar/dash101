@@ -184,6 +184,15 @@ test('se pide un reembolso desde el mismo formulario, y sale con folio RE-', asy
   await pag.getByLabel('Cuánto pagaste').fill('850');
   await pag.getByLabel('Qué compraste').fill('Gasolina de supply101');
   await pag.locator('#con-factura').uncheck();
+  // 0.92.0 · La cuenta a la que se me regresa: se pide la primera vez; si
+  // esta cuenta ya la dio en otra corrida, la tarjeta sale y la forma no.
+  assert.ok(await pag.locator('#bloque-cuenta').isVisible(), 'en reembolso sale «A qué cuenta te lo regresamos»');
+  if (await pag.locator('#cuenta-forma').isVisible()) {
+    await pag.locator('#rc-clabe').fill('012 180 01562178859 4');
+    await pag.locator('#rc-banco').fill('BBVA');
+  } else {
+    assert.ok(await pag.locator('#cuenta-guardada').isVisible(), 'o la cuenta guardada');
+  }
   await pag.getByRole('button', { name: 'Pedir el reembolso' }).click();
   await pag.waitForFunction(() => location.hash.startsWith('#/orden/'), { timeout: 30000 });
   await pag.waitForTimeout(1200);
@@ -193,6 +202,7 @@ test('se pide un reembolso desde el mismo formulario, y sale con folio RE-', asy
   assert.match(dice, /Reembolso/, 'y dice que es reembolso');
   assert.match(dice, /\$850\.00/, 'en pesos');
   assert.match(dice, /Esperando pago/, 'cae al buzón de quien paga, como una compra');
+  assert.match(dice, /A qué cuenta[\s\S]*012 180 01562178859 4/, 'y dice a qué cuenta se le regresa (0.92.0)');
 
   // Y la opción se cambia en el mismo formulario: abrir «pedir» y picar
   // Reembolso deja el mismo estado que la liga directa.

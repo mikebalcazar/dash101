@@ -24,7 +24,7 @@ import { createProveedor } from "@/lib/proveedores";
 import { createProyecto } from "@/lib/proyectos";
 import {
   clabeLegible, corregirOrden, crearOrden, desglosar, devolverOrden, getBuzon, getPermisosOrdenes, getResumenOrdenes,
-  cancelarOrden, listContadores, listMisOrdenes, listOrdenesPagadas, listPartidasDe, marcarContador, pagarOrden, vencida, verOrden,
+  cancelarOrden, guardarCuentaReembolso, listContadores, listMisOrdenes, listOrdenesPagadas, listPartidasDe, marcarContador, pagarOrden, vencida, verOrden,
 } from "@/lib/ordenes";
 import {
   crearCfdi, getCuadre, getIva, ligarCfdi, listCfdi, listPendientes, cancelarCfdi,
@@ -282,15 +282,31 @@ describe("cancelar", () => {
 describe("reembolsos", () => {
   let re = "";
 
-  it("se pide como reembolso y sale con folio RE-, en pesos", async () => {
+  it("se pide como reembolso y sale con folio RE-, en pesos; y lleva la cuenta a la que se paga (0.92.0)", async () => {
+    /* 0.92.0 · Sin cuenta a dónde pagarlo, el reembolso no entra: esta
+     * cuenta es nueva en la org y nunca la ha dado. Con una CLABE que no
+     * cuadra tampoco se guarda. */
+    await expect(crearOrden({ tipo: "reembolso", concepto: "Gasolina", monto: 850, con_factura: false })).rejects.toMatchObject({ error: "falta_cuenta_reembolso" });
+    await expect(guardarCuentaReembolso({ clabe: "012180015621788591" })).rejects.toMatchObject({ error: "datos_invalidos" });
+    const cuenta = await guardarCuentaReembolso({ clabe: "012 180 01562178859 4", banco: "BBVA" });
+    expect(cuenta.clabe, "sin espacios").toBe("012180015621788594");
+    expect(cuenta.beneficiario, "sin beneficiario, es quien la guarda").toBeTruthy();
+    const p = await getPermisosOrdenes();
+    expect(p.puede_comprar, "esta cuenta sí compra").toBe(true);
+    expect(p.cuenta_reembolso?.clabe, "/permisos la trae").toBe("012180015621788594");
+
     const o = await crearOrden({ tipo: "reembolso", concepto: "Gasolina", monto: 850, con_factura: false });
     re = o.id;
     expect(o.tipo).toBe("reembolso");
     expect(o.folio).toMatch(/^RE-/);
     expect(o.monto).toBe(850);
     expect((await listMisOrdenes()).some((x) => x.id === re && x.tipo === "reembolso")).toBe(true);
-    const p = await getPermisosOrdenes();
-    expect(p.puede_comprar, "esta cuenta sí compra").toBe(true);
+    // Lo que ve quien paga: a quién y a qué cuenta, copiado en la orden.
+    const v = await verOrden(re);
+    expect(v.reembolso_a?.clabe).toBe("012180015621788594");
+    expect(v.reembolso_a?.banco).toBe("BBVA");
+    expect(v.reembolso_a?.nombre || v.reembolso_a?.correo).toBeTruthy();
+    expect(clabeLegible(v.reembolso_a!.clabe!)).toBe("012 180 01562178859 4");
   });
 
   it("la pestaña de reembolsos suma sólo reembolsos, y el resumen del inicio cuadra con ella", async () => {

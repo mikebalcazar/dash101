@@ -260,6 +260,12 @@ jobs:
       # Con la API fingida, como la de arriba.
       - name: Cancelar una orden en supply101
         run: node supply101/pruebas/la-orden-se-cancela.mjs
+      # La cuenta a la que se reembolsa (10-oct-2026, contrato 0.92.0): en
+      # reembolso se pide si no está guardada, la CLABE se revisa antes de
+      # mandar, viaja con la orden, y la ficha del proveedor no se ofrece.
+      # Con la API fingida, como las dos de arriba.
+      - name: La cuenta del reembolso en supply101
+        run: node supply101/pruebas/la-cuenta-del-reembolso.mjs
       - name: Con un navegador, contra staging
         id: navegador
         continue-on-error: true

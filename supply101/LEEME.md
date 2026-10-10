@@ -68,6 +68,7 @@ retroceder, para no sacarlo de supply101.
 
     node supply101/pruebas/el-atras.mjs          # sin red y sin navegador
     node supply101/pruebas/la-orden-se-cancela.mjs   # cancelar, con la API fingida
+    node supply101/pruebas/la-cuenta-del-reembolso.mjs   # a qué cuenta se reembolsa, con la API fingida
 
     node supply101/pruebas/servidor.mjs 8798     # el Worker, en esta máquina
     URL_SUPPLY=http://127.0.0.1:8798 node --test supply101/pruebas/supply.spec.mjs

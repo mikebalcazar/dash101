@@ -89,9 +89,28 @@ export interface ProveedorDePago {
   terminos_pago: string | null; cuentas: CuentaDeProveedor[];
 }
 
-/** Una orden con su historia, sus papeles y, desde 0.67.0, su proveedor como se le paga. */
+/** Contrato 0.92.0 · A quién y a qué cuenta se le paga un REEMBOLSO, tal como
+ *  quedó copiado en la orden al pedirla (Mike, 10-oct-2026: un reembolso se
+ *  paga sólo a quien lo pidió; «esa info de cuenta bancaria cuando se va a
+ *  pagar el reembolso debe aparecer para poder ingresarla en el sistema
+ *  bancario o copiarla»). `null` en una compra. `clabe` null sólo en un
+ *  reembolso pedido antes de que supply101 exigiera la cuenta. */
+export interface ReembolsoA {
+  nombre: string | null; correo: string | null;
+  clabe: string | null; banco: string | null; beneficiario: string | null;
+}
+
+/** Contrato 0.92.0 · La cuenta a la que se me reembolsa: una por persona,
+ *  la da la primera vez que pide un reembolso. */
+export interface CuentaDeReembolso {
+  clabe: string; banco: string | null; beneficiario: string | null; actualizado_at: string;
+}
+
+/** Una orden con su historia, sus papeles, su proveedor como se le paga
+ *  (0.67.0) y, en un reembolso, a quién se le regresa el dinero (0.92.0). */
 export interface OrdenCompleta {
   orden: Orden; eventos: EventoOrden[]; archivos: ArchivoOrden[]; proveedor: ProveedorDePago | null;
+  reembolso_a: ReembolsoA | null;
 }
 
 /** La CLABE en grupos que se leen (banco · plaza · cuenta · verificador). */
@@ -152,6 +171,10 @@ export interface OrdenInput {
   tasa_iva?: number;
   fecha_maxima_pago?: string | null;
   urgente?: boolean;
+  /** 0.92.0 · Sólo en un reembolso: la cuenta a la que se me paga. Sin ella
+   *  la API usa la que ya tengo guardada; sin ninguna, contesta 400
+   *  `falta_cuenta_reembolso`. */
+  cuenta?: { clabe: string; banco?: string | null; beneficiario?: string | null } | null;
 }
 
 export async function crearOrden(d: OrdenInput): Promise<Orden> {
@@ -174,13 +197,23 @@ export async function crearOrden(d: OrdenInput): Promise<Orden> {
     cuerpo.iva = aCentavos(d.iva);
   }
   if (d.tasa_iva !== undefined) cuerpo.tasa_iva = d.tasa_iva;
+  if (d.cuenta && (d.tipo ?? 'compra') === 'reembolso') cuerpo.cuenta = d.cuenta;
   return orden(await pedir<FilaOrden>(base(), { method: 'POST', body: cuerpo }));
 }
 
 export async function verOrden(id: string): Promise<OrdenCompleta> {
-  const r = await pedir<{ orden: FilaOrden; eventos: EventoOrden[]; archivos: ArchivoOrden[]; proveedor?: ProveedorDePago | null }>(`${base()}/${id}`);
-  // Una API anterior a 0.67.0 no manda `proveedor`: se toma como «no hay».
-  return { ...r, orden: orden(r.orden), proveedor: r.proveedor ?? null };
+  const r = await pedir<{ orden: FilaOrden; eventos: EventoOrden[]; archivos: ArchivoOrden[]; proveedor?: ProveedorDePago | null; reembolso_a?: ReembolsoA | null }>(`${base()}/${id}`);
+  // Una API anterior a 0.67.0 no manda `proveedor`, y una anterior a 0.92.0
+  // no manda `reembolso_a`: se toman como «no hay».
+  return { ...r, orden: orden(r.orden), proveedor: r.proveedor ?? null, reembolso_a: r.reembolso_a ?? null };
+}
+
+/** 0.92.0 · Guardar o cambiar la cuenta a la que se ME reembolsa (es la de
+ *  quien pregunta; no lleva id). La CLABE se revisa en la API: 18 dígitos y
+ *  el verificador; si no cuadra, 400 `datos_invalidos` con `errores.clabe`. */
+export async function guardarCuentaReembolso(d: { clabe: string; banco?: string | null; beneficiario?: string | null }): Promise<CuentaDeReembolso> {
+  const r = await pedir<{ cuenta: CuentaDeReembolso }>(`${base()}/cuenta-reembolso`, { method: 'PUT', body: d });
+  return r.cuenta;
 }
 
 /** 0.56.1 · La orden que dejó ese egreso: desde el movimiento se llega a
@@ -260,7 +293,7 @@ export async function getResumenOrdenes(): Promise<ResumenOrdenes> {
  *  comprar; la excepción vive en supply101, donde quien no trae la llave de
  *  compras entra sólo a reembolsos. Se pinta lo que diga el servidor. */
 export const getPermisosOrdenes = () =>
-  pedir<{ puede_comprar: boolean; puede_pagar: boolean }>(`${base()}/permisos`);
+  pedir<{ puede_comprar: boolean; puede_pagar: boolean; cuenta_reembolso?: CuentaDeReembolso | null }>(`${base()}/permisos`);
 
 export async function pagarOrden(id: string, d: { cuenta_id: string; fecha?: string; nota?: string }) {
   const r = await pedir<{ orden: FilaOrden; movimiento: { id: string; monto: number }; correo: { enviado: boolean; motivo?: string; para?: string } }>(

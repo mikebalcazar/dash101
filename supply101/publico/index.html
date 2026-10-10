@@ -198,6 +198,37 @@
         </div>
       </div>
 
+      <!-- 0.92.0 · A qué cuenta se le regresa el dinero (Mike, 10-oct-2026):
+           un reembolso se paga SÓLO a quien lo pide, nunca a un proveedor ni
+           a un tercero. Se pide la primera vez y queda guardada; aquí se
+           enseña y se puede cambiar. Sólo sale en modo reembolso. -->
+      <div id="bloque-cuenta" class="oculto">
+        <label>A qué cuenta te lo regresamos
+          <span class="pista">Sólo a una cuenta tuya. Queda guardada para la próxima vez.</span>
+        </label>
+        <div id="cuenta-guardada" class="tarjeta oculto">
+          <p class="sub" style="margin:0"><b id="cg-banco"></b><span id="cg-beneficiario"></span></p>
+          <p class="clabe" id="cg-clabe" style="margin:4px 0 0"></p>
+          <button type="button" class="liso" id="b-cambiar-cuenta" style="margin-top:6px">Cambiar la cuenta</button>
+        </div>
+        <div id="cuenta-forma" class="tarjeta oculto">
+          <p class="sub" id="cuenta-forma-p" style="margin:0 0 8px">Es tu primer reembolso: dinos a qué cuenta te lo regresamos.</p>
+          <label for="rc-clabe" style="margin-top:0">CLABE <span class="pista">18 dígitos. Se revisa que cuadre.</span></label>
+          <input id="rc-clabe" inputmode="numeric" maxlength="24" placeholder="012 180 00000000000 0" autocomplete="off">
+          <div class="fila">
+            <div>
+              <label for="rc-banco">Banco</label>
+              <input id="rc-banco" placeholder="BBVA">
+            </div>
+            <div>
+              <label for="rc-beneficiario">A nombre de</label>
+              <input id="rc-beneficiario" placeholder="Tu nombre, como está en el banco">
+            </div>
+          </div>
+          <button type="button" class="liso oculto" id="b-dejar-cuenta" style="margin-top:6px">Dejar la que tenía</button>
+        </div>
+      </div>
+
       <label for="proyecto">Para qué proyecto
         <span class="pista">Si no es de ninguno, déjalo en gasto general.</span>
       </label>
