@@ -208,6 +208,8 @@ a.liga { display: inline-block; margin-top: 6px; font-size: 13px; color: var(--i
 .cuentas-lista li, .docs-lista li { display: flex; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--linea); font-size: 14px; }
 .cuentas-lista li > span, .docs-lista li > a, .docs-lista li > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .cuentas-lista .clabe { font-variant-numeric: tabular-nums; color: var(--tinta-2); font-size: 13px; }
+/* 0.92.0 · La CLABE a la que se reembolsa, en el formulario y en la orden. */
+#cg-clabe, .datos .clabe { font-variant-numeric: tabular-nums; letter-spacing: .04em; font-size: 15px; }
 .cuentas-lista .quitar, .docs-lista .quitar { background: none; border: 0; font-size: 18px; color: var(--tinta-2); padding: 2px 6px; flex: 0 0 auto; }
 
 

@@ -68,6 +68,7 @@ const DICHO = {
   orden_no_esta_devuelta: 'Esta orden ya no se puede corregir: cambió de estado.',
   orden_no_se_puede_cancelar: 'Esta orden ya no se puede cancelar: cambió de estado.',
   compras_no_autorizadas: 'Tu usuario no está autorizado para compras. Puedes pedir un reembolso.',
+  falta_cuenta_reembolso: 'Para pedir un reembolso hace falta la cuenta a la que se te paga: la CLABE, el banco y a nombre de quién está.',
   no_encontrado: 'No se encontró.',
 };
 const enPalabras = (e) => DICHO[e?.error] || e?.error || 'No se pudo. Vuelve a intentar.';
@@ -140,6 +141,8 @@ const est = {
   orden: null,        // la última orden abierta, para no volver a pedirla
   puedeComprar: true, // lo dice el servidor; sin respuesta, se asume que sí
   tipo: 'compra',     // lo que se está pidiendo: compra o reembolso
+  cuenta: null,       // 0.92.0 · a qué cuenta se me reembolsa {clabe, banco, beneficiario}, o null si nunca la di
+  cambiandoCuenta: false, // ¿está abierta la forma para cambiarla?
 };
 const TIPO = { compra: 'Compra', reembolso: 'Reembolso' };
 const LLAVE_ORG = 'supply101:org';
@@ -270,7 +273,9 @@ async function arrancarSesion() {
   try {
     const p = await pedir(`/orgs/${est.org.id}/ordenes/permisos`);
     est.puedeComprar = p.puede_comprar !== false;
-  } catch { est.puedeComprar = true; }
+    // 0.92.0 · Y a qué cuenta se me reembolsa, si ya la di.
+    est.cuenta = p.cuenta_reembolso && p.cuenta_reembolso.clabe ? p.cuenta_reembolso : null;
+  } catch { est.puedeComprar = true; est.cuenta = null; }
   ver('b-nueva-compra', est.puedeComprar);
   ver('sin-compras', !est.puedeComprar);
 
@@ -355,6 +360,71 @@ function ponerTipo(tipo, fijo) {
   $('concepto').placeholder = re ? 'Gasolina de la camioneta' : 'Triplay de 18 mm, 12 hojas';
   $('proveedor-l').textContent = re ? 'Dónde lo compraste (si quieres)' : 'A quién se le compra';
   $('archivo-l').textContent = re ? 'Foto o PDF del ticket o la factura' : 'Foto o PDF de la cotización';
+  /* 0.92.0 · En un reembolso el proveedor es sólo dónde se compró: su ficha
+   * con cuentas NO se enseña, porque se leía como «paga aquí» (Mike, 10-oct).
+   * Y sale el bloque de a qué cuenta se me regresa. */
+  ver('bloque-cuenta', re);
+  if (re) pintarCuenta(); else est.cambiandoCuenta = false;
+  refrescarProveedor();
+}
+
+/* ─────────────── 0.92.0 · a qué cuenta se me reembolsa ───────────────
+ * Mike, 10-oct-2026: un reembolso se paga SÓLO a quien lo pide. Si ya dio su
+ * cuenta (la trae /ordenes/permisos), se enseña y se puede cambiar; si no, se
+ * pide aquí mismo y viaja con la orden, que la guarda como la suya. Al
+ * corregir, la cuenta que se enseña es la que la ORDEN ya traía. */
+const fmtClabe = (c) => String(c || '').replace(/(\d{3})(\d{3})(\d{11})(\d)/, '$1 $2 $3 $4');
+/** La CLABE son 18 dígitos y el último los verifica (pesos 3, 7, 1): la misma
+ *  regla que la API, para decirlo antes de mandar y no después. */
+function clabeCuadra(c) {
+  if (!/^\d{18}$/.test(c)) return false;
+  const pesos = [3, 7, 1];
+  let suma = 0;
+  for (let i = 0; i < 17; i++) suma += (Number(c[i]) * pesos[i % 3]) % 10;
+  return (10 - (suma % 10)) % 10 === Number(c[17]);
+}
+/** La cuenta que aplica a lo que se está pidiendo: la de la orden que se
+ *  corrige, o la mía guardada. */
+function cuentaQueAplica() {
+  const o = est.corrigiendo;
+  if (o && o.tipo === 'reembolso' && o.reembolso_clabe) return { clabe: o.reembolso_clabe, banco: o.reembolso_banco, beneficiario: o.reembolso_beneficiario };
+  return est.cuenta;
+}
+function pintarCuenta() {
+  const c = cuentaQueAplica();
+  const forma = !c || est.cambiandoCuenta;
+  ver('cuenta-guardada', !forma);
+  ver('cuenta-forma', forma);
+  if (c) {
+    $('cg-banco').textContent = c.banco || 'Cuenta';
+    $('cg-beneficiario').textContent = c.beneficiario ? ` · ${c.beneficiario}` : '';
+    $('cg-clabe').textContent = fmtClabe(c.clabe);
+  }
+  $('cuenta-forma-p').textContent = c ? 'Escribe la cuenta nueva. Se queda guardada para las siguientes.' : 'Es tu primer reembolso: dinos a qué cuenta te lo regresamos.';
+  ver('b-dejar-cuenta', !!c);
+  if (forma && !est.cambiandoCuenta) {
+    // Primera vez: el beneficiario es quien pide, por defecto.
+    if (!$('rc-beneficiario').value) $('rc-beneficiario').value = est.yo?.usuario?.nombre || '';
+  }
+  $('rc-clabe').classList.remove('campo-mal');
+}
+$('b-cambiar-cuenta').onclick = () => {
+  est.cambiandoCuenta = true;
+  for (const id of ['rc-clabe', 'rc-banco', 'rc-beneficiario']) $(id).value = '';
+  const c = cuentaQueAplica();
+  if (c) { $('rc-banco').value = c.banco || ''; $('rc-beneficiario').value = c.beneficiario || ''; }
+  pintarCuenta();
+  $('rc-clabe').focus();
+};
+$('b-dejar-cuenta').onclick = () => { est.cambiandoCuenta = false; pintarCuenta(); };
+/** La cuenta escrita en la forma, limpia, o `null` si la forma está cerrada
+ *  (se usa la guardada). Si está abierta y no cuadra, dice por qué. */
+function cuentaDeLaForma() {
+  if ($('cuenta-forma').classList.contains('oculto')) return null;
+  const clabe = $('rc-clabe').value.replace(/[\s-]/g, '');
+  if (!clabe) return { error: 'Escribe la CLABE a la que se te regresa el dinero: son 18 dígitos.' };
+  if (!clabeCuadra(clabe)) return { error: 'La CLABE no cuadra: son 18 dígitos y el último los verifica. Revísala.' };
+  return { cuenta: { clabe, banco: $('rc-banco').value.trim() || null, beneficiario: $('rc-beneficiario').value.trim() || null } };
 }
 for (const b of document.querySelectorAll('#tipo .opcion')) {
   b.onclick = () => { if (!b.disabled) ponerTipo(b.dataset.tipo, false); };
@@ -385,6 +455,10 @@ async function verPedir(orden, tipo = 'compra') {
   refrescarIva();
   limpiarAltaProveedor();
   abrirAltaProveedor(false);
+  // 0.92.0 · La forma de la cuenta empieza cerrada y vacía cada vez.
+  est.cambiandoCuenta = false;
+  for (const id of ['rc-clabe', 'rc-banco', 'rc-beneficiario']) $(id).value = '';
+  if (est.tipo === 'reembolso') pintarCuenta();
 
   // Los pools: proveedores y proyectos. Si la API dice que no —una cuenta de
   // nómina sin permiso para verlos—, se sigue sin ellos: el nombre del
@@ -410,9 +484,10 @@ async function verPedir(orden, tipo = 'compra') {
 let tocado = false;  // ¿alguien editó el desglose a mano?
 
 const refrescarProveedor = () => {
+  const re = est.tipo === 'reembolso';
   ver('proveedor-nuevo', !$('proveedor').value);
-  ver('b-ficha-proveedor', !!$('proveedor').value && $('ficha-proveedor').classList.contains('oculto'));
-  if (!$('proveedor').value) ver('ficha-proveedor', false);
+  ver('b-ficha-proveedor', !re && !!$('proveedor').value && $('ficha-proveedor').classList.contains('oculto'));
+  if (re || !$('proveedor').value) ver('ficha-proveedor', false);
 };
 $('proveedor').onchange = () => { ver('ficha-proveedor', false); refrescarProveedor(); };
 
@@ -599,7 +674,7 @@ $('pv-guardar').onclick = async () => {
  * en «A quién se le compra» aparece «Ver la ficha»: sus datos, sus cuentas
  * (se agregan y se quitan) y sus documentos (se suben y se quitan). Vive
  * dentro de «Pedir», como el alta, para no salir del formulario a medias. */
-const fmtClabe = (c) => String(c || '').replace(/(\d{3})(\d{3})(\d{11})(\d)/, '$1 $2 $3 $4');
+/* `fmtClabe` vive arriba, con la cuenta del reembolso (0.92.0); es la misma. */
 async function abrirFicha(abrir) {
   ver('ficha-proveedor', abrir);
   ver('b-ficha-proveedor', !abrir && !!$('proveedor').value);
@@ -711,6 +786,13 @@ $('f-pedir').onsubmit = async (ev) => {
   decir('err-pedir', '');
   if (!cuadra()) return decir('err-pedir', 'El subtotal más el IVA tiene que dar el total exacto.');
   if (aCentavos($('monto').value) <= 0) return decir('err-pedir', 'Escribe cuánto es.');
+  // 0.92.0 · En un reembolso, la cuenta: la de la forma si está abierta.
+  let cuenta = null;
+  if (est.tipo === 'reembolso') {
+    const c = cuentaDeLaForma();
+    if (c?.error) { $('rc-clabe').classList.add('campo-mal'); $('rc-clabe').focus(); return decir('err-pedir', c.error); }
+    cuenta = c?.cuenta ?? null;
+  }
   const b = $('b-pedir'); const antes = b.textContent; b.disabled = true; b.textContent = 'Mandando…';
 
   const cuerpo = {
@@ -733,6 +815,7 @@ $('f-pedir').onsubmit = async (ev) => {
     cuerpo.subtotal = aCentavos($('subtotal').value);
     cuerpo.iva = aCentavos($('iva').value);
   }
+  if (cuenta) cuerpo.cuenta = cuenta;
 
   try {
     let orden;
@@ -761,10 +844,18 @@ $('f-pedir').onsubmit = async (ev) => {
         }
       }
     }
+    // 0.92.0 · La cuenta con la que salió el reembolso es ahora la mía.
+    if (orden.tipo === 'reembolso' && orden.reembolso_clabe) {
+      est.cuenta = { clabe: orden.reembolso_clabe, banco: orden.reembolso_banco, beneficiario: orden.reembolso_beneficiario };
+      est.cambiandoCuenta = false;
+    }
     est.corrigiendo = null;
     irA(`/orden/${orden.id}`, HONDURA.orden);
   } catch (e) {
-    decir('err-pedir', enPalabras(e));
+    // Una CLABE que la API rechaza se señala en su campo, con sus palabras.
+    const porCampo = e?.detalle?.errores?.clabe;
+    if (porCampo && est.tipo === 'reembolso') { $('rc-clabe').classList.add('campo-mal'); decir('err-pedir', porCampo); }
+    else decir('err-pedir', enPalabras(e));
   } finally { b.disabled = false; b.textContent = antes; }
 };
 
@@ -814,6 +905,8 @@ async function verDetalle(id) {
     <div class="tarjeta" style="margin-top:12px">
       <dl class="datos">
         <div><dt>${reembolso ? 'Cuánto se te regresa' : 'Cuánto'}</dt><dd><b>${pesos(o.monto, o.moneda)}</b></dd></div>
+        ${reembolso && o.reembolso_clabe ? `<div><dt>A qué cuenta</dt><dd><span class="clabe">${escapar(fmtClabe(o.reembolso_clabe))}</span>${
+          o.reembolso_banco ? ` · ${escapar(o.reembolso_banco)}` : ''}${o.reembolso_beneficiario ? `<br>${escapar(o.reembolso_beneficiario)}` : ''}</dd></div>` : ''}
         ${o.con_factura ? `<div><dt>Subtotal e IVA</dt><dd>${pesos(o.subtotal, o.moneda)} + ${pesos(o.iva, o.moneda)}</dd></div>` : ''}
         <div><dt>${o.estado === 'pagada' ? 'Se pagó el' : o.estado === 'cancelada' ? 'Se canceló el' : 'Se tiene que pagar'}</dt><dd>${
           o.estado === 'pagada' ? escapar(String(o.pagada_at || '').slice(0, 10))

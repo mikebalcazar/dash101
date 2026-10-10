@@ -26,7 +26,7 @@ import { SoltarArchivo } from "@/components/soltar-archivo";
 import { AQuien, BOTON, CAJA, CAJA_NUM, Dinero, ETIQUETA, Estado, Tipo, Vence } from "@/components/ordenes-ui";
 import type { Cuenta } from "@/types/schema";
 import { IconArrowLeft, IconCheck, IconCopy, IconFileText } from "@tabler/icons-react";
-import { clabeLegible, type ProveedorDePago } from "@/lib/ordenes";
+import { clabeLegible, type ProveedorDePago, type ReembolsoA } from "@/lib/ordenes";
 
 const QUE: Record<EventoOrden["que"], string> = {
   creada: "La pidió",
@@ -50,6 +50,7 @@ export default function OrdenPage() {
   const [eventos, setEventos] = useState<EventoOrden[]>([]);
   const [archivos, setArchivos] = useState<ArchivoOrden[]>([]);
   const [proveedor, setProveedor] = useState<ProveedorDePago | null>(null);
+  const [reembolsoA, setReembolsoA] = useState<ReembolsoA | null>(null);
   const [puedoPagar, setPuedoPagar] = useState(false);
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -74,6 +75,7 @@ export default function OrdenPage() {
       setEventos(r.eventos);
       setArchivos(r.archivos);
       setProveedor(r.proveedor);
+      setReembolsoA(r.reembolso_a);
       setMontoNuevo(String(r.orden.monto));
       setConceptoNuevo(r.orden.concepto);
     } catch (e) {
@@ -198,10 +200,13 @@ export default function OrdenPage() {
 
       {/* Mike, 5-oct-2026: «ahí mismo en la orden aparezcan los datos
           bancarios o de pago del proveedor para hacer ese pago». Un reembolso
-          no: ése se le regresa a quien puso el dinero. */}
+          no: ése se le regresa a quien puso el dinero, a SU cuenta (0.92.0,
+          Mike, 10-oct: nunca a un proveedor ni a un tercero), y esa cuenta
+          se enseña aquí para copiarla al banco. */}
       {/* Una cancelada (0.86.0) ya no se paga: ni datos para pagarle. Los
           botones de pagar, devolver y rechazar sólo salen en el buzón. */}
       {orden.tipo === "compra" && orden.estado !== "cancelada" && <ParaPagarle orden={orden} proveedor={proveedor} />}
+      {orden.tipo === "reembolso" && orden.estado !== "cancelada" && <ParaReembolsarle orden={orden} a={reembolsoA} />}
 
       {archivos.length > 0 && (
         <div className="bg-white border border-black/5 rounded-2xl p-4 mb-4">
@@ -441,6 +446,44 @@ function ParaPagarle({ orden, proveedor }: { orden: Orden; proveedor: ProveedorD
             </ul>
           )}
         </>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────── para reembolsarle ───────────────
+ * A quién y a qué cuenta se le regresa el dinero de un reembolso, tal como
+ * la API lo manda con la orden (contrato 0.92.0): la cuenta que quien pidió
+ * dio en supply101, copiada en la orden al pedirla. CLABE legible y
+ * «Copiar», para pegarla en el banco sin teclearla. Un reembolso pedido
+ * antes de que se exigiera la cuenta no la trae: se dice, en vez de
+ * inventar una. */
+function ParaReembolsarle({ orden, a }: { orden: Orden; a: ReembolsoA | null }) {
+  const nombre = a?.nombre || orden.solicitante_nombre || orden.solicitante_correo || "quien lo pidió";
+  return (
+    <div className="bg-white border border-black/5 rounded-2xl p-4 mb-4" data-para-reembolsarle>
+      <h3 className="text-xs font-medium text-ink-muted uppercase tracking-wide mb-2">Para reembolsarle</h3>
+      <p className="text-sm text-ink-dim">
+        {nombre}
+        {a?.correo && <span className="text-ink-muted"> · {a.correo}</span>}
+      </p>
+      {!a?.clabe ? (
+        <p className="text-xs text-ink-muted mt-2">
+          Este reembolso se pidió antes de que supply101 pidiera la cuenta: pregúntale a {nombre} a qué CLABE se lo pagas.
+        </p>
+      ) : (
+        <ul className="mt-2 space-y-2">
+          <li className="bg-cream rounded-xl px-3 py-2" data-cuenta={a.clabe}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-ink-dim">
+                {a.banco || "Cuenta"}
+              </span>
+              <Copiar texto={a.clabe} />
+            </div>
+            <p className="font-mono text-sm tracking-wider text-ink-dim mt-0.5">{clabeLegible(a.clabe)}</p>
+            {a.beneficiario && <p className="text-xs text-ink-muted">A nombre de {a.beneficiario}</p>}
+          </li>
+        </ul>
       )}
     </div>
   );
