@@ -529,6 +529,15 @@ test('pedir un reembolso, verlo en el inicio y en su pestaña del buzón, y paga
   await pag.getByLabel('Cuánto pagaste (total, con IVA si lleva)').fill('850');
   await pag.getByLabel('Qué compraste').fill('Gasolina del navegador');
   await pag.getByLabel('Con factura').uncheck();
+  // 0.92.0 · A qué cuenta se me regresa: la primera vez se pide; si esta
+  // cuenta ya la dio en otra corrida, sale la guardada y la forma no.
+  await pag.locator('[data-cuenta-reembolso]').waitFor({ timeout: 15000 });
+  if (await pag.locator('[data-cuenta-forma]').count()) {
+    await pag.getByLabel('CLABE (18 dígitos; se revisa que cuadre)').fill('012 180 01562178859 4');
+    await pag.getByLabel('Banco').fill('BBVA');
+  } else {
+    assert.equal(await pag.locator('[data-cuenta-guardada]').count(), 1, 'o la cuenta guardada');
+  }
   await pag.getByRole('button', { name: 'Pedir el reembolso' }).click();
   await pag.waitForURL((u) => /\/ordenes\/[^/]+$/.test(u.pathname) && !u.pathname.endsWith('/nueva'), { timeout: 30000 });
   await pag.waitForTimeout(1000);
@@ -596,6 +605,13 @@ test('pedir un reembolso, verlo en el inicio y en su pestaña del buzón, y paga
 
   // ── pagarlo, con los mismos botones ──
   await pag.goto(`${URL}/ordenes/${id}`, { waitUntil: 'load' });
+  // 0.92.0 · Quien paga ve a qué cuenta: «Para reembolsarle» con la CLABE
+  // legible y «Copiar», en vez de la ficha de un proveedor.
+  await pag.locator('[data-para-reembolsarle]').waitFor({ timeout: 20000 });
+  const paraReembolsar = await pag.locator('[data-para-reembolsarle]').innerText();
+  assert.match(paraReembolsar, /012 180 01562178859 4/, 'la CLABE de quien pidió, legible');
+  assert.match(paraReembolsar, /Copiar/, 'con «Copiar»');
+  assert.equal(await pag.locator('[data-para-pagarle]').count(), 0, 'y sin la ficha de un proveedor');
   await pag.getByRole('button', { name: 'Pagar', exact: true }).click();
   await pag.getByLabel('De qué cuenta sale').selectOption(cuenta.id);
   await pag.getByRole('button', { name: 'Registrar el pago' }).click();

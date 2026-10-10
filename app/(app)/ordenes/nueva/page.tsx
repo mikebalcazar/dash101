@@ -27,8 +27,8 @@ import { listProveedores } from "@/lib/proveedores";
 import { listProyectos } from "@/lib/proyectos";
 import { SoltarArchivo } from "@/components/soltar-archivo";
 import {
-  crearOrden, desglosar, getPermisosOrdenes, listPartidasDe, subirArchivo,
-  type PartidaDeProyecto, type TipoOrden,
+  clabeLegible, clabeValida, crearOrden, desglosar, getPermisosOrdenes, listPartidasDe, subirArchivo,
+  type CuentaDeReembolso, type PartidaDeProyecto, type TipoOrden,
 } from "@/lib/ordenes";
 import { formatMontoExact } from "@/lib/format";
 import { BOTON, CAJA, CAJA_NUM, ETIQUETA } from "@/components/ordenes-ui";
@@ -68,6 +68,17 @@ export default function NuevaOrdenPage() {
   const [iva, setIva] = useState("");
   const [tocado, setTocado] = useState(false);
   const [archivo, setArchivo] = useState<File | null>(null);
+  /* 0.92.0 · A qué cuenta se me reembolsa (Mike, 10-oct-2026: un reembolso
+   * se paga SÓLO a quien lo pide). La guardada la trae /permisos; si no hay,
+   * o si se quiere otra, se escribe aquí y viaja con la orden. */
+  const [cuentaGuardada, setCuentaGuardada] = useState<CuentaDeReembolso | null>(null);
+  const [cambiandoCuenta, setCambiandoCuenta] = useState(false);
+  const [rcClabe, setRcClabe] = useState("");
+  const [rcBanco, setRcBanco] = useState("");
+  const [rcBeneficiario, setRcBeneficiario] = useState("");
+  const formaCuenta = reembolso && (!cuentaGuardada || cambiandoCuenta);
+  const clabeLimpia = rcClabe.replace(/[\s-]/g, "");
+  const cuentaCuadra = !formaCuenta || clabeValida(clabeLimpia);
 
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
@@ -89,6 +100,7 @@ export default function NuevaOrdenPage() {
         const p = await getPermisosOrdenes();
         setPuedeComprar(p.puede_comprar);
         if (!p.puede_comprar) setTipo("reembolso");
+        setCuentaGuardada(p.cuenta_reembolso?.clabe ? p.cuenta_reembolso : null);
       } catch { /* se decide al mandar */ }
     })();
   }, [empresa, cargandoEmpresa]);
@@ -125,7 +137,7 @@ export default function NuevaOrdenPage() {
     : proveedorNuevo.trim();
 
   const listo = !!empresa?.id && Number(String(monto).replace(/[\s$,]/g, "")) > 0
-    && concepto.trim().length > 0 && cuadra && !guardando;
+    && concepto.trim().length > 0 && cuadra && cuentaCuadra && !guardando;
 
   const guardar = async () => {
     if (!empresa?.id) return;
@@ -144,6 +156,9 @@ export default function NuevaOrdenPage() {
         fecha_maxima_pago: fecha || null,
         urgente,
         ...(conFactura && tocado ? { subtotal, iva } : {}),
+        // 0.92.0 · La cuenta sólo viaja si se escribió aquí; si no, la API
+        // usa la guardada. Sin beneficiario, la API pone a quien pide.
+        ...(formaCuenta ? { cuenta: { clabe: clabeLimpia, banco: rcBanco.trim() || null, beneficiario: rcBeneficiario.trim() || null } } : {}),
       });
       // La cotización se sube DESPUÉS: el archivo cuelga de la orden y hasta
       // aquí no había id del que colgarlo. Si la subida falla, la orden ya
@@ -250,6 +265,61 @@ export default function NuevaOrdenPage() {
             />
           )}
         </div>
+
+        {/* 0.92.0 · A qué cuenta se me regresa: sólo en reembolso. Mike,
+            10-oct-2026: nunca a un proveedor ni a un tercero. */}
+        {reembolso && (
+          <div data-cuenta-reembolso>
+            <span className={ETIQUETA}>A qué cuenta te lo regresamos</span>
+            <p className="text-xs text-ink-muted mb-2">Sólo a una cuenta tuya. Queda guardada para la próxima vez.</p>
+            {!formaCuenta && cuentaGuardada ? (
+              <div className="bg-cream rounded-xl px-3 py-2" data-cuenta-guardada>
+                <p className="text-xs font-medium text-ink-dim">
+                  {cuentaGuardada.banco || "Cuenta"}
+                  {cuentaGuardada.beneficiario && <span className="text-ink-muted font-normal"> · {cuentaGuardada.beneficiario}</span>}
+                </p>
+                <p className="font-mono text-sm tracking-wider text-ink-dim mt-0.5">{clabeLegible(cuentaGuardada.clabe)}</p>
+                <button
+                  type="button" className="text-xs text-ink-muted hover:text-ink-dim mt-1"
+                  onClick={() => { setCambiandoCuenta(true); setRcClabe(""); setRcBanco(cuentaGuardada.banco ?? ""); setRcBeneficiario(cuentaGuardada.beneficiario ?? ""); }}
+                >
+                  Cambiar la cuenta
+                </button>
+              </div>
+            ) : (
+              <div className="bg-cream rounded-xl px-3 py-3 space-y-2" data-cuenta-forma>
+                <p className="text-xs text-ink-muted">
+                  {cuentaGuardada ? "Escribe la cuenta nueva. Se queda guardada para las siguientes." : "Es tu primer reembolso: dinos a qué cuenta te lo regresamos."}
+                </p>
+                <div>
+                  <label className={ETIQUETA} htmlFor="rc-clabe">CLABE (18 dígitos; se revisa que cuadre)</label>
+                  <input
+                    id="rc-clabe" className={`${CAJA} tabular-nums tracking-wider`} inputMode="numeric" maxLength={24} placeholder="012 180 00000000000 0" autoComplete="off"
+                    value={rcClabe} onChange={(e) => setRcClabe(e.target.value)}
+                  />
+                  {clabeLimpia.length > 0 && !clabeValida(clabeLimpia) && (
+                    <p className="text-xs text-red-700 mt-1">La CLABE no cuadra: son 18 dígitos y el último los verifica.</p>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className={ETIQUETA} htmlFor="rc-banco">Banco</label>
+                    <input id="rc-banco" className={CAJA} placeholder="BBVA" value={rcBanco} onChange={(e) => setRcBanco(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className={ETIQUETA} htmlFor="rc-beneficiario">A nombre de</label>
+                    <input id="rc-beneficiario" className={CAJA} placeholder="Tu nombre, como en el banco" value={rcBeneficiario} onChange={(e) => setRcBeneficiario(e.target.value)} />
+                  </div>
+                </div>
+                {cuentaGuardada && (
+                  <button type="button" className="text-xs text-ink-muted hover:text-ink-dim" onClick={() => setCambiandoCuenta(false)}>
+                    Dejar la que tenía
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         <div>
           <label className={ETIQUETA} htmlFor="proyecto">Para qué proyecto (si es de uno)</label>

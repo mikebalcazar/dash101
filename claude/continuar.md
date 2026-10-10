@@ -31,6 +31,11 @@ copiarla al banco. Detalle en `suite101-api/muro/2026-10-10-0100-…`.
   (`reembolso_a` de la API). Un reembolso de antes de la 0050 lo dice en vez
   de inventar una cuenta. `lib/ordenes.ts`: `ReembolsoA`,
   `CuentaDeReembolso`, `guardarCuentaReembolso()`, `cuenta` en `OrdenInput`.
+- **dash101, «Pedir un reembolso» (`/ordenes/nueva`)**: el mismo bloque «A
+  qué cuenta te lo regresamos» (guardada o forma; CLABE revisada con
+  `clabeValida` de `lib/ordenes.ts` antes de mandar; viaja en `cuenta`). Se
+  olvidó en el primer PR (#154) y lo atrapó la prueba de navegador contra
+  staging: producción no se publicó hasta el segundo.
 - `pruebas/ordenes-api.spec.ts` (staging): el reembolso sin cuenta da
   `falta_cuenta_reembolso`, una CLABE mala no se guarda, con la guardada entra
   y `verOrden` trae `reembolso_a`.

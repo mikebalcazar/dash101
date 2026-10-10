@@ -113,6 +113,17 @@ export interface OrdenCompleta {
   reembolso_a: ReembolsoA | null;
 }
 
+/** 0.92.0 · ¿La CLABE cuadra? 18 dígitos y el último los verifica (pesos 3,
+ *  7, 1): la misma regla que la API, para decirlo antes de mandar. */
+export function clabeValida(clabe: string): boolean {
+  const c = clabe.replace(/[\s-]/g, '');
+  if (!/^\d{18}$/.test(c)) return false;
+  const pesos = [3, 7, 1];
+  let suma = 0;
+  for (let i = 0; i < 17; i++) suma += (Number(c[i]) * pesos[i % 3]) % 10;
+  return (10 - (suma % 10)) % 10 === Number(c[17]);
+}
+
 /** La CLABE en grupos que se leen (banco · plaza · cuenta · verificador). */
 export function clabeLegible(clabe: string): string {
   const d = clabe.replace(/\D/g, '');
