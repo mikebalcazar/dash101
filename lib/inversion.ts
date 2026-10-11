@@ -177,10 +177,16 @@ export async function crearRondaDesdeElFlujo(d: {
  *  PARA LA GENTE SE LLAMA patron101 (Mike, 8-oct-2026: «esta plataforma se va
  *  a llamar patron101»); por dentro —app, llave, Worker, repo— sigue siendo
  *  `investor101`, que no se renombra. Por eso en el dominio propio la casa es
- *  patron101.taller101.com y en workers.dev (staging) el Worker conserva su
- *  nombre: dash101-staging.x → investor101-staging.x. */
+ *  patron.suite101.app y en workers.dev (staging) el Worker conserva su
+ *  nombre: dash101-staging.x → investor101-staging.x.
+ *
+ *  11-oct-2026 · el dominio propio es suite101.app y las apps van sin «101»
+ *  (dash.suite101.app → patron.suite101.app). Si alguien llega todavía por
+ *  dash101.taller101.com, la casa es la nueva, no la vieja. */
+const DASH_PROPIO = /^dash(101)?\.(suite101\.app|taller101\.com)$/;
 export function hostDePatron(host: string): string {
-  return host.replace(/^dash101/, host.endsWith('.taller101.com') ? 'patron101' : 'investor101');
+  if (DASH_PROPIO.test(host)) return 'patron.suite101.app';
+  return host.replace(/^dash101/, 'investor101');
 }
 export function urlInvestor(ruta = ''): string {
   if (typeof window === 'undefined') return '';

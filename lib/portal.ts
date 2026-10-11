@@ -30,9 +30,11 @@ import type { FilaMovimiento, FilaProyecto } from "./api/adaptar";
  * quite la redirección deja de llevar a ninguna parte. Una liga que se le
  * manda a un cliente por correo dura años, así que se le manda la buena.
  * Desde el 25-sep-2026 la buena es la del dominio propio, peek101.taller101.com;
- * la de workers.dev sigue viva, pero es la del proveedor, no la del taller. */
+ * la de workers.dev sigue viva, pero es la del proveedor, no la del taller.
+ * Desde el 11-oct-2026 la buena es peek.suite101.app: suite101.app es la
+ * marca, y la de taller101.com manda aquí. */
 export const PORTAL_URL =
-  process.env.NEXT_PUBLIC_PORTAL_URL ?? "https://peek101.taller101.com";
+  process.env.NEXT_PUBLIC_PORTAL_URL ?? "https://peek.suite101.app";
 
 const SECUNDARIA = "portal-clientes";
 

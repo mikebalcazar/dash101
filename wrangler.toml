@@ -21,7 +21,10 @@ compatibility_flags = ["nodejs_compat"]
 # 25-sep: «error code: 1042»). Las dos direcciones se quedan.
 workers_dev = true
 routes = [
-  { pattern = "dash101.taller101.com", custom_domain = true }
+  { pattern = "dash101.taller101.com", custom_domain = true },
+  # 11-oct-2026 · suite101.app es la marca (Mike: «taller101 será una marca de
+  # FORESPOT»). Ésta es la buena; la de arriba manda aquí.
+  { pattern = "dash.suite101.app", custom_domain = true }
 ]
 
 # La dirección de workers.dev manda al dominio (Mike, 25-sep: «redirigir, no
@@ -32,7 +35,7 @@ routes = [
 # volvía una variable de entorno, el Worker se publicaba sin la capa de
 # archivos y en producción las fuentes, el logotipo y los chunks de Next
 # contestaban 404 (25-sep, #86; se vio en la medición y en vivo).
-vars = { DOMINIO_PROPIO = "dash101.taller101.com" }
+vars = { DOMINIO_PROPIO = "dash.suite101.app", DOMINIO_ANTERIOR = "dash101.taller101.com" }
 
 # Lo que Next deja construido; el Worker lo sirve como archivos.
 assets = { directory = ".open-next/assets", binding = "ASSETS" }

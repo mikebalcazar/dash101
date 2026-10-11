@@ -106,6 +106,11 @@ jobs:
       - name: El letrero de versión nueva de supply101
         run: node supply101/pruebas/la-version-nueva.mjs
 
+      # workers.dev y la dirección vieja de taller101.com mandan a la nueva
+      # (11-oct-2026); `/s101/*` y los dominios de empresa no se tocan.
+      - name: La redirección al dominio propio de supply101
+        run: node supply101/pruebas/dominio.mjs
+
       # ── staging ──────────────────────────────────────────────────────────
       # La empresa se decide al construir (lib/fuente.ts), así que hay que
       # construir una vez por entorno: el nombre queda dentro del paquete.
@@ -338,8 +343,12 @@ jobs:
           npx wrangler deploy | tee /tmp/prod.txt
           grep -qE 'https://[a-z0-9.-]+\.workers\.dev' /tmp/prod.txt || { echo 'no pude sacar la liga de la salida de wrangler' >&2; exit 1; }
           # Producción se mide en su dominio: workers.dev manda para allá
-          # desde el 25-sep (DOMINIO_PROPIO en wrangler.toml).
-          url=https://dash101.taller101.com
+          # desde el 25-sep (DOMINIO_PROPIO en wrangler.toml), y desde el
+          # 11-oct la de taller101.com también.
+          url=https://dash.suite101.app
+          # El certificado de un custom domain nuevo tarda unos segundos: se
+          # espera a que conteste antes de medir (hasta dos minutos).
+          for i in $(seq 1 24); do curl -sf -o /dev/null "$url" && break; sleep 5; done
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "producción publicada: $url (y en workers.dev, que redirige)"
 
