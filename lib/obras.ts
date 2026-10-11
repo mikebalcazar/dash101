@@ -64,8 +64,9 @@ export function casaQuell(): string {
   return apiBase().includes('staging')
     ? 'https://bitacora-obra-staging.mike-929.workers.dev'
     // Desde el 25-sep-2026 quell101 vive en su dominio propio; la de
-    // workers.dev sigue viva, pero manda para allá.
-    : 'https://quell101.taller101.com';
+    // workers.dev sigue viva, pero manda para allá. Desde el 11-oct-2026 el
+    // dominio es suite101.app (la de taller101.com también manda aquí).
+    : 'https://quell.suite101.app';
 }
 export function urlObra(obra: Obra): string {
   return `${casaQuell()}/#/p/${obra.id}`;

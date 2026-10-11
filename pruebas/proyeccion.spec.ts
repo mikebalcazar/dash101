@@ -352,7 +352,8 @@ describe("cubrir un hueco del flujo con una ronda de investor101", () => {
 describe("la liga a patron101 (por dentro, investor101)", () => {
   it("en el dominio propio va a patron101; en workers.dev el Worker conserva su nombre", async () => {
     const { hostDePatron } = await import("@/lib/inversion");
-    expect(hostDePatron("dash101.taller101.com")).toBe("patron101.taller101.com");
+    expect(hostDePatron("dash.suite101.app")).toBe("patron.suite101.app");
+    expect(hostDePatron("dash101.taller101.com")).toBe("patron.suite101.app");
     expect(hostDePatron("dash101-staging.mike-929.workers.dev")).toBe("investor101-staging.mike-929.workers.dev");
     expect(hostDePatron("dash101.mike-929.workers.dev")).toBe("investor101.mike-929.workers.dev");
   });

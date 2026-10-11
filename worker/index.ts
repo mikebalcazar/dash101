@@ -25,7 +25,7 @@ const PREFIJO = '/s101';
  * lecturas (GET/HEAD) y sólo lo que no es la puerta a la suite: una petición
  * a `/s101/*` desde workers.dev viene de una página que ya se está yendo.
  * Staging no tiene `DOMINIO_PROPIO` y no redirige. */
-export function aDominioPropio(req: Request, env: { DOMINIO_PROPIO?: string }, u: URL): Response | null {
+export function aDominioPropio(req: Request, env: { DOMINIO_PROPIO?: string; DOMINIO_ANTERIOR?: string }, u: URL): Response | null {
   const d = env.DOMINIO_PROPIO;
   /* Sin la «s» (Mike, 30-sep-2026: en un Android nuevo abrió
    * http://quell101.taller101.com y el login con Google contestó
@@ -36,7 +36,12 @@ export function aDominioPropio(req: Request, env: { DOMINIO_PROPIO?: string }, u
   if (d && u.protocol === 'http:' && u.hostname === d && (req.method === 'GET' || req.method === 'HEAD')) {
     return Response.redirect(`https://${d}${u.pathname}${u.search}`, 301);
   }
-  if (!d || u.hostname === d || !u.hostname.endsWith('.workers.dev')) return null;
+  // 11-oct-2026 · y la de taller101.com (DOMINIO_ANTERIOR, acepta varias
+  // separadas por comas): la suite se mudó a suite101.app; las ligas viejas
+  // siguen sirviendo y acaban aquí, con las mismas reglas que workers.dev.
+  const anteriores = String(env.DOMINIO_ANTERIOR || '').split(',').map((s) => s.trim()).filter(Boolean);
+  const vieja = u.hostname.endsWith('.workers.dev') || anteriores.includes(u.hostname);
+  if (!d || u.hostname === d || !vieja) return null;
   if (req.method !== 'GET' && req.method !== 'HEAD') return null;
   if (u.pathname === PREFIJO || u.pathname.startsWith(PREFIJO + '/')) return null;
   return Response.redirect(`https://${d}${u.pathname}${u.search}`, 301);
@@ -54,7 +59,7 @@ export function empresaDelDominio(req: Request): string | null {
 }
 
 export default {
-  async fetch(req: Request, env: { API: { fetch: (r: Request) => Promise<Response> }; DOMINIO_PROPIO?: string }, ctx: ExecutionContext): Promise<Response> {
+  async fetch(req: Request, env: { API: { fetch: (r: Request) => Promise<Response> }; DOMINIO_PROPIO?: string; DOMINIO_ANTERIOR?: string }, ctx: ExecutionContext): Promise<Response> {
     const u = new URL(req.url);
     const ida = aDominioPropio(req, env, u);
     if (ida) return ida;
