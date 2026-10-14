@@ -101,6 +101,10 @@ export interface ReembolsoA {
   /** 0.98.0 · `orden`: la copiada al pedirlo; `roster`: la orden no traía
    *  cuenta y la API la toma del expediente del trabajador en roster. */
   origen?: "orden" | "roster";
+  /** 0.99.0 · Si su expediente de roster tiene los datos bancarios firmados y
+   *  la carátula (sólo si tiene cuenta en roster). */
+  firmada?: boolean;
+  caratula?: boolean;
 }
 
 /** Contrato 0.92.0 · La cuenta a la que se me reembolsa: una por persona,
@@ -109,6 +113,8 @@ export interface CuentaDeReembolso {
   clabe: string; banco: string | null; beneficiario: string | null; actualizado_at: string;
   /** 0.98.0 · `roster` (el expediente del trabajador manda) o `propia`. */
   origen?: "roster" | "propia";
+  firmada?: boolean;
+  caratula?: boolean;
 }
 
 /** Una orden con su historia, sus papeles, su proveedor como se le paga

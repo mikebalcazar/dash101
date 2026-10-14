@@ -68,7 +68,7 @@ const DICHO = {
   orden_no_esta_devuelta: 'Esta orden ya no se puede corregir: cambió de estado.',
   orden_no_se_puede_cancelar: 'Esta orden ya no se puede cancelar: cambió de estado.',
   compras_no_autorizadas: 'Tu usuario no está autorizado para compras. Puedes pedir un reembolso.',
-  falta_cuenta_reembolso: 'Para pedir un reembolso hace falta la cuenta a la que se te paga: la CLABE, el banco y a nombre de quién está.',
+  falta_cuenta_reembolso: 'Para pedir un reembolso registra tu cuenta y fírmala: la CLABE, el banco y a nombre de quién está.',
   no_encontrado: 'No se encontró.',
 };
 const enPalabras = (e) => DICHO[e?.error] || e?.error || 'No se pudo. Vuelve a intentar.';
@@ -392,15 +392,15 @@ function cuentaQueAplica() {
 }
 function pintarCuenta() {
   const c = cuentaQueAplica();
-  /* 0.98.0 · Mike, 14-oct: «no debería pedir número de cuenta, debería de en
-   * automático ligar el número de cuenta del trabajador (…) desde roster».
-   * Si la cuenta es la de su expediente en roster, se enseña y no se cambia
-   * aquí: se cambia en roster. */
+  /* 0.98.0 · Mike, 14-oct: la cuenta del trabajador sale de roster.
+   * 0.99.0 · Y si roster no la tiene: «ahí mismo ingresa los datos de la
+   * cuenta, el beneficiario, y queda como pendiente que suba la carátula
+   * bancaria, pero sí firma de que son sus datos y su cuenta bancaria. Y
+   * entonces ya solo vive en roster». Cambiarla es volver a firmarla. */
   const deRoster = !est.corrigiendo && est.cuenta?.origen === 'roster';
-  if (deRoster) est.cambiandoCuenta = false;
-  ver('b-cambiar-cuenta', !deRoster);
-  ver('cuenta-roster', deRoster);
-  $('cuenta-pista').textContent = deRoster ? 'Es la de tu expediente en roster: se te paga ahí.' : 'Sólo a una cuenta tuya. Queda guardada para la próxima vez.';
+  ver('b-cambiar-cuenta', !est.corrigiendo);
+  ver('cuenta-roster', deRoster && est.cuenta.caratula === false);
+  $('cuenta-pista').textContent = deRoster ? 'Es la de tu expediente en roster: se te paga ahí.' : 'Sólo a una cuenta tuya, firmada por ti. Queda en tu expediente de roster.';
   const forma = !c || est.cambiandoCuenta;
   ver('cuenta-guardada', !forma);
   ver('cuenta-forma', forma);
@@ -409,16 +409,114 @@ function pintarCuenta() {
     $('cg-beneficiario').textContent = c.beneficiario ? ` · ${c.beneficiario}` : '';
     $('cg-clabe').textContent = fmtClabe(c.clabe);
   }
-  $('cuenta-forma-p').textContent = c ? 'Escribe la cuenta nueva. Se queda guardada para las siguientes.' : 'Es tu primer reembolso: dinos a qué cuenta te lo regresamos.';
+  $('cuenta-forma-p').textContent = c
+    ? 'Escribe la cuenta nueva y vuelve a firmar. Reemplaza a la de tu expediente de roster.'
+    : 'Es tu primer reembolso: dinos a qué cuenta te lo regresamos y firma que es tuya.';
   ver('b-dejar-cuenta', !!c);
   if (forma && !est.cambiandoCuenta) {
     // Primera vez: el beneficiario es quien pide, por defecto.
     if (!$('rc-beneficiario').value) $('rc-beneficiario').value = est.yo?.usuario?.nombre || '';
   }
-  $('rc-clabe').classList.remove('campo-mal');
+  if (forma) requestAnimationFrame(prepararFirma);
+  for (const id of ['rc-clabe', 'rc-banco', 'rc-beneficiario', 'rc-firma']) $(id).classList.remove('campo-mal');
+}
+
+/* ─── 0.99.0 · la firma: con el dedo, sobre el recuadro (como en roster) ─── */
+const firma = { trazos: [], actual: null };
+function prepararFirma() {
+  const lz = $('rc-firma');
+  const r = lz.getBoundingClientRect();
+  const k = window.devicePixelRatio || 1;
+  if (r.width && lz.width !== Math.round(r.width * k)) { lz.width = Math.round(r.width * k); lz.height = Math.round(r.height * k); }
+  pintarTrazos();
+}
+function pintarTrazos() {
+  const lz = $('rc-firma'), g = lz.getContext('2d'), k = window.devicePixelRatio || 1;
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.clearRect(0, 0, lz.width, lz.height);
+  g.setTransform(k, 0, 0, k, 0, 0);
+  g.strokeStyle = '#12324a'; g.lineWidth = 2.4; g.lineCap = 'round'; g.lineJoin = 'round';
+  for (const t of firma.trazos) {
+    if (t.length < 2) continue;
+    g.beginPath(); g.moveTo(t[0].x, t[0].y);
+    for (const q of t.slice(1)) g.lineTo(q.x, q.y);
+    g.stroke();
+  }
+}
+const puntoDe = (ev) => { const r = $('rc-firma').getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; };
+$('rc-firma').addEventListener('pointerdown', (ev) => {
+  ev.preventDefault();
+  prepararFirma();
+  firma.actual = [puntoDe(ev)]; firma.trazos.push(firma.actual);
+  try { $('rc-firma').setPointerCapture(ev.pointerId); } catch { /* sin captura, igual se dibuja */ }
+  $('rc-firma').classList.remove('campo-mal');
+});
+$('rc-firma').addEventListener('pointermove', (ev) => {
+  if (!firma.actual) return;
+  firma.actual.push(puntoDe(ev));
+  pintarTrazos();
+});
+for (const e of ['pointerup', 'pointercancel']) $('rc-firma').addEventListener(e, () => { firma.actual = null; });
+$('b-borrar-firma').onclick = () => { firma.trazos = []; pintarTrazos(); };
+const hayFirma = () => firma.trazos.reduce((n, t) => n + t.length, 0) >= 12;
+
+/** La hoja firmada que queda en roster como «Datos bancarios firmados»: los
+ *  datos arriba, la declaración y la firma abajo, en una imagen PNG. */
+async function hojaFirmada(cuenta) {
+  const W = 720, H = 560;
+  const lz = document.createElement('canvas'); lz.width = W; lz.height = H;
+  const g = lz.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#12324a'; g.font = '700 20px Raleway, sans-serif';
+  g.fillText('Datos bancarios para reembolsos', 32, 44);
+  const filas = [
+    [est.yo?.usuario?.nombre ? 'NOMBRE' : 'CORREO', est.yo?.usuario?.nombre || est.yo?.usuario?.correo || ''],
+    ['BANCO', cuenta.banco], ['CLABE', fmtClabe(cuenta.clabe)], ['A NOMBRE DE', cuenta.beneficiario],
+  ];
+  let y = 84;
+  for (const [etq, val] of filas) {
+    g.fillStyle = '#6b7a85'; g.font = '600 12px Raleway, sans-serif'; g.fillText(etq, 32, y);
+    g.fillStyle = '#12324a'; g.font = '700 17px Raleway, sans-serif'; g.fillText(String(val || '').slice(0, 60), 32, y + 21);
+    y += 50;
+  }
+  g.fillStyle = '#4a5563'; g.font = '500 14px Raleway, sans-serif';
+  g.fillText('Declaro que estos datos y esta cuenta bancaria son míos.', 32, y + 10);
+  // La firma, escalada y centrada en su recuadro, con su línea y el pie.
+  const caja = { x: 180, y: y + 30, w: 360, h: 130 };
+  const r = $('rc-firma').getBoundingClientRect();
+  const k = Math.min(caja.w / (r.width || 1), caja.h / (r.height || 1));
+  const dx = caja.x + (caja.w - (r.width || 0) * k) / 2;
+  g.strokeStyle = '#12324a'; g.lineWidth = 2.2; g.lineCap = 'round'; g.lineJoin = 'round';
+  for (const t of firma.trazos) {
+    if (t.length < 2) continue;
+    g.beginPath(); g.moveTo(dx + t[0].x * k, caja.y + t[0].y * k);
+    for (const q of t.slice(1)) g.lineTo(dx + q.x * k, caja.y + q.y * k);
+    g.stroke();
+  }
+  const base = caja.y + caja.h + 10;
+  g.strokeStyle = '#9aa8b2'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(caja.x, base); g.lineTo(caja.x + caja.w, base); g.stroke();
+  const fecha = new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' });
+  g.fillStyle = '#4a5563'; g.font = '500 13px Raleway, sans-serif'; g.textAlign = 'center';
+  g.fillText('Firma', W / 2, base + 20);
+  g.fillStyle = '#6b7a85'; g.font = '500 12px Raleway, sans-serif';
+  g.fillText(`${est.org?.nombre || ''} · ${fecha}`, W / 2, base + 40);
+  return await new Promise((res) => lz.toBlob(res, 'image/png'));
+}
+
+/** Registra en roster la cuenta de la forma, firmada. Devuelve la cuenta. */
+async function registrarCuenta(cuenta) {
+  const f = new FormData();
+  f.set('clabe', cuenta.clabe);
+  f.set('banco', cuenta.banco || '');
+  f.set('beneficiario', cuenta.beneficiario || '');
+  f.set('firma', new File([await hojaFirmada(cuenta)], 'datos-bancarios-firmados.png', { type: 'image/png' }));
+  const r = await pedir(`/orgs/${est.org.id}/ordenes/cuenta-reembolso`, { method: 'POST', form: f });
+  return r.cuenta;
 }
 $('b-cambiar-cuenta').onclick = () => {
   est.cambiandoCuenta = true;
+  firma.trazos = [];
   for (const id of ['rc-clabe', 'rc-banco', 'rc-beneficiario']) $(id).value = '';
   const c = cuentaQueAplica();
   if (c) { $('rc-banco').value = c.banco || ''; $('rc-beneficiario').value = c.beneficiario || ''; }
@@ -431,9 +529,14 @@ $('b-dejar-cuenta').onclick = () => { est.cambiandoCuenta = false; pintarCuenta(
 function cuentaDeLaForma() {
   if ($('cuenta-forma').classList.contains('oculto')) return null;
   const clabe = $('rc-clabe').value.replace(/[\s-]/g, '');
-  if (!clabe) return { error: 'Escribe la CLABE a la que se te regresa el dinero: son 18 dígitos.' };
-  if (!clabeCuadra(clabe)) return { error: 'La CLABE no cuadra: son 18 dígitos y el último los verifica. Revísala.' };
-  return { cuenta: { clabe, banco: $('rc-banco').value.trim() || null, beneficiario: $('rc-beneficiario').value.trim() || null } };
+  const banco = $('rc-banco').value.trim(), beneficiario = $('rc-beneficiario').value.trim();
+  if (!clabe) return { error: 'Escribe la CLABE a la que se te regresa el dinero: son 18 dígitos.', campo: 'rc-clabe' };
+  if (!clabeCuadra(clabe)) return { error: 'La CLABE no cuadra: son 18 dígitos y el último los verifica. Revísala.', campo: 'rc-clabe' };
+  if (!banco) return { error: 'Escribe el banco.', campo: 'rc-banco' };
+  if (!beneficiario) return { error: 'Escribe a nombre de quién está la cuenta.', campo: 'rc-beneficiario' };
+  // 0.99.0 · Firmada, o no se registra.
+  if (!hayFirma()) return { error: 'Firma en el recuadro que son tus datos y tu cuenta bancaria.', campo: 'rc-firma' };
+  return { cuenta: { clabe, banco, beneficiario } };
 }
 for (const b of document.querySelectorAll('#tipo .opcion')) {
   b.onclick = () => { if (!b.disabled) ponerTipo(b.dataset.tipo, false); };
@@ -795,14 +898,28 @@ $('f-pedir').onsubmit = async (ev) => {
   decir('err-pedir', '');
   if (!cuadra()) return decir('err-pedir', 'El subtotal más el IVA tiene que dar el total exacto.');
   if (aCentavos($('monto').value) <= 0) return decir('err-pedir', 'Escribe cuánto es.');
-  // 0.92.0 · En un reembolso, la cuenta: la de la forma si está abierta.
+  // 0.99.0 · En un reembolso con la forma abierta, la cuenta se registra
+  // firmada en roster ANTES de pedirlo; el pedido ya no lleva cuenta.
   let cuenta = null;
   if (est.tipo === 'reembolso') {
     const c = cuentaDeLaForma();
-    if (c?.error) { $('rc-clabe').classList.add('campo-mal'); $('rc-clabe').focus(); return decir('err-pedir', c.error); }
+    if (c?.error) { $(c.campo).classList.add('campo-mal'); if (c.campo !== 'rc-firma') $(c.campo).focus(); return decir('err-pedir', c.error); }
     cuenta = c?.cuenta ?? null;
   }
   const b = $('b-pedir'); const antes = b.textContent; b.disabled = true; b.textContent = 'Mandando…';
+  if (cuenta) {
+    try {
+      est.cuenta = await registrarCuenta(cuenta);
+      est.cambiandoCuenta = false;
+      firma.trazos = [];
+    } catch (e) {
+      const errs = e?.detalle?.errores || {};
+      for (const [k, id] of [['clabe', 'rc-clabe'], ['banco', 'rc-banco'], ['beneficiario', 'rc-beneficiario'], ['firma', 'rc-firma']]) if (errs[k]) $(id).classList.add('campo-mal');
+      decir('err-pedir', Object.values(errs)[0] || enPalabras(e));
+      b.disabled = false; b.textContent = antes;
+      return;
+    }
+  }
 
   const cuerpo = {
     tipo: est.tipo,
@@ -824,7 +941,6 @@ $('f-pedir').onsubmit = async (ev) => {
     cuerpo.subtotal = aCentavos($('subtotal').value);
     cuerpo.iva = aCentavos($('iva').value);
   }
-  if (cuenta) cuerpo.cuenta = cuenta;
 
   try {
     let orden;
@@ -852,11 +968,6 @@ $('f-pedir').onsubmit = async (ev) => {
           return;
         }
       }
-    }
-    // 0.92.0 · La cuenta con la que salió el reembolso es ahora la mía.
-    if (orden.tipo === 'reembolso' && orden.reembolso_clabe) {
-      est.cuenta = { clabe: orden.reembolso_clabe, banco: orden.reembolso_banco, beneficiario: orden.reembolso_beneficiario };
-      est.cambiandoCuenta = false;
     }
     est.corrigiendo = null;
     irA(`/orden/${orden.id}`, HONDURA.orden);
