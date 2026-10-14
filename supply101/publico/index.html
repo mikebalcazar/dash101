@@ -210,7 +210,7 @@
           <p class="sub" style="margin:0"><b id="cg-banco"></b><span id="cg-beneficiario"></span></p>
           <p class="clabe" id="cg-clabe" style="margin:4px 0 0"></p>
           <button type="button" class="liso" id="b-cambiar-cuenta" style="margin-top:6px">Cambiar la cuenta</button>
-          <p class="sub oculto" id="cuenta-roster" style="margin:6px 0 0">Si cambió, pídele a quien administra roster que la actualice en tu expediente.</p>
+          <p class="sub oculto" id="cuenta-roster" style="margin:6px 0 0">Pendiente: sube la carátula de tu cuenta bancaria en tu expediente de roster.</p>
         </div>
         <div id="cuenta-forma" class="tarjeta oculto">
           <p class="sub" id="cuenta-forma-p" style="margin:0 0 8px">Es tu primer reembolso: dinos a qué cuenta te lo regresamos.</p>
@@ -226,6 +226,11 @@
               <input id="rc-beneficiario" placeholder="Tu nombre, como está en el banco">
             </div>
           </div>
+          <!-- 0.99.0 · Mike, 14-oct: «sí firma de que son sus datos y su cuenta bancaria». -->
+          <label for="rc-firma">Tu firma <span class="pista">Con el dedo: firmas que estos datos y esta cuenta son tuyos.</span></label>
+          <canvas id="rc-firma" class="firma-lienzo" aria-label="Recuadro para firmar"></canvas>
+          <button type="button" class="liso" id="b-borrar-firma" style="margin-top:4px">Borrar la firma</button>
+          <p class="sub" style="margin:6px 0 0">Queda en tu expediente de roster. Después sube ahí la carátula de tu cuenta.</p>
           <button type="button" class="liso oculto" id="b-dejar-cuenta" style="margin-top:6px">Dejar la que tenía</button>
         </div>
       </div>

@@ -27,6 +27,12 @@
  *     se enseña, no hay forma ni «Cambiar la cuenta», dice que es la de
  *     roster, y el POST va sin `cuenta`.
  *
+ *   · 0.99.0 · Mike, 14-oct: «ahí mismo ingresa los datos de la cuenta, el
+ *     beneficiario, y queda como pendiente que suba la carátula bancaria,
+ *     pero sí firma (…) ya solo vive en roster». Sin firma no se registra;
+ *     con firma, la cuenta va PRIMERO a POST /ordenes/cuenta-reembolso
+ *     (multipart con la hoja firmada en PNG) y el pedido va SIN `cuenta`.
+ *
  *   node supply101/pruebas/la-cuenta-del-reembolso.mjs
  */
 import { createServer } from 'node:http';
@@ -61,6 +67,7 @@ const CLABE_MAL = '012180015621788591';  // mismo cuerpo, verificador malo
 let cuentaGuardada = null;               // lo que /permisos contesta: la «base» fingida
 let rechazarClabe = null;                // si está puesto, el POST contesta 400 con esto
 const posts = [];
+const registros = [];                    // 0.99.0 · lo que llegó a POST /ordenes/cuenta-reembolso
 const ordenes = [];
 const devuelta = {
   id: 'o-dev', folio: 'RE-000007', estado: 'devuelta', tipo: 'reembolso', solicitante_usuario_id: 'u-ana', solicitante_correo: 'ana@ejemplo.mx',
@@ -88,12 +95,21 @@ await p.route('**/s101/**', async (route) => {
   if (r === '/orgs/demo/proveedores') return route.fulfill(ok({ filas: [{ id: 'pv1', nombre: 'OXXO' }] }));
   if (r === '/orgs/demo/proveedor_cuentas') return route.fulfill(ok({ filas: [{ id: 'c1', alias: 'Principal', clabe: '646180000000000000', banco: 'STP', beneficiario: 'OXXO SA' }] }));
   if (r === '/orgs/demo/proyectos' || r === '/orgs/demo/partidas' || r === '/orgs/demo/archivos') return route.fulfill(ok({ filas: [] }));
+  if (r === '/orgs/demo/ordenes/cuenta-reembolso' && metodo === 'POST') {
+    // multipart: se leen los campos y si viene la firma como PNG.
+    const req = route.request();
+    const cuerpo = req.postDataBuffer()?.toString('latin1') || '';
+    const campo = (n) => (cuerpo.match(new RegExp(`name="${n}"\r\n\r\n([^\r]*)`)) || [])[1] ?? null;
+    const firmaPng = /name="firma"; filename="[^"]+"\r\nContent-Type: image\/png/.test(cuerpo) && cuerpo.includes('PNG');
+    registros.push({ clabe: campo('clabe'), banco: campo('banco'), beneficiario: campo('beneficiario'), firmaPng });
+    if (rechazarClabe) return route.fulfill(json(400, { ok: false, error: 'datos_invalidos', detalle: { errores: { clabe: rechazarClabe } } }));
+    cuentaGuardada = { clabe: campo('clabe'), banco: campo('banco'), beneficiario: campo('beneficiario'), actualizado_at: T, origen: 'roster', firmada: true, caratula: false };
+    return route.fulfill(ok({ cuenta: cuentaGuardada, nuevo: true }));
+  }
   if (r === '/orgs/demo/ordenes' && metodo === 'POST') {
     const cuerpo = route.request().postDataJSON();
     posts.push(cuerpo);
-    if (rechazarClabe) return route.fulfill(json(400, { ok: false, error: 'datos_invalidos', detalle: { errores: { clabe: rechazarClabe } } }));
-    // Lo mismo que la API: la cuenta que viene se guarda como la mía; si no viene, la guardada; sin ninguna, no entra.
-    if (cuerpo.cuenta) cuentaGuardada = { clabe: cuerpo.cuenta.clabe, banco: cuerpo.cuenta.banco, beneficiario: cuerpo.cuenta.beneficiario || 'Ana', actualizado_at: T };
+    // Lo mismo que la API (0.99.0): la cuenta es la registrada en roster; sin ella, no entra.
     if (cuerpo.tipo === 'reembolso' && !cuentaGuardada) return route.fulfill(json(400, { ok: false, error: 'falta_cuenta_reembolso', detalle: { mensaje: 'Falta la cuenta' } }));
     n += 1;
     const o = {
@@ -128,6 +144,15 @@ const ir = async (hash, selector) => {
 };
 const visible = (sel) => p.locator(sel).isVisible();
 const texto = (sel) => p.locator(sel).innerText();
+/** Firmar con el dedo (aquí, el puntero) sobre el recuadro: una curva. */
+async function firmar() {
+  await p.locator('#rc-firma').scrollIntoViewIfNeeded(); // el puntero sólo atina a lo que está a la vista
+  const c = await p.locator('#rc-firma').boundingBox();
+  await p.mouse.move(c.x + 20, c.y + c.height * 0.7);
+  await p.mouse.down();
+  for (let i = 1; i <= 24; i++) await p.mouse.move(c.x + 20 + i * 10, c.y + c.height * (0.7 - 0.4 * Math.sin(i / 4)));
+  await p.mouse.up();
+}
 
 console.log('· en compra no hay bloque de cuenta y la ficha del proveedor sí se ofrece');
 await ir('#/pedir', '#v-pedir:not(.oculto) #monto');
@@ -145,12 +170,13 @@ rev(/primer reembolso/.test(await texto('#cuenta-forma-p')), 'y dice que es la p
 rev(await p.locator('#b-dejar-cuenta').isHidden(), 'no hay «Dejar la que tenía»: no había ninguna');
 await p.selectOption('#proveedor', 'pv1');
 rev(await p.locator('#b-ficha-proveedor').isHidden() && await p.locator('#ficha-proveedor').isHidden(), 'la ficha del proveedor con cuentas no se ofrece');
+rev(await visible('#rc-firma'), 'y el recuadro para firmar');
 for (const id of ['#rc-clabe', '#rc-banco', '#rc-beneficiario']) {
   const c = await p.locator(id).boundingBox();
   rev(c && c.height >= 44, `${id} se atina con el pulgar`, c ? `${Math.round(c.height)} px` : 'sin caja');
 }
 
-console.log('· sin CLABE no se manda; con una que no cuadra tampoco; con una buena, el POST la lleva');
+console.log('· sin CLABE no se manda; con una que no cuadra tampoco; sin firma tampoco; firmada, se registra y luego se pide');
 await p.getByLabel('Cuánto pagaste').fill('850');
 await p.getByLabel('Qué compraste').fill('Gasolina');
 await p.locator('#con-factura').uncheck();
@@ -168,9 +194,16 @@ await p.locator('#rc-clabe').fill('012 180 01562178859-4');
 await p.locator('#rc-banco').fill('BBVA');
 await p.locator('#rc-beneficiario').fill('Ana Pide Ortega');
 await p.getByRole('button', { name: 'Pedir el reembolso' }).tap();
+await p.waitForTimeout(200);
+rev(/Firma en el recuadro/.test(await texto('#err-pedir')) && await p.locator('#rc-firma.campo-mal').count() === 1, 'sin firma: se dice y se señala el recuadro', await texto('#err-pedir'));
+rev(posts.length === 0 && registros.length === 0, 'y nada se manda');
+await firmar();
+await p.getByRole('button', { name: 'Pedir el reembolso' }).tap();
 await p.waitForFunction(() => location.hash.startsWith('#/orden/'), { timeout: 8000 });
-rev(posts.length === 1, 'un solo POST');
-rev(posts[0]?.tipo === 'reembolso' && JSON.stringify(posts[0]?.cuenta) === JSON.stringify({ clabe: CLABE, banco: 'BBVA', beneficiario: 'Ana Pide Ortega' }), 'con `cuenta`: CLABE sin espacios ni guiones, banco y a nombre de quién', JSON.stringify(posts[0]?.cuenta));
+rev(registros.length === 1 && registros[0].clabe === CLABE && registros[0].banco === 'BBVA' && registros[0].beneficiario === 'Ana Pide Ortega', 'la cuenta se registra primero: CLABE limpia, banco y a nombre de quién', JSON.stringify(registros[0]));
+rev(registros[0]?.firmaPng, 'con la hoja firmada como PNG');
+rev(posts.length === 1, 'un solo POST del pedido');
+rev(posts[0]?.tipo === 'reembolso' && !('cuenta' in posts[0]), 'y el pedido va SIN `cuenta`: la API usa la de roster');
 await p.waitForSelector('#v-detalle:not(.oculto) dl.datos', { timeout: 8000 });
 const detalle = await texto('#detalle');
 rev(/A qué cuenta/.test(detalle) && /012 180 01562178859 4/.test(detalle) && /BBVA/.test(detalle) && /Ana Pide Ortega/.test(detalle), 'la orden dice a qué cuenta, con la CLABE legible');
@@ -179,12 +212,13 @@ console.log('· al volver a pedir, la cuenta ya está guardada: se enseña y el 
 await ir('#/reembolso', '#v-pedir:not(.oculto) #monto');
 rev(await visible('#cuenta-guardada') && await p.locator('#cuenta-forma').isHidden(), 'la tarjeta con la cuenta, la forma cerrada');
 rev(/012 180 01562178859 4/.test(await texto('#cg-clabe')) && /BBVA/.test(await texto('#cg-banco')) && /Ana Pide Ortega/.test(await texto('#cg-beneficiario')), 'con la CLABE legible, el banco y el nombre');
+rev(await visible('#cuenta-roster') && /carátula/.test(await texto('#cuenta-roster')), 'y dice que falta subir la carátula en roster', await texto('#cuenta-roster'));
 await p.getByLabel('Cuánto pagaste').fill('120');
 await p.getByLabel('Qué compraste').fill('Taxi');
 await p.locator('#con-factura').uncheck();
 await p.getByRole('button', { name: 'Pedir el reembolso' }).tap();
 await p.waitForFunction(() => location.hash.startsWith('#/orden/'), { timeout: 8000 });
-rev(posts.length === 2 && !('cuenta' in posts[1]), 'el POST no lleva `cuenta`: la API usa la guardada');
+rev(posts.length === 2 && !('cuenta' in posts[1]) && registros.length === 1, 'el POST no lleva `cuenta` ni se vuelve a registrar');
 
 console.log('· «Cambiar la cuenta» abre la forma, «Dejar la que tenía» la cierra, y la nueva viaja');
 await ir('#/reembolso', '#v-pedir:not(.oculto) #monto');
@@ -200,9 +234,11 @@ await p.locator('#rc-banco').fill('Banamex');
 await p.getByLabel('Cuánto pagaste').fill('60');
 await p.getByLabel('Qué compraste').fill('Pasaje');
 await p.locator('#con-factura').uncheck();
+await firmar();
 await p.getByRole('button', { name: 'Pedir el reembolso' }).tap();
 await p.waitForFunction(() => location.hash.startsWith('#/orden/'), { timeout: 8000 });
-rev(posts.length === 3 && posts[2]?.cuenta?.clabe === '002010077777777771' && posts[2]?.cuenta?.banco === 'Banamex', 'la cuenta nueva viaja con la orden');
+rev(registros.length === 2 && registros[1].clabe === '002010077777777771' && registros[1].banco === 'Banamex' && registros[1].firmaPng, 'la cuenta nueva se vuelve a registrar, firmada');
+rev(posts.length === 3 && !('cuenta' in posts[2]), 'y el pedido va sin `cuenta`');
 await ir('#/reembolso', '#v-pedir:not(.oculto) #monto');
 rev(/002 010 07777777777 1/.test(await texto('#cg-clabe')), 'y desde entonces es la que se enseña');
 
@@ -215,6 +251,7 @@ console.log('· si la API rechaza la CLABE, se dicen sus palabras y se señala e
 rechazarClabe = 'La CLABE no cuadra: son 18 dígitos y el último los verifica.';
 await p.locator('#b-cambiar-cuenta').tap();
 await p.locator('#rc-clabe').fill(CLABE);
+await firmar();
 await p.getByLabel('Cuánto pagaste').fill('10');
 await p.getByLabel('Qué compraste').fill('Chicles');
 await p.locator('#con-factura').uncheck();
@@ -240,14 +277,15 @@ rev(!!patch && !('cuenta' in patch) && patch.monto === 31000, 'el PATCH sin `cue
 /* 0.98.0 · Mike, 14-oct: «no debería pedir número de cuenta, debería de en
  * automático ligar el número de cuenta del trabajador (…) desde roster». */
 console.log('· con la cuenta de su expediente en roster: se enseña, no se pide ni se cambia aquí, y el POST va sin `cuenta`');
-cuentaGuardada = { clabe: '072180001234567896', banco: 'Banorte', beneficiario: 'Ana Pide', actualizado_at: T, origen: 'roster' };
+cuentaGuardada = { clabe: '072180001234567896', banco: 'Banorte', beneficiario: 'Ana Pide', actualizado_at: T, origen: 'roster', firmada: true, caratula: true };
 await p.goto(`${base}/#/reembolso`, { waitUntil: 'load' });
 await p.reload({ waitUntil: 'load' }); // sólo cambiar el # no recarga: /permisos se vuelve a leer al arrancar
 await p.waitForSelector('#v-pedir:not(.oculto) #monto', { timeout: 8000 });
 rev(await visible('#cuenta-guardada') && await p.locator('#cuenta-forma').isHidden(), 'la tarjeta con la cuenta, sin forma');
 rev(/072 180 00123456789 6/.test(await texto('#cg-clabe')) && /Banorte/.test(await texto('#cg-banco')), 'con la CLABE de roster legible y su banco', await texto('#cg-clabe'));
-rev(await p.locator('#b-cambiar-cuenta').isHidden(), 'sin «Cambiar la cuenta»: se cambia en roster');
-rev(await visible('#cuenta-roster') && /roster/.test(await texto('#cuenta-pista')), 'y dice que es la de su expediente en roster', await texto('#cuenta-pista'));
+rev(/roster/.test(await texto('#cuenta-pista')), 'dice que es la de su expediente en roster', await texto('#cuenta-pista'));
+rev(await p.locator('#cuenta-roster').isHidden(), 'con la carátula ya subida, no hay pendiente');
+rev(await visible('#b-cambiar-cuenta'), '«Cambiar la cuenta» sigue: cambiarla es volver a firmarla');
 const antesRoster = posts.length;
 await p.getByLabel('Cuánto pagaste').fill('95');
 await p.getByLabel('Qué compraste').fill('Tornillos');

@@ -484,6 +484,14 @@ function ParaReembolsarle({ orden, a }: { orden: Orden; a: ReembolsoA | null }) 
             {a.beneficiario && <p className="text-xs text-ink-muted">A nombre de {a.beneficiario}</p>}
             {/* 0.98.0 · Mike, 14-oct: la cuenta del trabajador sale de roster. */}
             {a.origen === "roster" && <p className="text-[11px] text-ink-muted mt-0.5" data-cuenta-de-roster>De su expediente en roster.</p>}
+            {/* 0.99.0 · Mike, 14-oct: firma de que son sus datos; la carátula queda pendiente. */}
+            {a.firmada !== undefined && (
+              <p className="text-[11px] text-ink-muted mt-0.5" data-expediente-bancario>
+                {a.firmada ? "Datos bancarios firmados" : "Sin firma de sus datos bancarios"}
+                {" · "}
+                {a.caratula ? "carátula en roster" : <span className="text-amber-700">carátula pendiente en roster</span>}
+              </p>
+            )}
           </li>
         </ul>
       )}
