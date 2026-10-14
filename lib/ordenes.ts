@@ -98,12 +98,17 @@ export interface ProveedorDePago {
 export interface ReembolsoA {
   nombre: string | null; correo: string | null;
   clabe: string | null; banco: string | null; beneficiario: string | null;
+  /** 0.98.0 · `orden`: la copiada al pedirlo; `roster`: la orden no traía
+   *  cuenta y la API la toma del expediente del trabajador en roster. */
+  origen?: "orden" | "roster";
 }
 
 /** Contrato 0.92.0 · La cuenta a la que se me reembolsa: una por persona,
  *  la da la primera vez que pide un reembolso. */
 export interface CuentaDeReembolso {
   clabe: string; banco: string | null; beneficiario: string | null; actualizado_at: string;
+  /** 0.98.0 · `roster` (el expediente del trabajador manda) o `propia`. */
+  origen?: "roster" | "propia";
 }
 
 /** Una orden con su historia, sus papeles, su proveedor como se le paga

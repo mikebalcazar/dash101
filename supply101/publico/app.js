@@ -392,6 +392,15 @@ function cuentaQueAplica() {
 }
 function pintarCuenta() {
   const c = cuentaQueAplica();
+  /* 0.98.0 · Mike, 14-oct: «no debería pedir número de cuenta, debería de en
+   * automático ligar el número de cuenta del trabajador (…) desde roster».
+   * Si la cuenta es la de su expediente en roster, se enseña y no se cambia
+   * aquí: se cambia en roster. */
+  const deRoster = !est.corrigiendo && est.cuenta?.origen === 'roster';
+  if (deRoster) est.cambiandoCuenta = false;
+  ver('b-cambiar-cuenta', !deRoster);
+  ver('cuenta-roster', deRoster);
+  $('cuenta-pista').textContent = deRoster ? 'Es la de tu expediente en roster: se te paga ahí.' : 'Sólo a una cuenta tuya. Queda guardada para la próxima vez.';
   const forma = !c || est.cambiandoCuenta;
   ver('cuenta-guardada', !forma);
   ver('cuenta-forma', forma);

@@ -469,7 +469,7 @@ function ParaReembolsarle({ orden, a }: { orden: Orden; a: ReembolsoA | null }) 
       </p>
       {!a?.clabe ? (
         <p className="text-xs text-ink-muted mt-2">
-          Este reembolso se pidió antes de que supply101 pidiera la cuenta: pregúntale a {nombre} a qué CLABE se lo pagas.
+          Este reembolso no trae cuenta y {nombre} no tiene CLABE en su expediente de roster: pregúntale a qué CLABE se lo pagas, o pídele que la capture en roster.
         </p>
       ) : (
         <ul className="mt-2 space-y-2">
@@ -482,6 +482,8 @@ function ParaReembolsarle({ orden, a }: { orden: Orden; a: ReembolsoA | null }) 
             </div>
             <p className="font-mono text-sm tracking-wider text-ink-dim mt-0.5">{clabeLegible(a.clabe)}</p>
             {a.beneficiario && <p className="text-xs text-ink-muted">A nombre de {a.beneficiario}</p>}
+            {/* 0.98.0 · Mike, 14-oct: la cuenta del trabajador sale de roster. */}
+            {a.origen === "roster" && <p className="text-[11px] text-ink-muted mt-0.5" data-cuenta-de-roster>De su expediente en roster.</p>}
           </li>
         </ul>
       )}

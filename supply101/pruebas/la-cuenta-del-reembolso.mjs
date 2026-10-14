@@ -23,6 +23,9 @@
  *     palabras y se señala el campo.
  *   · Al corregir un reembolso devuelto, la cuenta que se enseña es la que la
  *     ORDEN traía, no la mía de hoy.
+ *   · 0.98.0 · Con la cuenta de su expediente en roster (`origen: 'roster'`):
+ *     se enseña, no hay forma ni «Cambiar la cuenta», dice que es la de
+ *     roster, y el POST va sin `cuenta`.
  *
  *   node supply101/pruebas/la-cuenta-del-reembolso.mjs
  */
@@ -233,6 +236,25 @@ await p.getByRole('button', { name: 'Volver a mandarla' }).tap();
 await p.waitForFunction(() => location.hash.startsWith('#/orden/'), { timeout: 8000 });
 const patch = posts.find((x) => x.patch === 'o-dev');
 rev(!!patch && !('cuenta' in patch) && patch.monto === 31000, 'el PATCH sin `cuenta`: la orden se queda con la suya', JSON.stringify(patch));
+
+/* 0.98.0 · Mike, 14-oct: «no debería pedir número de cuenta, debería de en
+ * automático ligar el número de cuenta del trabajador (…) desde roster». */
+console.log('· con la cuenta de su expediente en roster: se enseña, no se pide ni se cambia aquí, y el POST va sin `cuenta`');
+cuentaGuardada = { clabe: '072180001234567896', banco: 'Banorte', beneficiario: 'Ana Pide', actualizado_at: T, origen: 'roster' };
+await p.goto(`${base}/#/reembolso`, { waitUntil: 'load' });
+await p.reload({ waitUntil: 'load' }); // sólo cambiar el # no recarga: /permisos se vuelve a leer al arrancar
+await p.waitForSelector('#v-pedir:not(.oculto) #monto', { timeout: 8000 });
+rev(await visible('#cuenta-guardada') && await p.locator('#cuenta-forma').isHidden(), 'la tarjeta con la cuenta, sin forma');
+rev(/072 180 00123456789 6/.test(await texto('#cg-clabe')) && /Banorte/.test(await texto('#cg-banco')), 'con la CLABE de roster legible y su banco', await texto('#cg-clabe'));
+rev(await p.locator('#b-cambiar-cuenta').isHidden(), 'sin «Cambiar la cuenta»: se cambia en roster');
+rev(await visible('#cuenta-roster') && /roster/.test(await texto('#cuenta-pista')), 'y dice que es la de su expediente en roster', await texto('#cuenta-pista'));
+const antesRoster = posts.length;
+await p.getByLabel('Cuánto pagaste').fill('95');
+await p.getByLabel('Qué compraste').fill('Tornillos');
+await p.locator('#con-factura').uncheck();
+await p.getByRole('button', { name: 'Pedir el reembolso' }).tap();
+await p.waitForFunction(() => location.hash.startsWith('#/orden/'), { timeout: 8000 });
+rev(posts.length === antesRoster + 1 && !('cuenta' in posts[antesRoster]), 'el POST no lleva `cuenta`: la API usa la de roster');
 
 const ancho = await p.evaluate(() => document.documentElement.scrollWidth);
 rev(ancho <= 391, 'a 390 no hay barrido horizontal', `${ancho}`);
