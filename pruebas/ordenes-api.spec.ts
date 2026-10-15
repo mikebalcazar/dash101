@@ -24,7 +24,7 @@ import { createProveedor } from "@/lib/proveedores";
 import { createProyecto } from "@/lib/proyectos";
 import {
   clabeLegible, corregirOrden, crearOrden, desglosar, devolverOrden, getBuzon, getPermisosOrdenes, getResumenOrdenes,
-  cancelarOrden, guardarCuentaReembolso, listContadores, listMisOrdenes, listOrdenesPagadas, listPartidasDe, marcarContador, pagarOrden, vencida, verOrden,
+  cancelarOrden, registrarCuentaFirmada, listContadores, listMisOrdenes, listOrdenesPagadas, listPartidasDe, marcarContador, pagarOrden, vencida, verOrden,
 } from "@/lib/ordenes";
 import {
   crearCfdi, getCuadre, getIva, ligarCfdi, listCfdi, listPendientes, cancelarCfdi,
@@ -49,6 +49,8 @@ const clabeDe = (base17: string) => {
   return base17 + String((10 - (suma % 10)) % 10);
 };
 const CLABE_MADERAS = clabeDe("07218000123412345");
+// Una imagen de 1x1: la API sólo pide que la firma sea PNG o JPG.
+const PNG_1X1 = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="), (c) => c.charCodeAt(0));
 
 let uid = "";
 const ids = { banco: "", cliente: "", proveedor: "", proyecto: "", orden: "", movimiento: "", cfdi: "" };
@@ -287,10 +289,14 @@ describe("reembolsos", () => {
      * cuenta es nueva en la org y nunca la ha dado. Con una CLABE que no
      * cuadra tampoco se guarda. */
     await expect(crearOrden({ tipo: "reembolso", concepto: "Gasolina", monto: 850, con_factura: false })).rejects.toMatchObject({ error: "falta_cuenta_reembolso" });
-    await expect(guardarCuentaReembolso({ clabe: "012180015621788591" })).rejects.toMatchObject({ error: "datos_invalidos" });
-    const cuenta = await guardarCuentaReembolso({ clabe: "012 180 01562178859 4", banco: "BBVA" });
+    // 0.99.0 · La cuenta se registra firmada, en el expediente de roster.
+    const firma = new Blob([PNG_1X1], { type: "image/png" });
+    await expect(registrarCuentaFirmada({ clabe: "012180015621788591", banco: "BBVA", beneficiario: "Mike" }, firma)).rejects.toMatchObject({ error: "datos_invalidos" });
+    const cuenta = await registrarCuentaFirmada({ clabe: "012 180 01562178859 4", banco: "BBVA", beneficiario: "Mike" }, firma);
     expect(cuenta.clabe, "sin espacios").toBe("012180015621788594");
-    expect(cuenta.beneficiario, "sin beneficiario, es quien la guarda").toBeTruthy();
+    expect(cuenta.origen, "vive en roster").toBe("roster");
+    expect(cuenta.firmada, "con su firma").toBe(true);
+    expect(cuenta.caratula, "la carátula queda pendiente").toBe(false);
     const p = await getPermisosOrdenes();
     expect(p.puede_comprar, "esta cuenta sí compra").toBe(true);
     expect(p.cuenta_reembolso?.clabe, "/permisos la trae").toBe("012180015621788594");

@@ -111,7 +111,8 @@ export interface ReembolsoA {
  *  la da la primera vez que pide un reembolso. */
 export interface CuentaDeReembolso {
   clabe: string; banco: string | null; beneficiario: string | null; actualizado_at: string;
-  /** 0.98.0 · `roster` (el expediente del trabajador manda) o `propia`. */
+  /** 0.98.0 · `roster` (el expediente del trabajador manda) o `propia`.
+   *  Desde 0.99.0 siempre es `roster`. */
   origen?: "roster" | "propia";
   firmada?: boolean;
   caratula?: boolean;
@@ -230,11 +231,22 @@ export async function verOrden(id: string): Promise<OrdenCompleta> {
   return { ...r, orden: orden(r.orden), proveedor: r.proveedor ?? null, reembolso_a: r.reembolso_a ?? null };
 }
 
-/** 0.92.0 · Guardar o cambiar la cuenta a la que se ME reembolsa (es la de
- *  quien pregunta; no lleva id). La CLABE se revisa en la API: 18 dígitos y
- *  el verificador; si no cuadra, 400 `datos_invalidos` con `errores.clabe`. */
-export async function guardarCuentaReembolso(d: { clabe: string; banco?: string | null; beneficiario?: string | null }): Promise<CuentaDeReembolso> {
-  const r = await pedir<{ cuenta: CuentaDeReembolso }>(`${base()}/cuenta-reembolso`, { method: 'PUT', body: d });
+/** 0.99.0 · Registrar la cuenta a la que se ME reembolsa, firmada (Mike,
+ *  14-oct-2026: «ya solo vive en roster la cuenta bancaria ligada al usuario
+ *  y también con la firma»). Va a mi expediente de roster con la hoja firmada
+ *  como «Datos bancarios firmados»; la carátula queda pendiente allá. La
+ *  CLABE se revisa en la API: si no cuadra, 400 `datos_invalidos` con
+ *  `errores.clabe`. El `PUT` de antes ya contesta 409 `firma_requerida`. */
+export async function registrarCuentaFirmada(
+  d: { clabe: string; banco: string; beneficiario: string },
+  firma: Blob,
+): Promise<CuentaDeReembolso> {
+  const forma = new FormData();
+  forma.set('clabe', d.clabe);
+  forma.set('banco', d.banco);
+  forma.set('beneficiario', d.beneficiario);
+  forma.set('firma', new File([firma], 'datos-bancarios-firmados.png', { type: 'image/png' }));
+  const r = await pedir<{ cuenta: CuentaDeReembolso }>(`${base()}/cuenta-reembolso`, { method: 'POST', body: forma });
   return r.cuenta;
 }
 

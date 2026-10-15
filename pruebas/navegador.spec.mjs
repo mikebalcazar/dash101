@@ -531,10 +531,20 @@ test('pedir un reembolso, verlo en el inicio y en su pestaña del buzón, y paga
   await pag.getByLabel('Con factura').uncheck();
   // 0.92.0 · A qué cuenta se me regresa: la primera vez se pide; si esta
   // cuenta ya la dio en otra corrida, sale la guardada y la forma no.
+  // 0.99.0 · Y se firma: queda en su expediente de roster.
   await pag.locator('[data-cuenta-reembolso]').waitFor({ timeout: 15000 });
   if (await pag.locator('[data-cuenta-forma]').count()) {
     await pag.getByLabel('CLABE (18 dígitos; se revisa que cuadre)').fill('012 180 01562178859 4');
     await pag.getByLabel('Banco').fill('BBVA');
+    await pag.getByLabel('A nombre de').fill('Navegador de Pruebas');
+    // 0.99.0 · Se firma que la cuenta es suya: un trazo sobre el recuadro.
+    const lienzo = pag.locator('[data-firma]');
+    await lienzo.scrollIntoViewIfNeeded();
+    const caja = await lienzo.boundingBox();
+    await pag.mouse.move(caja.x + 20, caja.y + caja.height / 2);
+    await pag.mouse.down();
+    for (let i = 1; i <= 20; i++) await pag.mouse.move(caja.x + 20 + i * 12, caja.y + caja.height / 2 + (i % 2 ? -14 : 14));
+    await pag.mouse.up();
   } else {
     assert.equal(await pag.locator('[data-cuenta-guardada]').count(), 1, 'o la cuenta guardada');
   }
