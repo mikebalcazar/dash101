@@ -20,14 +20,16 @@
  * guarda un subtotal que no cuadre con el total.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEmpresa } from "@/lib/empresa-context";
+import { useAuth } from "@/lib/auth-context";
+import { LienzoFirma, type FirmaCuenta } from "@/components/firma-cuenta";
 import { listProveedores } from "@/lib/proveedores";
 import { listProyectos } from "@/lib/proyectos";
 import { SoltarArchivo } from "@/components/soltar-archivo";
 import {
-  clabeLegible, clabeValida, crearOrden, desglosar, getPermisosOrdenes, listPartidasDe, subirArchivo,
+  clabeLegible, clabeValida, crearOrden, desglosar, getPermisosOrdenes, listPartidasDe, registrarCuentaFirmada, subirArchivo,
   type CuentaDeReembolso, type PartidaDeProyecto, type TipoOrden,
 } from "@/lib/ordenes";
 import { formatMontoExact } from "@/lib/format";
@@ -44,6 +46,7 @@ export default function NuevaOrdenPage() {
   const router = useRouter();
   const params = useSearchParams();
   const { empresa, loading: cargandoEmpresa } = useEmpresa();
+  const { user } = useAuth();
 
   // `?tipo=reembolso` abre directo en reembolso (es la liga del botón de
   // «Mis compras» y la del inicio).
@@ -69,8 +72,10 @@ export default function NuevaOrdenPage() {
   const [tocado, setTocado] = useState(false);
   const [archivo, setArchivo] = useState<File | null>(null);
   /* 0.92.0 · A qué cuenta se me reembolsa (Mike, 10-oct-2026: un reembolso
-   * se paga SÓLO a quien lo pide). La guardada la trae /permisos; si no hay,
-   * o si se quiere otra, se escribe aquí y viaja con la orden. */
+   * se paga SÓLO a quien lo pide). La guardada la trae /permisos.
+   * 0.99.0 · Vive SÓLO en el expediente de roster, firmada: si no hay, o si
+   * se quiere otra, se escribe aquí, se firma, y se registra en roster ANTES
+   * de pedir el reembolso (la orden ya no lleva cuenta). */
   const [cuentaGuardada, setCuentaGuardada] = useState<CuentaDeReembolso | null>(null);
   const [cambiandoCuenta, setCambiandoCuenta] = useState(false);
   const [rcClabe, setRcClabe] = useState("");
@@ -78,7 +83,10 @@ export default function NuevaOrdenPage() {
   const [rcBeneficiario, setRcBeneficiario] = useState("");
   const formaCuenta = reembolso && (!cuentaGuardada || cambiandoCuenta);
   const clabeLimpia = rcClabe.replace(/[\s-]/g, "");
-  const cuentaCuadra = !formaCuenta || clabeValida(clabeLimpia);
+  const firma = useRef<FirmaCuenta>(null);
+  const [firmado, setFirmado] = useState(false);
+  const cuentaCuadra = !formaCuenta
+    || (clabeValida(clabeLimpia) && rcBanco.trim().length > 0 && rcBeneficiario.trim().length > 0 && firmado);
 
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
@@ -101,6 +109,8 @@ export default function NuevaOrdenPage() {
         setPuedeComprar(p.puede_comprar);
         if (!p.puede_comprar) setTipo("reembolso");
         setCuentaGuardada(p.cuenta_reembolso?.clabe ? p.cuenta_reembolso : null);
+        // La primera vez, el beneficiario es quien pide.
+        if (!p.cuenta_reembolso?.clabe && user?.displayName) setRcBeneficiario((b) => b || user.displayName || "");
       } catch { /* se decide al mandar */ }
     })();
   }, [empresa, cargandoEmpresa]);
@@ -144,6 +154,14 @@ export default function NuevaOrdenPage() {
     setError("");
     setGuardando(true);
     try {
+      if (formaCuenta) {
+        const datos = { clabe: clabeLimpia, banco: rcBanco.trim(), beneficiario: rcBeneficiario.trim() };
+        const hoja = await firma.current!.hoja({
+          ...datos, quien: user?.displayName || user?.email || "", empresa: empresa.nombre ?? "",
+        });
+        setCuentaGuardada(await registrarCuentaFirmada(datos, hoja));
+        setCambiandoCuenta(false);
+      }
       const o = await crearOrden({
         tipo,
         proveedor_id: proveedorId || null,
@@ -156,9 +174,6 @@ export default function NuevaOrdenPage() {
         fecha_maxima_pago: fecha || null,
         urgente,
         ...(conFactura && tocado ? { subtotal, iva } : {}),
-        // 0.92.0 · La cuenta sólo viaja si se escribió aquí; si no, la API
-        // usa la guardada. Sin beneficiario, la API pone a quien pide.
-        ...(formaCuenta ? { cuenta: { clabe: clabeLimpia, banco: rcBanco.trim() || null, beneficiario: rcBeneficiario.trim() || null } } : {}),
       });
       // La cotización se sube DESPUÉS: el archivo cuelga de la orden y hasta
       // aquí no había id del que colgarlo. Si la subida falla, la orden ya
@@ -271,7 +286,11 @@ export default function NuevaOrdenPage() {
         {reembolso && (
           <div data-cuenta-reembolso>
             <span className={ETIQUETA}>A qué cuenta te lo regresamos</span>
-            <p className="text-xs text-ink-muted mb-2">Sólo a una cuenta tuya. Queda guardada para la próxima vez.</p>
+            <p className="text-xs text-ink-muted mb-2">
+              {!formaCuenta && cuentaGuardada?.origen === "roster"
+                ? "Es la de tu expediente en roster: se te paga ahí."
+                : "Sólo a una cuenta tuya, firmada por ti. Queda en tu expediente de roster."}
+            </p>
             {!formaCuenta && cuentaGuardada ? (
               <div className="bg-cream rounded-xl px-3 py-2" data-cuenta-guardada>
                 <p className="text-xs font-medium text-ink-dim">
@@ -279,9 +298,14 @@ export default function NuevaOrdenPage() {
                   {cuentaGuardada.beneficiario && <span className="text-ink-muted font-normal"> · {cuentaGuardada.beneficiario}</span>}
                 </p>
                 <p className="font-mono text-sm tracking-wider text-ink-dim mt-0.5">{clabeLegible(cuentaGuardada.clabe)}</p>
+                {cuentaGuardada.caratula === false && (
+                  <p className="text-[11px] text-mauve-900 mt-1" data-caratula-pendiente>
+                    Pendiente: sube la carátula de tu cuenta bancaria en tu expediente de roster.
+                  </p>
+                )}
                 <button
                   type="button" className="text-xs text-ink-muted hover:text-ink-dim mt-1"
-                  onClick={() => { setCambiandoCuenta(true); setRcClabe(""); setRcBanco(cuentaGuardada.banco ?? ""); setRcBeneficiario(cuentaGuardada.beneficiario ?? ""); }}
+                  onClick={() => { setCambiandoCuenta(true); setFirmado(false); setRcClabe(""); setRcBanco(cuentaGuardada.banco ?? ""); setRcBeneficiario(cuentaGuardada.beneficiario ?? ""); }}
                 >
                   Cambiar la cuenta
                 </button>
@@ -289,7 +313,9 @@ export default function NuevaOrdenPage() {
             ) : (
               <div className="bg-cream rounded-xl px-3 py-3 space-y-2" data-cuenta-forma>
                 <p className="text-xs text-ink-muted">
-                  {cuentaGuardada ? "Escribe la cuenta nueva. Se queda guardada para las siguientes." : "Es tu primer reembolso: dinos a qué cuenta te lo regresamos."}
+                  {cuentaGuardada
+                    ? "Escribe la cuenta nueva y vuelve a firmar. Reemplaza a la de tu expediente de roster."
+                    : "Es tu primer reembolso: dinos a qué cuenta te lo regresamos y firma que es tuya."}
                 </p>
                 <div>
                   <label className={ETIQUETA} htmlFor="rc-clabe">CLABE (18 dígitos; se revisa que cuadre)</label>
@@ -310,6 +336,13 @@ export default function NuevaOrdenPage() {
                     <label className={ETIQUETA} htmlFor="rc-beneficiario">A nombre de</label>
                     <input id="rc-beneficiario" className={CAJA} placeholder="Tu nombre, como en el banco" value={rcBeneficiario} onChange={(e) => setRcBeneficiario(e.target.value)} />
                   </div>
+                </div>
+                <div>
+                  <span className={ETIQUETA}>Firma que estos datos y esta cuenta son tuyos</span>
+                  <LienzoFirma ref={firma} onFirma={() => setFirmado(!!firma.current?.hay())} />
+                  <p className="text-[11px] text-ink-muted mt-1">
+                    Queda en tu expediente de roster. La carátula del banco la subes después, ahí mismo.
+                  </p>
                 </div>
                 {cuentaGuardada && (
                   <button type="button" className="text-xs text-ink-muted hover:text-ink-dim" onClick={() => setCambiandoCuenta(false)}>
