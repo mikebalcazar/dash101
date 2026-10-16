@@ -1160,30 +1160,69 @@ test('6-oct: el flujo proyectado se presenta por bloques —semana, quincena, me
   await ctx.close();
 });
 
-test('16-oct: en la gráfica del flujo, la etiqueta dice la semana que está bajo el mouse (sólo lectura)', async () => {
-  /* Al grabar el video de Forespot (16-oct-2026) la etiqueta de la gráfica
-   * decía «Semana del 19 oct» casi en cualquier punto: el eje iba por el
-   * letrero de abajo, que es "" en tres de cada cuatro semanas, y Recharts
-   * juntaba todas esas en una sola. Se pasa el mouse por tres puntos de la
-   * gráfica, a lo ancho, y cada uno tiene que dar una semana distinta. */
-  const { ctx, pag, errores } = await pestana(undefined, true);
+test('16-oct: en la gráfica del flujo cada semana trae su propio globo, y la línea se ve sobre el tema oscuro', async () => {
+  /* Se vio en staging el 16-oct a 1920×1200: por semana, el eje usaba de
+   * llave la etiqueta escrita abajo, que sólo existe una de cada cuatro
+   * semanas. Las demás iban en "" y Recharts las juntaba en UNA categoría:
+   * al pasar el ratón por cualquiera, el globo decía la primera («Semana del
+   * 19 oct») y el punto se quedaba pegado a la izquierda. Aquí se pasa el
+   * ratón por ocho puntos de izquierda a derecha: los ocho globos tienen que
+   * decir ocho semanas distintas, y el punto activo tiene que avanzar con el
+   * ratón. Ocho y no dos porque dos puntos fijos pueden caer justo en semanas
+   * con etiqueta y pasar con el defecto puesto (se midió: pasaba). Con ocho,
+   * las vacías se repiten y truena. Igual por quincena, que escribía una de
+   * cada dos. SÓLO SE LEE. */
+  const { ctx, pag, errores } = await pestana({ width: 1920, height: 1200 }, true);
   await pag.goto(`${URL}/flujo`, { waitUntil: 'load' });
   await pag.locator('[data-bloque]').waitFor({ timeout: 20000 });
-  await pag.locator('[data-bloque]').selectOption('semana');
   await pag.locator('[data-horizonte]').selectOption('12');
-  const lienzo = pag.locator('.recharts-wrapper').first();
-  await lienzo.waitFor({ timeout: 20000 });
-  const caja = await lienzo.boundingBox();
-  const etiquetas = [];
-  for (const fraccion of [0.3, 0.55, 0.8]) {
-    await pag.mouse.move(caja.x + caja.width * fraccion, caja.y + caja.height * 0.5);
-    const etiqueta = pag.locator('.recharts-tooltip-label');
-    await etiqueta.waitFor({ timeout: 5000 });
+
+  const grafica = pag.locator('[data-grafica-flujo] .recharts-surface').first();
+  const globo = pag.locator('[data-grafica-flujo] .recharts-tooltip-label');
+  /** Pasa el ratón a esa fracción del ancho de la gráfica y lee el globo. */
+  const globoEn = async (fraccion) => {
+    const caja = await grafica.boundingBox();
+    assert.ok(caja, 'la gráfica está pintada');
+    await pag.mouse.move(caja.x + caja.width * fraccion, caja.y + caja.height / 2);
+    await globo.waitFor({ state: 'visible', timeout: 5000 });
+    return (await globo.innerText()).trim();
+  };
+
+  const punto = pag.locator('[data-grafica-flujo] .recharts-active-dot circle').first();
+  for (const [bloque, patron] of [['semana', /^Semana del /], ['quincena', /quincena de /]]) {
+    await pag.locator('[data-bloque]').selectOption(bloque);
     await pag.waitForTimeout(400);
-    etiquetas.push((await etiqueta.innerText()).trim());
+    const globos = [];
+    const xs = [];
+    for (let k = 0; k < 8; k++) {
+      globos.push(await globoEn(0.08 + k * 0.11));
+      xs.push((await punto.boundingBox())?.x ?? -1);
+    }
+    for (const g of globos) assert.match(g, patron, `por ${bloque}, el globo dice el bloque: «${g}»`);
+    assert.equal(new Set(globos).size, globos.length, `por ${bloque}, ocho puntos dan ocho globos distintos: ${globos.join(' · ')}`);
+    assert.ok(xs.every((x, i) => i === 0 || x > xs[i - 1]), `por ${bloque}, el punto activo avanza con el ratón: ${xs.map((x) => x.toFixed(0)).join(', ')}`);
   }
-  for (const e of etiquetas) assert.match(e, /^Semana del /, `la etiqueta dice de qué semana es: «${e}»`);
-  assert.equal(new Set(etiquetas).size, 3, `tres puntos, tres semanas distintas: ${etiquetas.join(' · ')}`);
+
+  /* El tema oscuro: la línea, el punto y el texto del globo se leen sobre su
+   * fondo. Se mide el contraste con los colores ya pintados, no con el código. */
+  const colores = await pag.evaluate(() => {
+    const rgb = (c) => (c.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+    const luz = ([r, g, b]) => {
+      const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+      return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+    };
+    const contraste = (x, y) => { const [l1, l2] = [luz(rgb(x)), luz(rgb(y))].sort((p, q) => q - p); return (l1 + 0.05) / (l2 + 0.05); };
+    const fondo = getComputedStyle(document.documentElement).getPropertyValue('--color-bg').trim() || 'rgb(15,27,36)';
+    const linea = getComputedStyle(document.querySelector('[data-grafica-flujo] .recharts-line-curve')).stroke;
+    const caja = document.querySelector('[data-grafica-flujo] .recharts-default-tooltip');
+    const etiqueta = getComputedStyle(document.querySelector('[data-grafica-flujo] .recharts-tooltip-label')).color;
+    return {
+      linea: contraste(linea, fondo),
+      etiqueta: contraste(etiqueta, getComputedStyle(caja).backgroundColor),
+    };
+  });
+  assert.ok(colores.linea >= 3, `la línea se distingue del fondo oscuro (contraste ${colores.linea.toFixed(2)}, mínimo 3)`);
+  assert.ok(colores.etiqueta >= 4.5, `el texto del globo se lee sobre el globo (contraste ${colores.etiqueta.toFixed(2)}, mínimo 4.5)`);
 
   assert.deepEqual(errores, [], 'cero errores de JavaScript');
   await ctx.close();

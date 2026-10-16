@@ -533,15 +533,15 @@ export default function FlujoPage() {
       )}
 
       {/* Chart */}
-      <div className="bg-white border border-black/5 rounded-2xl p-4 mb-4">
+      <div data-grafica-flujo className="bg-white border border-black/5 rounded-2xl p-4 mb-4">
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 10, right: 15, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--c-negro) / 0.06)" />
               <XAxis
                 dataKey="index"
                 tickFormatter={(i) => letreroDe.get(Number(i)) ?? ""}
-                tick={{ fontSize: 10, fill: "#A9C0CE" }}
+                tick={{ fontSize: 10, fill: "var(--color-ink-muted)" }}
                 axisLine={false}
                 tickLine={false}
                 interval={0}
@@ -553,23 +553,26 @@ export default function FlujoPage() {
                     maximumFractionDigits: 1,
                   }).format(v)
                 }
-                tick={{ fontSize: 10, fill: "#A9C0CE" }}
+                tick={{ fontSize: 10, fill: "var(--color-ink-muted)" }}
                 axisLine={false}
                 tickLine={false}
               />
-              {/* Los tonos del tema oscuro (globals.css): la línea en el azul de
-                * la marca y la etiqueta sobre la superficie apagada. Con el
-                * #1E2A3A de antes la línea casi no se veía sobre el vidrio. */}
+              {/* Los tonos salen de las variables de globals.css, no de un hex:
+                * en pantalla dan el tema oscuro (la línea en el azul de la
+                * marca, la etiqueta sobre el fondo de la app) y al imprimir
+                * vuelven solos los claros. Con hex fijos del oscuro, el globo
+                * salía oscuro sobre el papel. Con el #1E2A3A de antes la línea
+                * casi no se veía sobre el vidrio. */}
               <Tooltip
-                cursor={{ stroke: "rgba(255,255,255,0.25)" }}
+                cursor={{ stroke: "rgb(var(--c-negro) / 0.25)" }}
                 contentStyle={{
-                  background: "#16242E",
-                  border: "1px solid rgba(255,255,255,0.12)",
+                  background: "var(--color-bg)",
+                  border: "1px solid rgb(var(--c-negro) / 0.15)",
                   borderRadius: "10px",
                   fontSize: 12,
                 }}
-                labelStyle={{ color: "#A9C0CE" }}
-                itemStyle={{ color: "#E8EEF2" }}
+                labelStyle={{ color: "var(--color-ink-muted)" }}
+                itemStyle={{ color: "var(--color-ink)" }}
                 formatter={(value) => [
                   formatMonto(Number(value), empresa.moneda),
                   "Saldo",
@@ -579,14 +582,14 @@ export default function FlujoPage() {
                   return p?.etiqueta ?? "";
                 }}
               />
-              <ReferenceLine y={0} stroke="#F0A08A" strokeDasharray="4 4" />
+              <ReferenceLine y={0} stroke="var(--color-mauve-900)" strokeDasharray="4 4" />
               <Line
                 type="monotone"
                 dataKey="saldo"
-                stroke="#3AA3DC"
+                stroke="var(--color-marca)"
                 strokeWidth={2}
                 dot={false}
-                activeDot={{ r: 4, fill: "#86C9EC", stroke: "#0F1B24" }}
+                activeDot={{ r: 4, fill: "var(--color-marca)", stroke: "var(--color-bg)", strokeWidth: 2 }}
               />
             </LineChart>
           </ResponsiveContainer>
