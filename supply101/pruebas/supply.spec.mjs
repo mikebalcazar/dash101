@@ -264,3 +264,33 @@ test('la compra sale en mis compras, y a 390 no hay barrido ni errores', async (
   assert.deepEqual(errores, [], 'cero errores de JavaScript');
   console.log(`    ${folio} pedida, pagada y con comprobante a la vista, a 390×844`);
 });
+
+test('al abrir, un solo /yo y los permisos a la par de la lista', async () => {
+  /* 16-oct-2026 · El arranque eran cuatro viajes en fila: /yo, OTRA VEZ /yo,
+   * permisos y la lista (~1.3 s de más medido en staging). Ahora /yo una vez
+   * y permisos y lista salen juntos. */
+  const vistos = [];
+  const oye = (r) => {
+    const u = new globalThis.URL(r.url());
+    if (u.pathname.startsWith('/s101/')) vistos.push({ ruta: u.pathname, t: Date.now() });
+  };
+  const fin = new Map();
+  const acaba = (r) => fin.set(new globalThis.URL(r.url()).pathname, Date.now());
+  pag.on('request', oye); pag.on('requestfinished', acaba);
+  await pag.goto(`${URL}/#/`, { waitUntil: 'load' });
+  await pag.reload({ waitUntil: 'load' });
+  vistos.length = 0; fin.clear();
+  await pag.reload({ waitUntil: 'load' });
+  await pag.locator('#lista .renglon').first().waitFor({ timeout: 20000 });
+  await pag.waitForTimeout(500);
+  pag.off('request', oye); pag.off('requestfinished', acaba);
+
+  const yo = vistos.filter((v) => v.ruta === '/s101/yo');
+  assert.equal(yo.length, 1, `un solo /yo al abrir (${vistos.map((v) => v.ruta).join(', ')})`);
+  const permisos = vistos.find((v) => v.ruta.endsWith('/ordenes/permisos'));
+  const lista = vistos.find((v) => /\/ordenes$/.test(v.ruta));
+  assert.ok(permisos && lista, 'pidió permisos y lista');
+  const finPermisos = fin.get(permisos.ruta);
+  assert.ok(lista.t <= finPermisos, 'la lista sale antes de que contesten los permisos');
+  assert.ok(await pag.locator('#b-nueva-compra').isVisible(), 'el botón de pedir se prende cuando contestan');
+});
