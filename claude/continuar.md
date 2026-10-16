@@ -10,6 +10,42 @@ no se pudo medir desde aquí y se dice cómo se mide.
 
 ---
 
+# 16-oct-2026 · flujo: la gráfica toma los tonos por variable, y la prueba del globo pasa por ocho puntos (#161)
+
+Dos sesiones arreglaron a la vez el globo de la gráfica de `/flujo`, el que
+decía «Semana del 19 oct» en casi cualquier punto. Ninguna había dejado
+`claude/EN-CURSO.md`. Entró primero #160, de jr. **Mike decidió con botones
+(16-oct, 16:12 UTC): «sumar al suyo»**. La segunda sesión no abre otro
+arreglo: agrega sólo lo que a #160 le faltaba.
+
+- `app/(app)/flujo/page.tsx`: #160 dejó en la gráfica los hex del tema
+  oscuro. Ahora los colores salen de `var(--color-…)` y de
+  `rgb(var(--c-negro) / …)`, como el resto de la app. Al imprimir,
+  globals.css vuelve a los tonos claros y la gráfica también.
+  - Con los hex fijos, en papel el globo salía oscuro y la línea quedaba
+    en 2.82 de contraste sobre blanco.
+  - Ahora el globo sale claro, la línea queda en 4.32 y la semana en 6.55.
+  - El contenedor de la gráfica lleva `data-grafica-flujo`.
+- `pruebas/navegador.spec.mjs`: la prueba del globo pasa el ratón por
+  ocho puntos, no tres, por semana y por quincena. Pide:
+  - ocho globos distintos;
+  - que el punto activo avance con el ratón;
+  - contraste ya pintado de 3 o más en la línea, y de 4.5 o más en el
+    texto del globo.
+
+  Con dos puntos fijos, la versión con el defecto llegó a pasar: caían
+  justo en semanas con letrero. Medido en local con la API fingida.
+- Medido en el corredor:
+  - la rama, publicada `solo_staging`: navegador 26/26;
+  - main `42ba727`: staging 26/26, supply101 6/6, y en producción
+    (dash.suite101.app) todos los «ok» de la medición.
+
+Sin anotar: el recado del muro. suite101-api tenía `EN-CURSO` vigente de
+otro chat y no se tocó. El post de wall101 sí quedó
+(`posts/2026-10-16-1640-dash101.md`).
+
+---
+
 # 10-oct-2026 · reembolsos: la cuenta de quien pide, obligatoria, y visible al pagar (API 0.92.0)
 
 Mike mandó una captura: en un reembolso, «Dónde lo compraste» abría la ficha
