@@ -10,6 +10,7 @@ import { createOpex } from "@/lib/opex";
 import type { Cuenta, FrecuenciaOpex, TipoOpex, Moneda } from "@/types/schema";
 import { FRECUENCIA_LABELS, DIAS_SEMANA } from "@/types/schema";
 import { IconArrowLeft } from "@tabler/icons-react";
+import { aDia, delDia } from "@/lib/api/adaptar";
 
 export default function NuevoOpexPage() {
   const router = useRouter();
@@ -25,7 +26,7 @@ export default function NuevoOpexPage() {
   const [frecuencia, setFrecuencia] = useState<FrecuenciaOpex>("mensual");
   const [diaSemana, setDiaSemana] = useState<number>(1); // lunes
   const [diaDelMes, setDiaDelMes] = useState<number>(1);
-  const [fechaInicio, setFechaInicio] = useState(new Date().toISOString().slice(0, 10));
+  const [fechaInicio, setFechaInicio] = useState(aDia(new Date()));
   const [fechaFin, setFechaFin] = useState("");
   const [cuentaId, setCuentaId] = useState("");
   const [categoria, setCategoria] = useState("");
@@ -73,8 +74,8 @@ export default function NuevoOpexPage() {
         frecuencia,
         dia_semana: frecuencia === "semanal" ? diaSemana : null,
         dia_del_mes: frecuencia === "mensual" ? diaDelMes : null,
-        fecha_inicio: new Date(fechaInicio),
-        fecha_fin: fechaFin ? new Date(fechaFin) : null,
+        fecha_inicio: delDia(fechaInicio),
+        fecha_fin: fechaFin ? delDia(fechaFin) : null,
         cuenta_id: cuenta?.id ?? null,
         cuenta_nombre: cuenta?.nombre ?? null,
         categoria: categoria.trim() || undefined,

@@ -16,6 +16,8 @@
  * defecto sólo se notaba al guardar.
  */
 
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { aDia, aTimestamp, delDia } from "@/lib/api/adaptar";
 
@@ -65,5 +67,44 @@ describe("el día que se escoge es el día que se guarda", () => {
       expect(t, `${d} se pudo leer`).toBeTruthy();
       expect(aDia(t!.toDate()), `${d} de la API a la pantalla`).toBe(d);
     }
+  });
+});
+
+/* 16-oct-2026 · El arreglo del 21-sep se quedó en el formulario de
+ * movimientos. Guardar un proyecto, un gasto fijo o crearlos seguía haciendo
+ * `new Date(fechaInicio)` y cada guardado atrasaba un día (lo encontró la
+ * medición de velocidad: «2027-03-01» se guardaba como «2027-02-28»). Y
+ * `new Date().toISOString().slice(0, 10)` como «hoy» proponía MAÑANA
+ * después de las seis de la tarde en la Ciudad de México.
+ *
+ * Esto revisa todas las pantallas para que ninguna vuelva a mezclar zonas:
+ * un día de un `<input type="date">` se convierte con `delDia`, y un día se
+ * escribe con `aDia`. */
+function fuentes(dir: string): string[] {
+  const out: string[] = [];
+  for (const n of readdirSync(dir)) {
+    const p = join(dir, n);
+    if (statSync(p).isDirectory()) out.push(...fuentes(p));
+    else if (/\.(tsx?|mjs)$/.test(n)) out.push(p);
+  }
+  return out;
+}
+
+describe("ninguna pantalla mezcla zonas al leer o escribir un día", () => {
+  const archivos = ["app", "components"].flatMap((d) => fuentes(join(__dirname, "..", d)));
+
+  it("hay pantallas que revisar", () => {
+    expect(archivos.length).toBeGreaterThan(20);
+  });
+
+  it("nadie arma un día con `toISOString().slice(0, 10)` (es el día de Londres)", () => {
+    const malos = archivos.filter((a) => /toISOString\(\)\.slice\(0,\s*10\)/.test(readFileSync(a, "utf8")));
+    expect(malos, "usa aDia(...)").toEqual([]);
+  });
+
+  it("nadie convierte un día de formulario con `new Date(fecha…)` (es medianoche en Londres)", () => {
+    const malos = archivos.flatMap((a) =>
+      [...readFileSync(a, "utf8").matchAll(/new Date\((fecha\w*)\)/gi)].map((m) => `${a}: ${m[0]}`));
+    expect(malos, "usa delDia(...)").toEqual([]);
   });
 });

@@ -10,6 +10,7 @@ import type { Opex, Cuenta, FrecuenciaOpex, TipoOpex, Moneda } from "@/types/sch
 import { FRECUENCIA_LABELS, DIAS_SEMANA } from "@/types/schema";
 import { Timestamp } from "firebase/firestore";
 import { IconArrowLeft, IconTrash } from "@tabler/icons-react";
+import { aDia, delDia } from "@/lib/api/adaptar";
 
 export default function OpexDetallePage() {
   const router = useRouter();
@@ -58,9 +59,9 @@ export default function OpexDetallePage() {
         if (o.dia_semana != null) setDiaSemana(o.dia_semana);
         if (o.dia_del_mes != null) setDiaDelMes(o.dia_del_mes);
         const fi = o.fecha_inicio as Timestamp;
-        if (fi?.toDate) setFechaInicio(fi.toDate().toISOString().slice(0, 10));
+        if (fi?.toDate) setFechaInicio(aDia(fi.toDate()));
         const ff = o.fecha_fin as Timestamp | null;
-        if (ff?.toDate) setFechaFin(ff.toDate().toISOString().slice(0, 10));
+        if (ff?.toDate) setFechaFin(aDia(ff.toDate()));
         setCuentaId(o.cuenta_id ?? "");
         setCategoria(o.categoria ?? "");
         setDescripcion(o.descripcion ?? "");
@@ -89,8 +90,8 @@ export default function OpexDetallePage() {
         frecuencia,
         dia_semana: frecuencia === "semanal" ? diaSemana : null,
         dia_del_mes: frecuencia === "mensual" ? diaDelMes : null,
-        fecha_inicio: new Date(fechaInicio),
-        fecha_fin: fechaFin ? new Date(fechaFin) : null,
+        fecha_inicio: delDia(fechaInicio),
+        fecha_fin: fechaFin ? delDia(fechaFin) : null,
         cuenta_id: cuenta?.id ?? null,
         cuenta_nombre: cuenta?.nombre ?? null,
         categoria: categoria.trim() || undefined,

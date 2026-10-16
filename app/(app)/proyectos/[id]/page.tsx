@@ -21,6 +21,7 @@ import { desglose } from "@/lib/estado-proyecto";
 import { ItemsDelProyecto } from "@/components/items-del-proyecto";
 import { FusionarProyecto } from "@/components/fusionar-proyecto";
 import { PlanDePagos } from "@/components/plan-de-pagos";
+import { aDia, delDia } from "@/lib/api/adaptar";
 
 const ESTADO_STYLE: Record<string, string> = {
   planeando: "bg-cream text-ink-muted",
@@ -71,7 +72,7 @@ function importe(cantidad: string, unitario: string): string {
 
 function tsToInput(t: unknown): string {
   const ts = t as Timestamp | null | undefined;
-  return ts && typeof ts.toDate === "function" ? ts.toDate().toISOString().slice(0, 10) : "";
+  return ts && typeof ts.toDate === "function" ? aDia(ts.toDate()) : "";
 }
 
 export default function ProyectoDetallePage() {
@@ -116,7 +117,7 @@ export default function ProyectoDetallePage() {
       setIvaIncluido(Boolean(p.iva_incluido));
       const fi = p.fecha_inicio as Timestamp | undefined;
       if (fi && typeof fi.toDate === "function") {
-        setFechaInicio(fi.toDate().toISOString().slice(0, 10));
+        setFechaInicio(aDia(fi.toDate()));
       }
       setPartidasEdit(
         (p.partidas ?? []).filter((pt) => !pt.tarea_id).map((pt) => ({
@@ -184,7 +185,7 @@ export default function ProyectoDetallePage() {
         descripcion: descripcion.trim() || "",
         estado,
         iva_incluido: ivaIncluido,
-        fecha_inicio: fechaInicio ? new Date(fechaInicio) : undefined,
+        fecha_inicio: fechaInicio ? delDia(fechaInicio) : undefined,
         items: itemsEdit
           .filter((pr) => pr.nombre.trim())
           .map((pr) => ({
