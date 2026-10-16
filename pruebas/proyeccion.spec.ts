@@ -70,6 +70,16 @@ describe("los bloques cortan donde deben", () => {
     expect(lapsos("semana", HOY, 12)).toHaveLength(53);
   });
 
+  it("también cuando hoy cae justo en el inicio de un bloque: entra el bloque de hoy + N meses (16-oct-2026)", () => {
+    expect(lapsos("quincena", d("2026-10-16"), 12)).toHaveLength(25);
+    expect(dia(lapsos("quincena", d("2026-10-16"), 12)[24].inicio)).toBe("2027-10-16");
+    expect(lapsos("quincena", d("2026-10-01"), 12)).toHaveLength(25);
+    expect(lapsos("mes", d("2026-11-01"), 12)).toHaveLength(13);
+    expect(lapsos("mes", d("2026-11-01"), 3)).toHaveLength(4);
+    expect(lapsos("anio", d("2027-01-01"), 12)).toHaveLength(2);
+    expect(lapsos("semana", d("2026-10-12"), 12)).toHaveLength(53);
+  });
+
   it("y se llaman como la gente los llama", () => {
     const l = (b: Parameters<typeof lapsos>[0], desde: string) => etiquetaDeLapso(b, lapsos(b, d(desde), 1)[0]);
     expect(l("semana", "2026-10-06")).toMatch(/^Semana del 5 oct/);

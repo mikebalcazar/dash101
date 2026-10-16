@@ -335,7 +335,10 @@ export function lapsos(bloque: Bloque, desde: Date, meses: number): Lapso[] {
   tope.setMonth(tope.getMonth() + meses);
   const salida: Lapso[] = [];
   let inicio = inicioDeBloque(bloque, desde);
-  while (inicio < tope) {
+  // `<=`: el último bloque es el que CONTIENE hoy + N meses. Con `<`, el día
+  // en que hoy cae en el inicio de un bloque (el 16, el 1.º del mes) ese
+  // bloque se quedaba fuera: el 16-oct-2026 salían 24 quincenas, no 25.
+  while (inicio <= tope) {
     const sig = siguienteBloque(bloque, inicio);
     salida.push({ index: salida.length, inicio, fin: new Date(sig.getTime() - 1) });
     inicio = sig;

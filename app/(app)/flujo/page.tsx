@@ -227,6 +227,11 @@ export default function FlujoPage() {
       })),
     [proyeccion, bloque]
   );
+  /* El eje va por `index`, que no se repite, y la fecha sale sólo como letrero.
+   * Con `dataKey="label"` las semanas sin letrero ("") eran una sola categoría
+   * para Recharts, y al pasar el mouse por cualquiera de ellas la etiqueta
+   * enseñaba la del 19 oct (16-oct-2026). */
+  const letreroDe = useMemo(() => new Map(chartData.map((p) => [p.index, p.label])), [chartData]);
 
   const primeraNeg = primerBloqueBajoUmbral(proyeccion, 0);
   const saldoFinal = proyeccion[proyeccion.length - 1]?.saldo_final ?? capitalInicial;
@@ -532,10 +537,11 @@ export default function FlujoPage() {
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 10, right: 15, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
               <XAxis
-                dataKey="label"
-                tick={{ fontSize: 10, fill: "#6E737E" }}
+                dataKey="index"
+                tickFormatter={(i) => letreroDe.get(Number(i)) ?? ""}
+                tick={{ fontSize: 10, fill: "#A9C0CE" }}
                 axisLine={false}
                 tickLine={false}
                 interval={0}
@@ -547,17 +553,23 @@ export default function FlujoPage() {
                     maximumFractionDigits: 1,
                   }).format(v)
                 }
-                tick={{ fontSize: 10, fill: "#6E737E" }}
+                tick={{ fontSize: 10, fill: "#A9C0CE" }}
                 axisLine={false}
                 tickLine={false}
               />
+              {/* Los tonos del tema oscuro (globals.css): la línea en el azul de
+                * la marca y la etiqueta sobre la superficie apagada. Con el
+                * #1E2A3A de antes la línea casi no se veía sobre el vidrio. */}
               <Tooltip
+                cursor={{ stroke: "rgba(255,255,255,0.25)" }}
                 contentStyle={{
-                  background: "#FBF8F2",
-                  border: "1px solid rgba(0,0,0,0.1)",
+                  background: "#16242E",
+                  border: "1px solid rgba(255,255,255,0.12)",
                   borderRadius: "10px",
                   fontSize: 12,
                 }}
+                labelStyle={{ color: "#A9C0CE" }}
+                itemStyle={{ color: "#E8EEF2" }}
                 formatter={(value) => [
                   formatMonto(Number(value), empresa.moneda),
                   "Saldo",
@@ -567,14 +579,14 @@ export default function FlujoPage() {
                   return p?.etiqueta ?? "";
                 }}
               />
-              <ReferenceLine y={0} stroke="#5C485E" strokeDasharray="4 4" />
+              <ReferenceLine y={0} stroke="#F0A08A" strokeDasharray="4 4" />
               <Line
                 type="monotone"
                 dataKey="saldo"
-                stroke="#1E2A3A"
+                stroke="#3AA3DC"
                 strokeWidth={2}
                 dot={false}
-                activeDot={{ r: 4, fill: "#1E2A3A" }}
+                activeDot={{ r: 4, fill: "#86C9EC", stroke: "#0F1B24" }}
               />
             </LineChart>
           </ResponsiveContainer>
