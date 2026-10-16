@@ -81,7 +81,7 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
   const [gastoGeneral, setGastoGeneral] = useState(false);
   const [categoriaDeLaCarga, setCategoriaDeLaCarga] = useState<string>("");
   const [monto, setMonto] = useState("");
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
+  const [fecha, setFecha] = useState(aDia(new Date()));
   const [proyectoId, setProyectoId] = useState(searchParams?.get("proyecto") ?? "");
   const [cuentaId, setCuentaId] = useState("");
   const [contraparteId, setContraparteId] = useState("");

@@ -17,6 +17,7 @@ import { formatMontoExact } from "@/lib/format";
 import { AvisoFiscal, SelectorDeMes, TabsFiscal, bajarCsv } from "@/components/fiscal-ui";
 import { BOTON, CAJA, CAJA_NUM, ETIQUETA } from "@/components/ordenes-ui";
 import { IconDownload, IconPlus } from "@tabler/icons-react";
+import { aDia } from "@/lib/api/adaptar";
 
 export default function CfdiPage() {
   const { empresa } = useEmpresa();
@@ -168,7 +169,7 @@ function NuevaFactura({
   const [uuid, setUuid] = useState("");
   const [rfc, setRfc] = useState("");
   const [razon, setRazon] = useState("");
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
+  const [fecha, setFecha] = useState(aDia(new Date()));
   const [subtotal, setSubtotal] = useState("");
   const [iva, setIva] = useState("");
   const [retenciones, setRetenciones] = useState("");

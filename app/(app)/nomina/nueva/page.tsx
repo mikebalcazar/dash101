@@ -19,6 +19,7 @@ import {
   type GenteDeRaya, type TrabajadorDeRoster,
 } from "@/lib/nomina";
 import { formatMonto } from "@/lib/format";
+import { aDia } from "@/lib/api/adaptar";
 
 type Renglon = { personal_id: string; concepto: string; sueldo: string; extras: string; descuentos: string };
 
@@ -33,7 +34,7 @@ function semanaDeHoy(): { inicio: string; fin: string } {
   const dia = (hoy.getDay() + 6) % 7; // lunes = 0
   const lunes = new Date(hoy); lunes.setDate(hoy.getDate() - dia);
   const domingo = new Date(lunes); domingo.setDate(lunes.getDate() + 6);
-  const d = (x: Date) => x.toISOString().slice(0, 10);
+  const d = aDia;
   return { inicio: d(lunes), fin: d(domingo) };
 }
 

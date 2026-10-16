@@ -14,6 +14,7 @@ import type { Cliente, Proveedor, EstadoProyecto } from "@/types/schema";
 import { ESTADO_PROYECTO_LABELS } from "@/types/schema";
 import { formatMonto } from "@/lib/format";
 import { IconArrowLeft, IconPlus, IconTrash } from "@tabler/icons-react";
+import { aDia, delDia } from "@/lib/api/adaptar";
 
 interface Partida {
   proveedor_id: string;
@@ -47,7 +48,7 @@ export default function NuevoProyectoPage() {
   // El correo es de UN cliente (0.65.0): el que ya lo tiene, para preguntar «¿es éste?».
   const [conEseCorreo, setConEseCorreo] = useState<Cliente | null>(null);
   const [estado, setEstado] = useState<EstadoProyecto>("planeando");
-  const [fechaInicio, setFechaInicio] = useState(new Date().toISOString().slice(0, 10));
+  const [fechaInicio, setFechaInicio] = useState(aDia(new Date()));
   const [partidas, setPartidas] = useState<Partida[]>([]);
 
   /* Las obras que ya existen en quell101 y todavía no tienen proyecto aquí.
@@ -205,7 +206,7 @@ export default function NuevoProyectoPage() {
           monto_acordado: parseFloat(p.monto_acordado),
         })),
         estado,
-        fecha_inicio: new Date(fechaInicio),
+        fecha_inicio: delDia(fechaInicio),
       });
       /* La liga con la obra va DESPUÉS de crear: el proyecto tiene que
        * existir para poder ligarlo. Si la liga falla —alguien más la acaba de

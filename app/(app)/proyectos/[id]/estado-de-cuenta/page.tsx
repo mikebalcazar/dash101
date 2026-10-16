@@ -37,6 +37,7 @@ import { estadoDelProyecto, ligaDelExcel, type EstadoDelProyecto } from "@/lib/e
  * 15,345 = 111,250», que no cuadra. El que suma la columna es quien va a
  * pagar. */
 import { formatMontoExact } from "@/lib/format";
+import { aDia } from "@/lib/api/adaptar";
 
 /** El día que se genera, en palabras. Sale de `generado_at`, que lo pone el
  *  SERVIDOR: un estado de cuenta con la fecha de la laptop mal puesta es un
@@ -45,7 +46,7 @@ const enPalabras = (iso: string) =>
   new Date(iso).toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" });
 
 /** Para el nombre del archivo: 2026-09-21, que ordena solo en una carpeta. */
-const enDigitos = (iso: string) => new Date(iso).toISOString().slice(0, 10);
+const enDigitos = (iso: string) => aDia(new Date(iso));
 
 const limpio = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
