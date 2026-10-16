@@ -215,7 +215,7 @@ $('f-codigo').onsubmit = async (ev) => {
     await pedir('/auth/entrar', { method: 'POST', body: { correo, codigo: $('codigo').value.trim() } });
     const yo = await pedir('/yo');
     if (!yo.tiene_clave) { mostrar('v-nueva'); $('nueva').focus(); return; }
-    await arrancarSesion();
+    await arrancarSesion(yo);
   } catch (e) { decir('err-codigo', enPalabras(e)); }
   finally { b.disabled = false; b.textContent = 'Continuar'; }
 };
@@ -250,9 +250,11 @@ function resolverEmpresa(yo) {
   return (yo.orgs || []).map((o) => ({ id: o.id, nombre: o.nombre }));
 }
 
-async function arrancarSesion() {
+/** `yo`, si ya se pidió (al abrir o al entrar con código), no se vuelve a
+ *  pedir: cada /yo es un viaje a la suite. */
+async function arrancarSesion(yo = null) {
   mostrar('v-cargando');
-  est.yo = await pedir('/yo');
+  est.yo = yo || await pedir('/yo');
   const empresas = resolverEmpresa(est.yo);
   if (empresas.length === 0) {
     mostrar('v-lista');
@@ -270,14 +272,21 @@ async function arrancarSesion() {
 
   // Quién puede comprar lo dice el servidor. Si no contesta, se deja la
   // opción prendida: el servidor lo vuelve a decir al mandar.
-  try {
-    const p = await pedir(`/orgs/${est.org.id}/ordenes/permisos`);
-    est.puedeComprar = p.puede_comprar !== false;
-    // 0.92.0 · Y a qué cuenta se me reembolsa, si ya la di.
-    est.cuenta = p.cuenta_reembolso && p.cuenta_reembolso.clabe ? p.cuenta_reembolso : null;
-  } catch { est.puedeComprar = true; est.cuenta = null; }
-  ver('b-nueva-compra', est.puedeComprar);
-  ver('sin-compras', !est.puedeComprar);
+  // 16-oct-2026 · Va A LA PAR de la lista, no antes: sólo prende botones.
+  // El formulario de pedir sí lo espera (`est.permisos`), porque de ahí sale
+  // la cuenta del reembolso.
+  ver('b-nueva-compra', false);
+  ver('sin-compras', false);
+  est.permisos = (async () => {
+    try {
+      const p = await pedir(`/orgs/${est.org.id}/ordenes/permisos`);
+      est.puedeComprar = p.puede_comprar !== false;
+      // 0.92.0 · Y a qué cuenta se me reembolsa, si ya la di.
+      est.cuenta = p.cuenta_reembolso && p.cuenta_reembolso.clabe ? p.cuenta_reembolso : null;
+    } catch { est.puedeComprar = true; est.cuenta = null; }
+    ver('b-nueva-compra', est.puedeComprar);
+    ver('sin-compras', !est.puedeComprar);
+  })();
 
   /* La empresa es una (Mike, 1-oct-2026): la API cuelga sola cada orden de
    * ella. Aquí no se lista, no se escoge ni se recuerda nada. */
@@ -543,6 +552,7 @@ for (const b of document.querySelectorAll('#tipo .opcion')) {
 }
 
 async function verPedir(orden, tipo = 'compra') {
+  await est.permisos;
   est.corrigiendo = orden || null;
   mostrar('v-pedir');
   decir('err-pedir', '');
@@ -1156,11 +1166,12 @@ window.addEventListener('hashchange', enrutar);
     u.searchParams.delete('entrada');
     history.replaceState(null, '', u.pathname + u.search + u.hash);
   }
-  try {
-    await pedir('/yo');
-    await arrancarSesion();
-  } catch {
+  // Un solo /yo al abrir: el mismo que dice si hay sesión arranca la app.
+  let yo;
+  try { yo = await pedir('/yo'); } catch {
     mostrar('v-correo');
     $('correo').focus();
+    return;
   }
+  await arrancarSesion(yo);
 })();
