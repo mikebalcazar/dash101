@@ -1160,6 +1160,35 @@ test('6-oct: el flujo proyectado se presenta por bloques —semana, quincena, me
   await ctx.close();
 });
 
+test('16-oct: en la gráfica del flujo, la etiqueta dice la semana que está bajo el mouse (sólo lectura)', async () => {
+  /* Al grabar el video de Forespot (16-oct-2026) la etiqueta de la gráfica
+   * decía «Semana del 19 oct» casi en cualquier punto: el eje iba por el
+   * letrero de abajo, que es "" en tres de cada cuatro semanas, y Recharts
+   * juntaba todas esas en una sola. Se pasa el mouse por tres puntos de la
+   * gráfica, a lo ancho, y cada uno tiene que dar una semana distinta. */
+  const { ctx, pag, errores } = await pestana(undefined, true);
+  await pag.goto(`${URL}/flujo`, { waitUntil: 'load' });
+  await pag.locator('[data-bloque]').waitFor({ timeout: 20000 });
+  await pag.locator('[data-bloque]').selectOption('semana');
+  await pag.locator('[data-horizonte]').selectOption('12');
+  const lienzo = pag.locator('.recharts-wrapper').first();
+  await lienzo.waitFor({ timeout: 20000 });
+  const caja = await lienzo.boundingBox();
+  const etiquetas = [];
+  for (const fraccion of [0.3, 0.55, 0.8]) {
+    await pag.mouse.move(caja.x + caja.width * fraccion, caja.y + caja.height * 0.5);
+    const etiqueta = pag.locator('.recharts-tooltip-label');
+    await etiqueta.waitFor({ timeout: 5000 });
+    await pag.waitForTimeout(400);
+    etiquetas.push((await etiqueta.innerText()).trim());
+  }
+  for (const e of etiquetas) assert.match(e, /^Semana del /, `la etiqueta dice de qué semana es: «${e}»`);
+  assert.equal(new Set(etiquetas).size, 3, `tres puntos, tres semanas distintas: ${etiquetas.join(' · ')}`);
+
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
 test('6-oct: la lista de ítems trae el avance de la obra como en quell101, y el panel se abre también con una pieza del plano (sólo lectura)', async () => {
   const { ctx, pag, errores } = await pestana(undefined, true);
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
