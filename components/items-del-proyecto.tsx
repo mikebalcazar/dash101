@@ -337,9 +337,9 @@ export function ItemsDelProyecto({ proyecto, alCambiar, alEditarLista }: {
         <span className="text-[11px] text-ink-muted">
           {pestana !== "" && <>{formatMonto(suma, "MXN")} de </>}
           {formatMonto(sumaTodo, "MXN")}
-          {proyecto.precio_venta > 0 && Math.abs(sumaTodo - proyecto.precio_venta) > 0.5 && (
-            <span className="text-mauve-900 ml-1">≠ precio venta</span>
-          )}
+          {/* «≠ precio venta» se fue el 18-nov-2026 (contrato 0.105.0): el
+              precio del proyecto son sus conceptos de cobro, no la suma de
+              los ítems, así que ya no tienen por qué coincidir. */}
         </span>
       </div>
 

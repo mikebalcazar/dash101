@@ -48,6 +48,28 @@ export interface PagoDelEstado {
   requiere_factura: boolean;
 }
 
+/** 0.105.0 · Un concepto de cobro como lo pinta el estado de cuenta. */
+export interface ConceptoDelEstado {
+  id: string;
+  descripcion: string;
+  cantidad: number;
+  /** En PESOS. */
+  precio_unitario: number;
+  /** En PESOS. */
+  importe: number;
+}
+/** 0.105.0 · Los conceptos de una cotización importada —«Cotización 2 ·
+ *  COT-000014 · Planta alta»— o los escritos a mano («Otros conceptos»). */
+export interface GrupoDelEstado {
+  cotizacion_id: string | null;
+  folio: string | null;
+  nombre: string;
+  numero: number | null;
+  /** En PESOS. */
+  importe: number;
+  conceptos: ConceptoDelEstado[];
+}
+
 export interface EstadoDelProyecto {
   /** La pone el SERVIDOR, no el reloj de quien imprime. */
   generado_at: string;
@@ -55,15 +77,38 @@ export interface EstadoDelProyecto {
   cliente: { id: string; nombre: string; rfc: string | null; correo: string | null; telefono: string | null } | null;
   /** Quien vende: la empresa, con su RFC. */
   empresa: { id: string; nombre: string; rfc: string | null; moneda: string | null } | null;
+  /** Hasta 0.104 eran los ítems vendidos; desde 0.105.0 son los conceptos. */
   items: RenglonDelEstado[];
+  /** 0.105.0 · los conceptos de cobro, agrupados por cotización. */
+  grupos: GrupoDelEstado[];
   movimientos: PagoDelEstado[];
   /** Todo en PESOS, menos `tasa_iva`, que va en PUNTOS BASE (1600 = 16 %). */
   totales: {
     subtotal: number; iva: number; total: number;
     tasa_iva: number; iva_incluido: boolean;
-    cobrado: number; saldo: number; piezas: number;
+    /** null: el precio está por cargar y no hay contra qué restar. */
+    cobrado: number; saldo: number | null; piezas: number;
+    /** 0.105.0 · sin conceptos de cobro todavía. */
+    precio_por_cargar: boolean;
+    /** Lo que decía antes del 18-nov-2026, mientras se carga. En PESOS. */
+    precio_anterior: number | null;
   };
 }
+
+const grupo = (g: Record<string, any>): GrupoDelEstado => ({
+  cotizacion_id: g.cotizacion_id ?? null, folio: g.folio ?? null, nombre: String(g.nombre ?? ''),
+  numero: g.numero ?? null, importe: aPesos(g.importe),
+  conceptos: ((g.conceptos ?? []) as Array<Record<string, any>>).map((c) => ({
+    id: String(c.id), descripcion: String(c.descripcion ?? ''), cantidad: Number(c.cantidad ?? 1),
+    precio_unitario: aPesos(c.precio_unitario), importe: aPesos(c.monto),
+  })),
+});
+
+/** Cómo se titula un grupo de conceptos en el papel. */
+export const tituloDelGrupo = (g: Pick<GrupoDelEstado, 'cotizacion_id' | 'folio' | 'nombre' | 'numero'>): string =>
+  g.cotizacion_id
+    ? `Cotización ${g.numero ?? ''}${g.folio ? ' · ' + g.folio : ''}${g.nombre ? ' · ' + g.nombre : ''}`
+    : g.nombre || 'Otros conceptos';
 
 /** Quien vende es LA EMPRESA. El contrato 0.63.0 todavía manda ese bloque
  *  con el nombre de antes, por compatibilidad; aquí se acepta con cualquiera
@@ -95,6 +140,7 @@ export async function estadoDelProyecto(proyecto_id: string): Promise<EstadoDelP
       producto_nombre: i.producto_nombre ?? null,
       partida: i.partida ?? null, fecha_entrega: i.fecha_entrega ?? null,
     })),
+    grupos: ((r.grupos ?? []) as Array<Record<string, any>>).map(grupo),
     movimientos: (r.movimientos ?? []).map((m: Record<string, any>) => ({
       id: String(m.id), fecha: String(m.fecha ?? ''), monto: aPesos(m.monto),
       descripcion: m.descripcion ?? null, cuenta_nombre: m.cuenta_nombre ?? null,
@@ -103,8 +149,11 @@ export async function estadoDelProyecto(proyecto_id: string): Promise<EstadoDelP
     totales: {
       subtotal: aPesos(r.totales.subtotal), iva: aPesos(r.totales.iva), total: aPesos(r.totales.total),
       tasa_iva: Number(r.totales.tasa_iva ?? 1600), iva_incluido: Boolean(r.totales.iva_incluido),
-      cobrado: aPesos(r.totales.cobrado), saldo: aPesos(r.totales.saldo),
+      cobrado: aPesos(r.totales.cobrado),
+      saldo: r.totales.saldo === null ? null : aPesos(r.totales.saldo),
       piezas: Number(r.totales.piezas ?? 0),
+      precio_por_cargar: Boolean(r.totales.precio_por_cargar),
+      precio_anterior: r.totales.precio_anterior == null ? null : aPesos(r.totales.precio_anterior),
     },
   };
 }

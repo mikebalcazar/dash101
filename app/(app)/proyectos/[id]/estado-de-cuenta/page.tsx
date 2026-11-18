@@ -24,12 +24,11 @@
  * la empresa y el que baja el cliente digan lo mismo.
  */
 
-import { BotonVerItem, NombreDeItem } from "@/components/panel-item";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { IconArrowLeft, IconPrinter, IconTableExport } from "@tabler/icons-react";
-import { estadoDelProyecto, ligaDelExcel, type EstadoDelProyecto } from "@/lib/estado-proyecto";
+import { estadoDelProyecto, ligaDelExcel, tituloDelGrupo, type EstadoDelProyecto } from "@/lib/estado-proyecto";
 /* `formatMontoExact` y no `formatMonto`: éste último redondea a pesos
  * enteros, y en un papel que se le manda a un cliente eso rompe la cuenta.
  * Con «IVA incluido» el subtotal casi nunca es redondo —de $111,250 salen
@@ -69,6 +68,9 @@ export default function EstadoDelProyectoPage() {
   if (!d) return <p className="text-sm text-mauve-900">{error || "Ese proyecto ya no existe."}</p>;
 
   const t = d.totales;
+  /* 0.105.0 · sin conceptos de cobro el precio está por cargar: el papel lo
+   * dice con letras y no inventa un saldo. */
+  const saldoDice = t.precio_por_cargar || t.saldo === null ? "Precio por cargar" : formatMontoExact(t.saldo, "MXN");
 
   return (
     <div className="max-w-4xl">
@@ -97,7 +99,7 @@ export default function EstadoDelProyectoPage() {
 
       <p className="print:hidden text-xs text-ink-muted mb-4">
         El PDF lo hace tu navegador: al picarle se abre la ventana de imprimir y ahí escoges{" "}
-        <b>«Guardar como PDF»</b>. El Excel trae dos hojas, los ítems y los pagos, con los
+        <b>«Guardar como PDF»</b>. El Excel trae dos hojas, los conceptos y los pagos, con los
         mismos números. Es el mismo documento que tu cliente puede bajar desde su portal.
       </p>
 
@@ -122,13 +124,13 @@ export default function EstadoDelProyectoPage() {
         {/* El saldo general. Es lo primero que se busca al abrir el papel. */}
         <div className="grid grid-cols-3 gap-3 my-5 no-partir">
           {[
-            { que: "Total del proyecto", cuanto: t.total, tono: "text-ink-dim" },
-            { que: "Pagado", cuanto: t.cobrado, tono: "text-mint-900" },
-            { que: "Saldo", cuanto: t.saldo, tono: t.saldo > 0 ? "text-mauve-900" : "text-ink-dim" },
+            { que: "Total del proyecto", dice: t.precio_por_cargar ? "Por cargar" : formatMontoExact(t.total, "MXN"), tono: "text-ink-dim" },
+            { que: "Pagado", dice: formatMontoExact(t.cobrado, "MXN"), tono: "text-mint-900" },
+            { que: "Saldo", dice: t.precio_por_cargar || t.saldo === null ? "—" : formatMontoExact(t.saldo, "MXN"), tono: (t.saldo ?? 0) > 0 ? "text-mauve-900" : "text-ink-dim" },
           ].map((k) => (
-            <div key={k.que} className="bg-cream/60 rounded-xl p-3 print:bg-transparent print:border print:border-black/15">
+            <div key={k.que} data-kpi={k.que} className="bg-cream/60 rounded-xl p-3 print:bg-transparent print:border print:border-black/15">
               <p className="text-[11px] text-ink-muted">{k.que}</p>
-              <p className={`text-lg font-medium tabular ${k.tono}`}>{formatMontoExact(k.cuanto, "MXN")}</p>
+              <p className={`text-lg font-medium tabular ${k.tono}`}>{k.dice}</p>
             </div>
           ))}
         </div>
@@ -138,9 +140,15 @@ export default function EstadoDelProyectoPage() {
           cuánto se vendió; aquí es cuánto se debe.
         </p>
 
-        <h2 className="text-sm font-medium text-ink-dim mb-2">Lo que lleva la obra</h2>
-        {d.items.length === 0 ? (
-          <p className="text-sm text-ink-muted mb-5">Todavía no hay ítems vendidos en este proyecto.</p>
+        {/* 0.105.0 · Lo que se cobra: los conceptos, agrupados por cotización
+            —«Cotización 2 · COT-000014 · Planta alta»— y lo escrito a mano al
+            final. Mike, 18-nov: «se debe ver que es una segunda cotización
+            pero suma». */}
+        <h2 className="text-sm font-medium text-ink-dim mb-2">Lo que se cobra</h2>
+        {d.grupos.length === 0 ? (
+          <p className="text-sm text-ink-muted mb-5" data-por-cargar>
+            Precio por cargar: este proyecto todavía no tiene conceptos de cobro.
+          </p>
         ) : (
           <table className="w-full text-sm mb-5">
             <thead className="text-xs text-ink-muted uppercase tracking-wide border-b border-black/10">
@@ -151,25 +159,31 @@ export default function EstadoDelProyectoPage() {
                 <th className="text-right py-1.5 font-medium">Importe</th>
               </tr>
             </thead>
-            <tbody>
-              {d.items.map((i) => (
-                <tr key={i.id} className="border-b border-black/5 no-partir">
-                  <td className="py-1.5 text-ink-dim">
-                    <NombreDeItem id={i.id}>
-                      {i.clave ? <span className="text-ink-muted">{i.clave} · </span> : null}
-                      {i.nombre}
-                    </NombreDeItem>
-                    <BotonVerItem id={i.id} className="ml-1 no-print" />
-                    {i.producto_nombre && i.producto_nombre !== i.nombre && (
-                      <span className="block text-[11px] text-ink-muted">{i.producto_nombre}</span>
-                    )}
-                  </td>
-                  <td className="py-1.5 text-right tabular">{i.cantidad}</td>
-                  <td className="py-1.5 text-right tabular">{formatMontoExact(i.precio_unitario, "MXN")}</td>
-                  <td className="py-1.5 text-right tabular">{formatMontoExact(i.importe, "MXN")}</td>
-                </tr>
-              ))}
-            </tbody>
+            {d.grupos.map((g) => (
+              <tbody key={g.cotizacion_id ?? "a-mano"} data-grupo={g.cotizacion_id ?? "a-mano"}>
+                {(d.grupos.length > 1 || g.cotizacion_id) && (
+                  <tr className="no-partir">
+                    <td colSpan={4} className="pt-3 pb-1 text-xs font-medium text-ink-dim">{tituloDelGrupo(g)}</td>
+                  </tr>
+                )}
+                {g.conceptos.map((c) => (
+                  <tr key={c.id} className="border-b border-black/5 no-partir">
+                    <td className="py-1.5 text-ink-dim">{c.descripcion}</td>
+                    <td className="py-1.5 text-right tabular">{c.cantidad}</td>
+                    <td className="py-1.5 text-right tabular">{formatMontoExact(c.precio_unitario, "MXN")}</td>
+                    <td className="py-1.5 text-right tabular">{formatMontoExact(c.importe, "MXN")}</td>
+                  </tr>
+                ))}
+                {d.grupos.length > 1 && (
+                  <tr className="no-partir">
+                    <td colSpan={3} className="py-1 text-right text-[11px] text-ink-muted">
+                      Suma {g.cotizacion_id ? `de la cotización ${g.numero}` : "de otros conceptos"}
+                    </td>
+                    <td className="py-1 text-right tabular text-[11px] text-ink-muted">{formatMontoExact(g.importe, "MXN")}</td>
+                  </tr>
+                )}
+              </tbody>
+            ))}
             <tfoot>
               <tr>
                 <td colSpan={2} />
@@ -221,7 +235,7 @@ export default function EstadoDelProyectoPage() {
               </tr>
               <tr className="font-medium">
                 <td colSpan={2} className="py-1">Saldo</td>
-                <td className="py-1 text-right tabular">{formatMontoExact(t.saldo, "MXN")}</td>
+                <td className="py-1 text-right tabular" data-saldo>{saldoDice}</td>
               </tr>
             </tfoot>
           </table>

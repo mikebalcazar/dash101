@@ -10,6 +10,7 @@
  * Lo que las pantallas reciben es lo que devuelven los módulos de `lib/` con
  * FUENTE=api: pesos con decimales y `Timestamp` de Firestore, como siempre. */
 
+import { listarConceptos } from "@/lib/conceptos";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Timestamp } from "firebase/firestore";
 import { canjear, entrarDePrueba, pedir, urlGoogle, yo } from "@/lib/api/cliente";
@@ -143,8 +144,13 @@ describe("el proyecto: cachés, partidas e ítems como los conoce la app", () =>
     const p = await laCocina();
     expect(p.cliente_nombre).toBe("Familia Ramírez");
     expect(p.estado).toBe("activo");
-    // en pesos, no en centavos
-    expect(p.precio_venta).toBe(262000);
+    /* 0.105.0 · el precio son los conceptos de cobro (Mike, 18-nov-2026), en
+     * pesos: lo que diga la lista de conceptos, al centavo. La demo nació
+     * con el precio de sus ítems; desde la 0055 está por cargar hasta que
+     * alguien le cargue conceptos. */
+    const conceptos = await listarConceptos(p.id!);
+    expect(p.precio_venta).toBe(Math.round(conceptos.reduce((t, c) => t + c.importe * 100, 0)) / 100);
+    expect(p.precio_por_cargar).toBe(conceptos.length === 0);
     expect(p.cobrado).toBe(140000);
     expect(p.pagado).toBe(33500);
     /* 0.73.0: los compromisos que nacen de las fases del cronograma de
@@ -178,8 +184,7 @@ describe("el proyecto: cachés, partidas e ítems como los conoce la app", () =>
     expect(dia(cocina.fecha_entrega).getDate()).toBe(15);
     const isla = p!.items!.find((x) => x.nombre === "Isla con cubierta de cuarzo")!;
     expect(isla.pagado).toBe(20000);
-    const suma = p!.items!.reduce((s, x) => s + x.monto, 0);
-    expect(suma).toBe(p!.precio_venta);
+    // 0.105.0 · la suma de los ítems ya no es el precio: ése son los conceptos.
   });
 });
 

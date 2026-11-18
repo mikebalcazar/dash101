@@ -21,6 +21,7 @@ import { desglose } from "@/lib/estado-proyecto";
 import { ItemsDelProyecto } from "@/components/items-del-proyecto";
 import { FusionarProyecto } from "@/components/fusionar-proyecto";
 import { PlanDePagos } from "@/components/plan-de-pagos";
+import { ConceptosDeCobro } from "@/components/conceptos-de-cobro";
 import { aDia, delDia } from "@/lib/api/adaptar";
 
 const ESTADO_STYLE: Record<string, string> = {
@@ -172,13 +173,9 @@ export default function ProyectoDetallePage() {
         }
       }
 
-      for (const pr of itemsEdit) {
-        if (pr.nombre.trim() && !(parseFloat(pr.monto) > 0)) {
-          setError(`El ítem «${pr.nombre}» necesita monto`);
-          setSaving(false);
-          return;
-        }
-      }
+      /* 0.105.0 · un ítem ya no necesita precio: el del proyecto son sus
+       * conceptos de cobro (Mike, 18-nov-2026: «Ya no va a ir ligada a los
+       * ítems»). Hasta aquí se exigía monto en cada uno. */
 
       await updateProyecto(id, {
         nombre: nombre.trim(),
@@ -245,6 +242,13 @@ export default function ProyectoDetallePage() {
   const pctPagado = p.compromiso_total > 0 ? (p.pagado / p.compromiso_total) * 100 : 0;
   const porCobrar = p.precio_venta - p.cobrado;
   const porPagar = p.compromiso_total - p.pagado;
+  /* 0.105.0 · sin conceptos de cobro el precio está POR CARGAR: no vale $0,
+   * no se sabe todavía. No hay porcentaje cobrado, ni pendiente, ni margen. */
+  const porCargar = Boolean(p.precio_por_cargar);
+  /* Lo que se les debe a contratistas y proveedores en esta obra: lo
+   * acordado menos lo pagado de cada compromiso, sólo lo que falta. */
+  const pendientePorPartida = (pt: PartidaProyecto) => Math.max(0, Math.round((pt.monto_acordado - pt.monto_pagado) * 100) / 100);
+  const debidoAContratistas = p.partidas.reduce((t, pt) => t + pendientePorPartida(pt), 0);
 
   return (
     <div className="max-w-3xl">
@@ -325,7 +329,7 @@ export default function ProyectoDetallePage() {
               <p className="text-xs text-mint-label font-medium mb-2">Ingreso del cliente</p>
               <div className="flex justify-between text-xs text-mint-label mb-0.5">
                 <span>Precio venta</span>
-                <span className="font-medium">{formatMonto(p.precio_venta, "MXN")}</span>
+                <span className="font-medium" data-precio-venta>{porCargar ? "Por cargar" : formatMonto(p.precio_venta, "MXN")}</span>
               </div>
               <div className="flex justify-between text-sm text-mint-900 mb-1.5">
                 <span>Cobrado</span>
@@ -338,8 +342,12 @@ export default function ProyectoDetallePage() {
                 />
               </div>
               <div className="flex justify-between text-[10px] text-mint-label mt-1">
-                <span>{pctCobrado.toFixed(0)}% cobrado</span>
-                <span>{formatMonto(porCobrar, "MXN")} pendiente</span>
+                {porCargar
+                  ? <span>Sin precio no hay saldo: carga los conceptos de cobro</span>
+                  : <>
+                      <span>{pctCobrado.toFixed(0)}% cobrado</span>
+                      <span>{formatMonto(porCobrar, "MXN")} pendiente</span>
+                    </>}
               </div>
             </div>
 
@@ -371,8 +379,8 @@ export default function ProyectoDetallePage() {
             <div>
               <p className="text-xs text-ink-muted">Margen proyectado</p>
               <p className="text-lg font-medium text-ink-dim">
-                {formatMonto(p.margen_proyectado ?? 0, "MXN")}{" "}
-                {p.precio_venta > 0 && (
+                {porCargar ? "Precio por cargar" : formatMonto(p.margen_proyectado ?? 0, "MXN")}{" "}
+                {!porCargar && p.precio_venta > 0 && (
                   <span className="text-xs text-mint-900 font-medium ml-1">
                     {((p.margen_proyectado / p.precio_venta) * 100).toFixed(0)}%
                   </span>
@@ -380,13 +388,18 @@ export default function ProyectoDetallePage() {
               </p>
             </div>
             <p className="text-xs text-ink-muted font-mono">
-              {formatMonto(p.precio_venta, "MXN")} − {formatMonto(p.compromiso_total, "MXN")}
+              {porCargar ? "—" : formatMonto(p.precio_venta, "MXN")} − {formatMonto(p.compromiso_total, "MXN")}
             </p>
           </div>
 
           {/* Cuándo se espera cobrar cuánto (contrato 0.72.0): el flujo
               proyectado pone cada parcialidad en su fecha, descontando lo
               ya cobrado en orden. Mike lo escogió con botones el 6-oct. */}
+          {/* El precio del proyecto, por aparte de los ítems (contrato
+              0.105.0). Mike, 18-nov: «Los precios de los proyectos se harán
+              por aparte», con conceptos que se importan de quote101. */}
+          <ConceptosDeCobro proyecto={p} alCambiar={() => { void loadProyecto(); }} />
+
           <PlanDePagos proyecto={p} />
 
           {/* La obra de quell101, si la hay (contrato 0.22.0). */}
@@ -406,7 +419,16 @@ export default function ProyectoDetallePage() {
               igual en la misma pantalla. La tabla de la base sigue siendo
               `partidas`; lo que cambia es cómo se lee aquí. */}
           <div className="mb-4">
-            <h3 className="text-sm font-medium text-ink-dim mb-2">Compromisos con proveedores</h3>
+            <div className="flex justify-between items-baseline gap-3 mb-2">
+              <h3 className="text-sm font-medium text-ink-dim">Compromisos con proveedores</h3>
+              {/* 0.105.0 · Mike, 18-nov: «poner en dash los pagos pendientes
+                  de cada proyecto a cada contratista». */}
+              {debidoAContratistas > 0 && (
+                <Link href="/pagos-pendientes" data-debido-contratistas className="text-xs text-mauve-900 tabular-nums hover:underline">
+                  Por pagar: {formatMonto(debidoAContratistas, "MXN")}
+                </Link>
+              )}
+            </div>
             {p.partidas.length === 0 ? (
               <div className="bg-white border border-black/5 rounded-2xl p-6 text-center text-xs text-ink-muted">
                 Sin compromisos. Edita el proyecto para agregar, o ponles costo a las fases del cronograma en quell101.
@@ -419,7 +441,8 @@ export default function ProyectoDetallePage() {
                       <th className="text-left px-4 py-2 font-medium">Proveedor</th>
                       <th className="text-left px-4 py-2 font-medium hidden sm:table-cell">Se paga</th>
                       <th className="text-right px-4 py-2 font-medium">Acordado</th>
-                      <th className="text-right px-4 py-2 font-medium">Pagado</th>
+                      <th className="text-right px-4 py-2 font-medium hidden sm:table-cell">Pagado</th>
+                      <th className="text-right px-4 py-2 font-medium">Pendiente</th>
                       <th className="text-right px-4 py-2 font-medium">Estado</th>
                     </tr>
                   </thead>
@@ -443,8 +466,11 @@ export default function ProyectoDetallePage() {
                         <td className="text-right px-4 py-3 text-sm text-ink-dim">
                           {formatMonto(pt.monto_acordado, "MXN")}
                         </td>
-                        <td className="text-right px-4 py-3 text-sm text-ink-dim">
+                        <td className="text-right px-4 py-3 text-sm text-ink-dim hidden sm:table-cell">
                           {formatMonto(pt.monto_pagado, "MXN")}
+                        </td>
+                        <td className="text-right px-4 py-3 text-sm text-ink-dim tabular-nums" data-partida-pendiente>
+                          {pendientePorPartida(pt) > 0 ? formatMonto(pendientePorPartida(pt), "MXN") : <span className="text-ink-muted">—</span>}
                         </td>
                         <td className="text-right px-4 py-3">
                           <span
@@ -671,8 +697,9 @@ function ProyectoEditForm(props: EditFormProps) {
         </div>
         <div>
           <label className="text-xs font-medium text-ink-dim block mb-1.5">Precio venta</label>
-          {/* Se lee, no se captura (2-oct): es la suma de los ítems
-              vendidos, y ésos se mueven desde quell101 o quote101. */}
+          {/* Se lee, no se captura aquí: desde el 18-nov-2026 (contrato
+              0.105.0) es la suma de los conceptos de cobro, que se cargan en
+              «Precio del proyecto» o se importan de quote101. */}
           <p className="w-full bg-cream/60 border border-black/5 rounded-xl px-3 py-2 text-sm text-ink-dim tabular-nums" data-precio-venta-leido>
             {formatMonto(parseFloat(props.precioVenta) || 0, "MXN")}
           </p>

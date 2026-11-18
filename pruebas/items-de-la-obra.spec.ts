@@ -124,7 +124,8 @@ describe("juntar los ítems de la obra con los del proyecto", () => {
      * trae precio, y una venta de cero pesos en la proyección es una cifra
      * que nadie tecleó. */
     const p = await getProyecto(ids.proyecto);
-    expect(p!.precio_venta, "la proyección no se movió ni un peso").toBe(60_000);
+    // 0.105.0 · los ítems ya no le ponen precio al proyecto (Mike, 18-nov-2026).
+    expect(p!.precio_venta, "la proyección no se movió ni un peso").toBe(0);
     /* Y NO está entre los `items`, a propósito: ésa es la lista que el
      * formulario guarda, y el guardado marca vendido todo lo que le llega.
      * Un cotizado ahí se volvería venta al primer «Guardar». */

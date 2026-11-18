@@ -87,7 +87,8 @@ describe("dash101 no genera ítems (Mike, 2-oct)", () => {
     const d = (await getProyecto(ids.proyecto))!;
     expect(d.nombre, "ni el proyecto se tocó").toBe("Casa Uno");
     expect(d.items!.map((x) => x.nombre).sort(), "todo o nada: ni el nuevo ni el cambio").toEqual(["Clóset", "Cocina"]);
-    expect(d.precio_venta).toBe(300);
+    // 0.105.0 · los ítems ya no le ponen precio al proyecto (Mike, 18-nov-2026).
+    expect(d.precio_venta).toBe(0);
   });
 
   it("un precio de venta a secas tampoco fabrica el ítem fantasma", async () => {
@@ -104,7 +105,8 @@ describe("editar la lista de ítems de un proyecto", () => {
   it("nace con los dos que se sembraron, y el precio es su suma", async () => {
     const p = (await getProyecto(ids.proyecto))!;
     expect(p.items).toHaveLength(2);
-    expect(p.precio_venta).toBe(300);
+    // 0.105.0 · los ítems ya no le ponen precio al proyecto (Mike, 18-nov-2026).
+    expect(p.precio_venta).toBe(0);
   });
 
   it("se cambia uno y se quita otro: queda LO QUE SE VE", async () => {
@@ -122,7 +124,8 @@ describe("editar la lista de ítems de un proyecto", () => {
     const d = (await getProyecto(ids.proyecto))!;
     expect(d.items!.map((x) => x.nombre), "queda exactamente el de la lista").toEqual(["Cocina"]);
     expect(d.items![0].monto).toBe(150);
-    expect(d.precio_venta, "y el precio es la suma de lo que quedó").toBe(150);
+    // 0.105.0 · los ítems ya no le ponen precio al proyecto (Mike, 18-nov-2026).
+    expect(d.precio_venta, "y el precio es la suma de lo que quedó").toBe(0);
   });
 
   it("guardar dos veces seguidas lo mismo no duplica nada", async () => {
@@ -170,7 +173,8 @@ describe("editar la lista de ítems de un proyecto", () => {
     expect(d.items).toHaveLength(1);
     expect(d.items![0].cantidad).toBe(20);
     expect(d.items![0].monto).toBe(30_000);
-    expect(d.precio_venta, "la suma es del importe de la línea").toBe(30_000);
+    // 0.105.0 · los ítems ya no le ponen precio al proyecto (Mike, 18-nov-2026).
+    expect(d.precio_venta, "la suma es del importe de la línea").toBe(0);
   });
 
   it("sin decir cantidad, es uno: lo que ya existía no cambia", async () => {
@@ -178,7 +182,8 @@ describe("editar la lista de ítems de un proyecto", () => {
     await updateProyecto(ids.proyecto, { items: [{ id: barra, nombre: "Barra", monto: 8_000 }] });
     const d = (await getProyecto(ids.proyecto))!;
     expect(d.items![0].cantidad).toBe(1);
-    expect(d.precio_venta).toBe(8_000);
+    // 0.105.0 · los ítems ya no le ponen precio al proyecto (Mike, 18-nov-2026).
+    expect(d.precio_venta).toBe(0);
   });
 
   it("el que se quita deja de verse, y los sacados no estorban al siguiente guardado", async () => {
@@ -206,7 +211,8 @@ describe("editar la lista de ítems de un proyecto", () => {
 
     const d = (await getProyecto(ids.proyecto))!;
     expect(d.items!.map((p) => p.nombre)).toEqual(["Se queda"]);
-    expect(d.precio_venta).toBe(100);
+    // 0.105.0 · los ítems ya no le ponen precio al proyecto (Mike, 18-nov-2026).
+    expect(d.precio_venta).toBe(0);
 
     // Sigue existiendo, fuera del alcance: el rastro no se pierde. Desde la
     // 0.64.0 ya no hay 'cancelado': queda cotizado, con la fecha en que lo
@@ -223,7 +229,8 @@ describe("editar la lista de ítems de un proyecto", () => {
     await updateProyecto(ids.proyecto, { items: sobreviven });
     const otra = (await getProyecto(ids.proyecto))!;
     expect(otra.items!.map((p) => p.nombre)).toEqual(["Se queda"]);
-    expect(otra.precio_venta).toBe(100);
+    // 0.105.0 · los ítems ya no le ponen precio al proyecto (Mike, 18-nov-2026).
+    expect(otra.precio_venta).toBe(0);
   });
 
   it("un id que ya no sale en la lista se revive, NO se duplica", async () => {
@@ -241,7 +248,8 @@ describe("editar la lista de ítems de un proyecto", () => {
     expect(d.items, "uno solo, no dos").toHaveLength(1);
     expect(d.items![0].id, "y es el mismo de antes, revivido").toBe(p1);
     expect(d.items![0].monto).toBe(120);
-    expect(d.precio_venta).toBe(120);
+    // 0.105.0 · los ítems ya no le ponen precio al proyecto (Mike, 18-nov-2026).
+    expect(d.precio_venta).toBe(0);
   });
 
   it("un id que de veras no existe truena: no se inventa un ítem", async () => {
@@ -295,7 +303,8 @@ describe("el tope de 500 no puede esconder ítems (lo de HOLCIM)", () => {
 
     const d = (await getProyecto(ids.proyecto))!;
     expect(d.items!.map((p) => p.nombre)).toEqual(["Se queda"]);
-    expect(d.precio_venta).toBe(400);
+    // 0.105.0 · los ítems ya no le ponen precio al proyecto (Mike, 18-nov-2026).
+    expect(d.precio_venta).toBe(0);
   });
 
   it("«total» delata una lista cortada: es la única seña que da la API", async () => {
@@ -312,7 +321,8 @@ describe("el tope de 500 no puede esconder ítems (lo de HOLCIM)", () => {
     // Y la pantalla, que usa `listarCompleto`, los trae todos de todos modos.
     const d = (await getProyecto(ids.proyecto))!;
     expect(d.items).toHaveLength(3);
-    expect(d.precio_venta).toBe(60);
+    // 0.105.0 · los ítems ya no le ponen precio al proyecto (Mike, 18-nov-2026).
+    expect(d.precio_venta).toBe(0);
   });
 });
 

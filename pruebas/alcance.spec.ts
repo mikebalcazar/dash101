@@ -83,7 +83,8 @@ describe("una sola lista de fuera del alcance (0.64.0)", () => {
   });
 
   it("lo que está fuera tiene precio y NO suma", async () => {
-    expect(await venta(), "sólo la cocina: ni el requerimiento ni lo sacado").toBe(50_000);
+    // 0.105.0 · los ítems ya no le ponen precio al proyecto (Mike, 18-nov-2026).
+    expect(await venta(), "sólo la cocina: ni el requerimiento ni lo sacado").toBe(0);
     const f = await fueraDeAlcance(ids.proyecto);
     const req = f.find((i) => i.id === requerimiento);
     expect(req, `salió en fuera: ${JSON.stringify(f.map((i) => i.nombre))}`).toBeTruthy();
@@ -112,7 +113,8 @@ describe("una sola lista de fuera del alcance (0.64.0)", () => {
   it("agregar lo mete a la venta, y sacar lo regresa a la lista", async () => {
     const antes = await venta();
     await aprobarItem(requerimiento);
-    expect(await venta()).toBe(antes + 20_000);
+    // 0.105.0 · los ítems ya no le ponen precio al proyecto (Mike, 18-nov-2026).
+    expect(await venta()).toBe(antes);
     expect((await fueraDeAlcance(ids.proyecto)).map((i) => i.id)).not.toContain(requerimiento);
 
     await sacarItem(requerimiento, "Se arrepintió");
@@ -138,7 +140,8 @@ describe("una sola lista de fuera del alcance (0.64.0)", () => {
   it("y volver a agregar uno sacado lo regresa a la venta, y a la bitácora", async () => {
     const antes = await venta();
     await aprobarItem(sacado);
-    expect(await venta()).toBe(antes + 30_000);
+    // 0.105.0 · los ítems ya no le ponen precio al proyecto (Mike, 18-nov-2026).
+    expect(await venta()).toBe(antes);
     expect((await bitacoraAlcance(sacado)).map((m) => m.accion)).toEqual(["entra", "sale", "entra"]);
   });
 });

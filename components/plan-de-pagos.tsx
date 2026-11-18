@@ -105,9 +105,9 @@ export function PlanDePagos({ proyecto }: { proyecto: Proyecto }) {
             {plan.length === 0
               ? <>Cuándo se espera cobrar cuánto. Sin plan, este proyecto no entra en <Link href="/flujo" className="underline">Flujo proyectado</Link>.</>
               : <>
-                  Planeado {formatMonto(planeado, "MXN")} de {formatMonto(proyecto.precio_venta, "MXN")}
+                  Planeado {formatMonto(planeado, "MXN")} de {proyecto.precio_por_cargar ? "un precio por cargar" : formatMonto(proyecto.precio_venta, "MXN")}
                   {estado.sin_fecha > 0 && <> · <span className="text-mauve-900">{formatMonto(estado.sin_fecha, "MXN")} por cobrar sin fecha</span></>}
-                  {planeado > proyecto.precio_venta && <> · <span className="text-mauve-900">el plan suma más que el precio</span></>}
+                  {!proyecto.precio_por_cargar && planeado > proyecto.precio_venta && <> · <span className="text-mauve-900">el plan suma más que el precio</span></>}
                   . Entra en <Link href="/flujo" className="underline">Flujo proyectado</Link>.
                 </>}
           </p>

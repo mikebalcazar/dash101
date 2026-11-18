@@ -23,6 +23,7 @@ import {
   IconCash,
   IconCoins,
   IconBuildingBank,
+  IconCashBanknote,
 } from "@tabler/icons-react";
 
 /* El menú lleva el nombre al lado del ícono desde el 20-sep (lo pidió Mike):
@@ -41,6 +42,9 @@ const items: NavItem[] = [
   { href: "/opex", icon: IconReceipt, label: "OPEX" },
   // «Compras» a secas (Mike, 30-sep-2026): los reembolsos viven adentro.
   { href: "/ordenes", icon: IconShoppingCart, label: "Compras" },
+  // Mike, 18-nov-2026: «poner en dash los pagos pendientes de cada proyecto a
+  // cada contratista» (contrato 0.105.0).
+  { href: "/pagos-pendientes", icon: IconCashBanknote, label: "Por pagar" },
   // «Nómina», no «Raya» (Mike, 1-oct-2026).
   { href: "/nomina", icon: IconCash, label: "Nómina" },
   // Mike, 30-sep-2026: «un módulo de accionistas donde se registren pagos a

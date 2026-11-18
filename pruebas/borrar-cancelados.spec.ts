@@ -155,7 +155,8 @@ describe("lo que trae dinero se queda", () => {
 
   it("lo vendido no se tocó y el precio de venta no se movió", async () => {
     expect(await vive(vivo)).toBe(true);
-    expect(await venta()).toBe(12_000);
+    // 0.105.0 · los ítems ya no le ponen precio al proyecto (Mike, 18-nov-2026).
+    expect(await venta()).toBe(0);
   });
 
   it("en «Fuera de alcance» ya sólo queda, de los sacados, el que no se pudo borrar", async () => {
@@ -190,6 +191,7 @@ describe("borrar un renglón, aunque traiga su anticipo", () => {
     expect(await vive(otro)).toBe(true);
     const movs = await pedir<{ filas: Array<{ item_id: string | null; proyecto_id: string; monto: number }> }>(`/orgs/${ORG}/movimientos?proyecto_id=${ids.proyecto}`);
     expect(movs.filas.map((m) => [m.item_id, m.monto])).toEqual([[null, 200_000]]);
-    expect(await venta()).toBe(12_000);
+    // 0.105.0 · los ítems ya no le ponen precio al proyecto (Mike, 18-nov-2026).
+    expect(await venta()).toBe(0);
   });
 });

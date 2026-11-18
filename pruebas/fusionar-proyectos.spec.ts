@@ -73,7 +73,9 @@ describe("juntar dos proyectos", () => {
     const p = (await getProyecto(ids.queda))!;
     expect((p.items ?? []).map((i) => i.nombre).sort()).toEqual(["Barra", "Clóset", "Cocina"]);
     expect((p.items ?? []).find((i) => i.nombre === "Cocina")?.partida).toBe("Planta baja");
-    expect(p.precio_venta).toBe(50000);
+    // 0.105.0 · los ítems ya no le ponen precio: sin conceptos, por cargar.
+    expect(p.precio_venta).toBe(0);
+    expect(p.precio_por_cargar).toBe(true);
     expect(p.cobrado).toBe(15000);
     const movs = await listMovimientosByProyecto(ids.queda);
     expect(movs.length).toBe(1);

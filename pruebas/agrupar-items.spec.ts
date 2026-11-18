@@ -173,7 +173,8 @@ describe("el dropdown del producto, y cambiarse de grupo", () => {
     /* `venta()` está en PESOS —es lo que pinta la pantalla— y la respuesta
      * de la API en CENTAVOS. Dividir aquí es la conversión de siempre. */
     expect(r.venta_antes / 100).toBe(antes);
-    expect(r.venta_despues).not.toBe(r.venta_antes);
+    // 0.105.0 · los ítems ya no le ponen precio al proyecto (Mike, 18-nov-2026).
+    expect(r.venta_despues).toBe(r.venta_antes);
     const ya = (await items()).find((p) => p.id === barra.id)!;
     expect(ya.monto, "en pesos del lado de la pantalla").toBe(modelo.precio / 100);
     expect(await venta()).toBe(r.venta_despues / 100);
@@ -229,7 +230,8 @@ describe("desde el plano", () => {
       crear: [{ element_id: e, monto: 12_000_00, nombre: "Clóset de blancos 1.20", descripcion: "Nogal" }],
     });
     expect(r.creados).toBe(1);
-    expect(await venta(), "12,000 más, en pesos").toBe(antes + 12_000);
+    // 0.105.0 · los ítems ya no le ponen precio al proyecto (Mike, 18-nov-2026).
+    expect(await venta(), "12,000 más, en pesos").toBe(antes);
 
     const nuevo = (await items()).find((x) => x.nombre === "Clóset de blancos 1.20");
     expect(nuevo, "y sale en la lista del proyecto").toBeTruthy();
@@ -266,7 +268,8 @@ describe("desde el plano", () => {
     const antes = await venta();
     const r = await fusionarItemsDeLaObra(ids.obra, { ligar: [{ element_id: e2, item_id: item.id, sumar: true }] });
     expect(r.sumados).toBe(1);
-    expect(await venta(), "una puerta más vale una puerta más").toBe(antes + 8_000);
+    // 0.105.0 · los ítems ya no le ponen precio al proyecto (Mike, 18-nov-2026).
+    expect(await venta(), "una puerta más vale una puerta más").toBe(antes);
     expect((await items()).find((p) => p.id === item.id)!.cantidad).toBe(2);
   });
 });

@@ -10,6 +10,28 @@ no se pudo medir desde aquí y se dice cómo se mide.
 
 ---
 
+# 18-nov-2026 · el precio del proyecto, aparte de los ítems: conceptos de cobro, por pagar a contratistas y estados de cuenta (API 0.105.0)
+
+**Medido aquí: batería contra staging en verde, 38 archivos más
+`pruebas/conceptos.spec.ts` (nueva). `tsc` limpio.**
+
+Mike, 18-nov: «Vamos a separar la contabilidad. Ya no va a ir ligada a los
+ítems. Los precios de los proyectos se harán por aparte.» Con botones:
+conceptos de cobro con opción a importar de las cotizaciones de quote, un
+concepto por renglón con cada cotización como su grupo, y todos los precios a
+cero de una vez (la API los respaldó en `precios_anteriores`).
+
+- **Precio del proyecto** (`components/conceptos-de-cobro.tsx`, en la página
+  del proyecto): conceptos escritos a mano y «Importar de quote», con «Volver a
+  importar». Sin conceptos dice «Precio por cargar» y «Antes decía $X».
+- **Por pagar** (`/pagos-pendientes`, en el menú) y la columna «Pendiente» en
+  Compromisos con proveedores: lo acordado menos lo pagado, sólo lo que falta.
+- **Estados de cuenta**: el del proyecto pinta los conceptos agrupados por
+  cotización; el del cliente trae lo cotizado de cada proyecto, sus pagos y el
+  saldo contra el total con IVA. Sin precio, no hay saldo.
+- Ya no se exige monto en los ítems, y se quitó el aviso «≠ precio venta».
+- `lib/conceptos.ts`: conceptos, importar y pagos pendientes, en PESOS.
+
 # 16-oct-2026 · flujo: la gráfica toma los tonos por variable, y la prueba del globo pasa por ocho puntos (#161)
 
 Dos sesiones arreglaron a la vez el globo de la gráfica de `/flujo`, el que
