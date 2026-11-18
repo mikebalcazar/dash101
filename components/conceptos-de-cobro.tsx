@@ -1,32 +1,55 @@
 "use client";
 
-/* El precio del proyecto: sus conceptos de cobro · contrato 0.105.0.
+/* El precio del proyecto: la hoja de su presupuesto · contrato 0.106.0.
  *
  * Mike, 18-nov-2026: «Vamos a separar la contabilidad. Ya no va a ir ligada
- * a los ítems. Los precios de los proyectos se harán por aparte.» Con
- * botones: «Conceptos de cobro con opción a importar de las cotizaciones del
- * proyecto de quote»; «Un concepto por renglón. Si se importa una segunda
- * cotización del mismo proyecto, se debe ver que es una segunda cotización
- * pero suma»; y «Todos a cero de una vez»: mientras un proyecto no tenga
- * conceptos, dice «Precio por cargar» y no calcula saldo.
+ * a los ítems.» Con botones: conceptos de cobro con opción a importar de las
+ * cotizaciones de quote, un concepto por renglón, y todos los precios a cero
+ * de una vez: sin conceptos, el proyecto dice «Precio por cargar».
  *
- * Aquí no se suma el precio del proyecto: lo suma la API (y el importe de
- * cada concepto también). La pantalla agrupa lo que ya viene contado.
+ * Y el mismo día, con botones otra vez: «Hoja dentro de dash»: el
+ * presupuesto se edita en una cuadrícula como Sheets —Tab, Enter, flechas,
+ * y pegar un rango copiado de Sheets o Excel—, el total de abajo es el precio
+ * del proyecto, y las plantillas viven aquí. «Sólo existirán los conceptos
+ * que se importen desde quote (…) y los que se agreguen manualmente en la
+ * tabla de dash.»
+ *
+ * La hoja se edita en la pantalla y se guarda de un jalón (PUT
+ * /proyectos/:id/conceptos): todo o nada, y la API suma el precio. Lo que se
+ * lee de lo pegado y lo que se manda vive en `lib/hoja.ts`, medido sin
+ * navegador.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { IconFileImport, IconPencil, IconPlus, IconReceipt2, IconTrash } from "@tabler/icons-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  IconDeviceFloppy, IconFileImport, IconPlus, IconReceipt2, IconTemplate, IconTrash, IconX,
+} from "@tabler/icons-react";
 import type { Proyecto } from "@/types/schema";
 import {
-  borrarConcepto, cambiarConcepto, cotizacionesParaImportar, crearConcepto, importarCotizacion, listarConceptos,
-  type Concepto, type CotizacionParaImportar,
+  borrarPlantilla, cotizacionesParaImportar, crearPlantilla, guardarHoja, importarCotizacion, listarConceptos, listarPlantillas,
+  type Concepto, type CotizacionParaImportar, type Plantilla,
 } from "@/lib/conceptos";
-import { estadoDelProyecto, tituloDelGrupo } from "@/lib/estado-proyecto";
+import { desglose, estadoDelProyecto } from "@/lib/estado-proyecto";
 import { ErrorApi } from "@/lib/api/cliente";
 import { formatMonto } from "@/lib/format";
+import {
+  COLUMNAS, claveNueva, esRango, filaVacia, huella, importeDe, leerPegado, numeroDeHoja, pegarRango, revisar, vacia,
+  type Columna, type FilaDeHoja,
+} from "@/lib/hoja";
 
-type Form = { descripcion: string; cantidad: string; precio: string };
-const vacio = (): Form => ({ descripcion: "", cantidad: "1", precio: "" });
+/** «1 renglón», «4 renglones»: el plural pierde el acento. */
+const renglones = (n: number) => `${n} ${n === 1 ? "renglón" : "renglones"}`;
+
+const pesos = (v: number) => v.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const desdeConcepto = (c: Concepto): FilaDeHoja => ({
+  clave: c.id, id: c.id, descripcion: c.descripcion, cantidad: String(c.cantidad), precio: pesos(c.precio_unitario),
+  cotizacion_id: c.cotizacion_id, cotizacion_nombre: c.cotizacion_nombre, cotizacion_folio: c.cotizacion_folio,
+});
+
+/** Siempre queda un renglón en blanco al final, para seguir escribiendo. */
+const conColita = (filas: FilaDeHoja[]): FilaDeHoja[] =>
+  filas.length && vacia(filas[filas.length - 1]) && !filas[filas.length - 1].id ? filas : [...filas, filaVacia()];
 
 interface Grupo { cotizacion_id: string | null; folio: string | null; nombre: string; numero: number | null; importe: number; conceptos: Concepto[] }
 
@@ -53,67 +76,152 @@ export function agrupar(conceptos: Concepto[]): Grupo[] {
 
 const mensaje = (e: unknown): string => {
   if (e instanceof ErrorApi) {
-    const d = e.detalle as { motivo?: string } | undefined;
+    const d = e.detalle as { motivo?: string; renglon?: number; regla?: string } | undefined;
     if (e.error === "sin_precios") return "Esa cotización no trae el precio de sus renglones. Ábrela en quote101 y haz cualquier cambio para que lo mande.";
-    if (e.error === "ya_importada") return "Esa cotización ya está en los conceptos.";
+    if (e.error === "ya_importada") return "Esa cotización ya está en la hoja.";
+    if (e.error === "otro_proyecto") return "La hoja cambió en otra pantalla. Descarta y vuelve a abrirla.";
+    if (d?.renglon && d.regla) return `Renglón ${d.renglon}: ${d.regla}.`;
     if (d?.motivo) return d.motivo;
   }
   return e instanceof Error ? e.message : "No se pudo";
 };
 
 export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; alCambiar: () => void }) {
-  const [conceptos, setConceptos] = useState<Concepto[]>([]);
+  const [guardadas, setGuardadas] = useState<FilaDeHoja[]>([]);
+  const [filas, setFilas] = useState<FilaDeHoja[]>([filaVacia()]);
   const [cargando, setCargando] = useState(true);
-  const [abierto, setAbierto] = useState(false);
-  const [form, setForm] = useState<Form>(vacio());
-  const [editando, setEditando] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
+  const [marcada, setMarcada] = useState<{ fila: number; columna: Columna } | null>(null);
   const [aviso, setAviso] = useState("");
   const [cotizaciones, setCotizaciones] = useState<CotizacionParaImportar[] | null>(null);
   const [importando, setImportando] = useState<string | null>(null);
   const [reemplazar, setReemplazar] = useState<string | null>(null);
+  const [plantillas, setPlantillas] = useState<Plantilla[] | null>(null);
+  const [nombrePlantilla, setNombrePlantilla] = useState("");
+  const [borrarPl, setBorrarPl] = useState<string | null>(null);
   const [anterior, setAnterior] = useState<number | null>(null);
+  const caja = useRef<HTMLDivElement>(null);
+  const irA = useRef<{ fila: number; columna: Columna } | null>(null);
 
   const cargar = useCallback(async () => {
     if (!proyecto.id) return;
-    try { setConceptos(await listarConceptos(proyecto.id)); }
-    catch (e) { setError(mensaje(e)); }
+    try {
+      const desde = (await listarConceptos(proyecto.id)).map(desdeConcepto);
+      setGuardadas(desde);
+      setFilas(conColita(desde));
+    } catch (e) { setError(mensaje(e)); }
     finally { setCargando(false); }
   }, [proyecto.id]);
 
   useEffect(() => { void cargar(); }, [cargar]);
 
   /* Mientras está por cargar, lo que decía antes del 18-nov sirve de
-   * referencia («Antes: $X»). Sale del respaldo que hizo la API. */
+   * referencia («Antes decía $X»). Sale del respaldo que hizo la API. */
   useEffect(() => {
     if (!proyecto.id || !proyecto.precio_por_cargar) { setAnterior(null); return; }
     estadoDelProyecto(proyecto.id).then((e) => setAnterior(e.totales.precio_anterior)).catch(() => setAnterior(null));
   }, [proyecto.id, proyecto.precio_por_cargar]);
 
-  const grupos = useMemo(() => agrupar(conceptos), [conceptos]);
-  const suma = useMemo(() => Math.round(conceptos.reduce((t, c) => t + c.importe * 100, 0)) / 100, [conceptos]);
+  const cambiada = useMemo(() => huella(filas) !== huella(guardadas), [filas, guardadas]);
 
-  const listo = async (texto: string) => {
-    await cargar();
-    alCambiar();
-    setAviso(texto);
-    setTimeout(() => setAviso(""), 2500);
+  /* Irse con la hoja a medias pierde lo escrito: el navegador lo pregunta. */
+  useEffect(() => {
+    if (!cambiada) return;
+    const antes = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener("beforeunload", antes);
+    return () => window.removeEventListener("beforeunload", antes);
+  }, [cambiada]);
+
+  /* Después de pintar, el foco va a donde lo mandó Enter o una flecha. */
+  useEffect(() => {
+    const d = irA.current;
+    if (!d) return;
+    irA.current = null;
+    caja.current?.querySelector<HTMLInputElement>(`[data-fila="${d.fila}"][data-col="${d.columna}"]`)?.focus();
+  });
+
+  const suma = useMemo(() => Math.round(filas.reduce((t, f) => t + (importeDe(f.cantidad, f.precio) ?? 0) * 100, 0)) / 100, [filas]);
+  const conteo = useMemo(() => filas.filter((f) => !(vacia(f) && !f.id)).length, [filas]);
+  const d = desglose(suma, Boolean(proyecto.iva_incluido), proyecto.tasa_iva ?? 1600);
+
+  /* Número de cada cotización importada, en el orden en que aparece en la
+   * hoja: el mismo que usa el estado de cuenta para decir «Cotización 2». */
+  const numeroDeCot = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const f of guardadas) if (f.cotizacion_id && !m.has(f.cotizacion_id)) m.set(f.cotizacion_id, m.size + 1);
+    return m;
+  }, [guardadas]);
+
+  const cambiar = (i: number, columna: Columna, valor: string) => {
+    setMarcada(null);
+    setFilas((prev) => conColita(prev.map((f, k) => (k === i ? { ...f, [columna]: valor } : f))));
   };
+
+  const quitar = (i: number) => {
+    setMarcada(null);
+    setFilas((prev) => conColita(prev.filter((_, k) => k !== i)));
+  };
+
+  const mover = (i: number, columna: Columna, paso: number) => {
+    const destino = i + paso;
+    if (destino < 0) return;
+    if (destino >= filas.length) {
+      if (vacia(filas[i]) && !filas[i].id) return;
+      setFilas((prev) => [...prev, filaVacia()]);
+    }
+    irA.current = { fila: destino, columna };
+    if (destino < filas.length) caja.current?.querySelector<HTMLInputElement>(`[data-fila="${destino}"][data-col="${columna}"]`)?.focus();
+  };
+
+  const tecla = (e: React.KeyboardEvent<HTMLInputElement>, i: number, columna: Columna) => {
+    if (e.key === "Enter") { e.preventDefault(); mover(i, columna, e.shiftKey ? -1 : 1); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); mover(i, columna, 1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); mover(i, columna, -1); }
+  };
+
+  const pegar = (e: React.ClipboardEvent<HTMLInputElement>, i: number, columna: Columna) => {
+    const texto = e.clipboardData.getData("text/plain");
+    if (!esRango(texto)) return;
+    e.preventDefault();
+    const rango = leerPegado(texto);
+    setMarcada(null);
+    // Los precios pegados se leen con sus comas, como al salir de una celda.
+    setFilas((prev) => conColita(pegarRango(prev, i, columna, rango).map((f) => {
+      const v = numeroDeHoja(f.precio);
+      return v === null ? f : { ...f, precio: pesos(v) };
+    })));
+    setAviso(`Se pegaron ${rango.filter((r) => r.some((c) => c)).length} renglones. Revisa y guarda.`);
+    setTimeout(() => setAviso(""), 3000);
+  };
+
+  /* Un precio se lee con sus comas al salir de la celda, como en Sheets. */
+  const alSalir = (i: number, columna: Columna) => {
+    if (columna !== "precio") return;
+    const v = numeroDeHoja(filas[i].precio);
+    if (v !== null && filas[i].precio !== pesos(v)) setFilas((prev) => prev.map((f, k) => (k === i ? { ...f, precio: pesos(v) } : f)));
+  };
+
+  const avisar = (texto: string) => { setAviso(texto); setTimeout(() => setAviso(""), 2500); };
 
   const guardar = async () => {
     setError("");
-    const cantidad = parseFloat(form.cantidad);
-    const precio = parseFloat(form.precio);
-    if (!form.descripcion.trim()) { setError("Escribe qué se cobra."); return; }
-    if (!Number.isFinite(cantidad) || cantidad <= 0) { setError("La cantidad tiene que ser mayor que cero."); return; }
-    if (!Number.isFinite(precio)) { setError("Di el precio unitario, en pesos."); return; }
+    const r = revisar(filas);
+    if (!r.ok) {
+      setMarcada({ fila: r.fila - 1, columna: r.columna });
+      setError(`Renglón ${r.fila}: ${r.motivo}.`);
+      irA.current = { fila: r.fila - 1, columna: r.columna };
+      setFilas((prev) => [...prev]);
+      return;
+    }
     setGuardando(true);
     try {
-      if (editando) await cambiarConcepto(editando, { descripcion: form.descripcion, cantidad, precio_unitario: precio });
-      else await crearConcepto(proyecto.id!, { descripcion: form.descripcion, cantidad, precio_unitario: precio });
-      setForm(vacio()); setEditando(null); setAbierto(false);
-      await listo(editando ? "Concepto guardado" : "Concepto agregado");
+      const g = await guardarHoja(proyecto.id!, r.renglones);
+      const desde = g.conceptos.map(desdeConcepto);
+      setGuardadas(desde);
+      setFilas(conColita(desde));
+      alCambiar();
+      avisar(`Hoja guardada · ${desde.length} concepto${desde.length === 1 ? "" : "s"}`);
     } catch (e) {
       setError(mensaje(e));
     } finally {
@@ -121,22 +229,11 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
     }
   };
 
-  const borrar = async (c: Concepto) => {
-    if (!confirm(`¿Quitar «${c.descripcion}» (${formatMonto(c.importe, "MXN")}) del precio del proyecto?`)) return;
-    setError("");
-    try { await borrarConcepto(c.id); await listo("Concepto quitado"); }
-    catch (e) { setError(mensaje(e)); }
-  };
-
-  const editar = (c: Concepto) => {
-    setEditando(c.id);
-    setForm({ descripcion: c.descripcion, cantidad: String(c.cantidad), precio: String(c.precio_unitario) });
-    setAbierto(true);
-    setError("");
-  };
+  const descartar = () => { setError(""); setMarcada(null); setFilas(conColita(guardadas)); };
 
   const abrirImportar = async () => {
     setError("");
+    setPlantillas(null);
     if (cotizaciones) { setCotizaciones(null); return; }
     try { setCotizaciones(await cotizacionesParaImportar(proyecto.id!)); }
     catch (e) { setError(mensaje(e)); }
@@ -149,7 +246,9 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
       const r = await importarCotizacion(proyecto.id!, c.id, otraVez);
       setReemplazar(null);
       setCotizaciones(await cotizacionesParaImportar(proyecto.id!));
-      await listo(`${r.conceptos} concepto${r.conceptos === 1 ? "" : "s"} de «${c.nombre}»${otraVez ? " en lugar de los de antes" : ""}`);
+      await cargar();
+      alCambiar();
+      avisar(`${r.conceptos} concepto${r.conceptos === 1 ? "" : "s"} de «${c.nombre}»${otraVez ? " en lugar de los de antes" : ""}`);
     } catch (e) {
       setError(mensaje(e));
     } finally {
@@ -157,37 +256,77 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
     }
   };
 
+  const abrirPlantillas = async () => {
+    setError("");
+    setCotizaciones(null);
+    if (plantillas) { setPlantillas(null); return; }
+    try { setPlantillas(await listarPlantillas()); }
+    catch (e) { setError(mensaje(e)); }
+  };
+
+  /* Usar una plantilla llena la hoja —al final de lo que ya tiene— y no
+   * guarda nada: se revisa y se guarda como cualquier otro cambio. */
+  const usar = (p: Plantilla) => {
+    setFilas((prev) => conColita([
+      ...prev.filter((f) => !(vacia(f) && !f.id)),
+      ...p.renglones.map((r) => ({ ...filaVacia(), clave: claveNueva(), descripcion: r.descripcion, cantidad: String(r.cantidad), precio: pesos(r.precio_unitario) })),
+    ]));
+    setPlantillas(null);
+    avisar(`«${p.nombre}» está en la hoja. Revisa y guarda.`);
+  };
+
+  const guardarComoPlantilla = async () => {
+    setError("");
+    if (!nombrePlantilla.trim()) { setError("Ponle nombre a la plantilla."); return; }
+    const r = revisar(filas);
+    if (!r.ok) { setMarcada({ fila: r.fila - 1, columna: r.columna }); setError(`Renglón ${r.fila}: ${r.motivo}.`); return; }
+    if (!r.renglones.length) { setError("La hoja está vacía: no hay qué guardar como plantilla."); return; }
+    try {
+      const p = await crearPlantilla(nombrePlantilla, r.renglones.map(({ descripcion, cantidad, precio_unitario }) => ({ descripcion, cantidad, precio_unitario })));
+      setNombrePlantilla("");
+      setPlantillas(await listarPlantillas());
+      avisar(`Plantilla «${p.nombre}» guardada con ${renglones(p.renglones.length)}`);
+    } catch (e) { setError(mensaje(e)); }
+  };
+
+  const quitarPlantilla = async (p: Plantilla) => {
+    setError("");
+    try { await borrarPlantilla(p.id); setBorrarPl(null); setPlantillas(await listarPlantillas()); }
+    catch (e) { setError(mensaje(e)); }
+  };
+
   if (cargando) return null;
   const iva = proyecto.iva_incluido ? "IVA incluido" : "más IVA";
+  /* Sin `focus:bg-white`: el tema es vidrio oscuro y esa variante no la
+   * cubre globals.css, así que la celda se ponía blanca con letra clara. */
+  const celda = "w-full bg-transparent px-2 py-1.5 text-sm text-ink focus:outline-none focus:bg-white/10 focus:ring-2 focus:ring-marca/60 rounded-md";
 
   return (
-    <div data-conceptos className="bg-white border border-black/5 rounded-2xl p-4 mb-4">
-      <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
+    <div data-conceptos data-hoja className="bg-white border border-black/5 rounded-2xl p-4 mb-4">
+      <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
         <div className="min-w-0">
           <p className="text-sm font-medium text-ink-dim inline-flex items-center gap-1.5">
             <IconReceipt2 size={15} /> Precio del proyecto
           </p>
           <p className="text-xs text-ink-muted mt-0.5" data-conceptos-resumen>
-            {conceptos.length === 0
+            {guardadas.length === 0
               ? <>
-                  <span className="text-mauve-900 font-medium">Precio por cargar.</span> Agrega lo que se le cobra al cliente, o impórtalo de sus cotizaciones de quote101.
+                  <span className="text-mauve-900 font-medium">Precio por cargar.</span> Escribe el presupuesto en la hoja, pégalo de Sheets o Excel, o impórtalo de quote101.
                   {anterior !== null && <> Antes decía <span data-conceptos-anterior className="tabular-nums">{formatMonto(anterior, "MXN")}</span>.</>}
                 </>
-              : <>Suma de {conceptos.length} concepto{conceptos.length === 1 ? "" : "s"}: <span data-conceptos-total className="font-medium text-ink-dim tabular-nums">{formatMonto(suma, "MXN")}</span> {iva}.</>}
+              : <>Suma de {guardadas.length} concepto{guardadas.length === 1 ? "" : "s"}{cambiada && " guardados"}: <span data-conceptos-total className="font-medium text-ink-dim tabular-nums">{formatMonto(proyecto.precio_venta, "MXN")}</span> {iva}.</>}
           </p>
         </div>
-        <div className="flex gap-1.5 flex-shrink-0">
-          <button type="button" data-conceptos-importar onClick={() => void abrirImportar()}
-            className="text-xs border border-black/10 rounded-xl px-3 py-1.5 text-ink-dim inline-flex items-center gap-1">
+        <div className="flex gap-1.5 flex-shrink-0 flex-wrap">
+          <button type="button" data-conceptos-importar onClick={() => void abrirImportar()} disabled={cambiada}
+            title={cambiada ? "Guarda o descarta la hoja antes de importar" : undefined}
+            className="text-xs border border-black/10 rounded-xl px-3 py-1.5 text-ink-dim inline-flex items-center gap-1 disabled:opacity-40">
             <IconFileImport size={13} /> Importar de quote
           </button>
-          {!abierto && (
-            <button type="button" data-conceptos-agregar
-              onClick={() => { setEditando(null); setForm(vacio()); setAbierto(true); setError(""); }}
-              className="text-xs border border-black/10 rounded-xl px-3 py-1.5 text-ink-dim inline-flex items-center gap-1">
-              <IconPlus size={13} /> Concepto
-            </button>
-          )}
+          <button type="button" data-plantillas onClick={() => void abrirPlantillas()}
+            className="text-xs border border-black/10 rounded-xl px-3 py-1.5 text-ink-dim inline-flex items-center gap-1">
+            <IconTemplate size={13} /> Plantillas
+          </button>
         </div>
       </div>
 
@@ -204,7 +343,7 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
                       <p className="text-sm text-ink-dim">{c.nombre} {c.folio && <span className="text-[11px] text-ink-muted">· {c.folio}</span>}</p>
                       <p className="text-[11px] text-ink-muted">
                         {c.fuente
-                          ? <>{c.renglones} renglón{c.renglones === 1 ? "" : "es"} · {formatMonto(c.subtotal, "MXN")} sin IVA{c.fuente === "piezas" && " · del precio de sus piezas aprobadas"}</>
+                          ? <>{renglones(c.renglones)} · {formatMonto(c.subtotal, "MXN")} sin IVA{c.fuente === "piezas" && " · del precio de sus piezas aprobadas"}</>
                           : <>No trae precios: ábrela en quote101 y haz cualquier cambio para que los mande.</>}
                         {c.importados > 0 && <> · <span className="text-mint-900">ya importada</span></>}
                       </p>
@@ -234,64 +373,141 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
         </div>
       )}
 
-      {grupos.map((g) => (
-        <div key={g.cotizacion_id ?? "a-mano"} data-grupo={g.cotizacion_id ?? "a-mano"} className="mb-2">
-          <div className="flex justify-between items-baseline text-xs text-ink-muted border-b border-black/5 pb-1 mb-1">
-            <span className="font-medium text-ink-dim">{tituloDelGrupo(g)}</span>
-            <span className="tabular-nums">{formatMonto(g.importe, "MXN")}</span>
-          </div>
-          <table className="w-full text-sm">
-            <tbody>
-              {g.conceptos.map((c) => (
-                <tr key={c.id} data-concepto={c.id}>
-                  <td className="py-1 text-xs text-ink-dim">{c.descripcion}</td>
-                  <td className="py-1 text-[11px] text-ink-muted text-right tabular-nums whitespace-nowrap">
-                    {c.cantidad} × {formatMonto(c.precio_unitario, "MXN")}
+      {plantillas && (
+        <div data-plantillas-caja className="bg-cream/60 rounded-xl p-3 mb-3">
+          <p className="text-xs font-medium text-ink-dim mb-1.5">Plantillas de presupuesto</p>
+          {plantillas.length === 0
+            ? <p className="text-xs text-ink-muted mb-2">Todavía no hay plantillas. Guarda esta hoja como la primera.</p>
+            : (
+              <ul className="divide-y divide-black/5 mb-2">
+                {plantillas.map((p) => {
+                  const total = p.renglones.reduce((t, r) => t + Math.round(r.cantidad * Math.round(r.precio_unitario * 100)), 0) / 100;
+                  return (
+                    <li key={p.id} data-plantilla={p.id} className="py-2 flex items-center justify-between gap-3 flex-wrap">
+                      <div className="min-w-0">
+                        <p className="text-sm text-ink-dim">{p.nombre}</p>
+                        <p className="text-[11px] text-ink-muted tabular-nums">{renglones(p.renglones.length)} · {formatMonto(total, "MXN")}</p>
+                      </div>
+                      {borrarPl === p.id
+                        ? <span className="flex gap-1.5 items-center">
+                            <span className="text-[11px] text-ink-muted">¿Borrar la plantilla? La hoja no cambia.</span>
+                            <button type="button" data-plantilla-borrar-si onClick={() => void quitarPlantilla(p)} className="bg-mauve-900 text-cream rounded-xl px-3 py-1.5 text-xs font-medium">Sí, borrar</button>
+                            <button type="button" onClick={() => setBorrarPl(null)} className="border border-black/10 rounded-xl px-3 py-1.5 text-xs text-ink-dim">No</button>
+                          </span>
+                        : <span className="flex gap-1.5">
+                            <button type="button" data-plantilla-usar={p.id} onClick={() => usar(p)} className="bg-ink text-cream rounded-xl px-3 py-1.5 text-xs font-medium">Usar</button>
+                            <button type="button" aria-label="Borrar la plantilla" onClick={() => setBorrarPl(p.id)} className="text-ink-muted hover:text-mauve-900 p-1.5"><IconTrash size={13} /></button>
+                          </span>}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          <form className="flex gap-1.5 flex-wrap" onSubmit={(e) => { e.preventDefault(); void guardarComoPlantilla(); }}>
+            <input data-plantilla-nombre type="text" maxLength={120} value={nombrePlantilla} placeholder="Nombre: Cocina estándar, Baño completo…"
+              onChange={(e) => setNombrePlantilla(e.target.value)}
+              className="flex-1 min-w-[12rem] bg-white border border-black/10 rounded-xl px-3 py-1.5 text-sm text-ink" />
+            <button type="submit" data-plantilla-guardar className="border border-black/10 bg-white rounded-xl px-3 py-1.5 text-xs text-ink-dim">
+              Guardar esta hoja como plantilla
+            </button>
+          </form>
+        </div>
+      )}
+
+      <div ref={caja} className="overflow-x-auto -mx-1">
+        <table className="w-full min-w-[34rem] text-sm border-collapse" data-hoja-tabla>
+          <thead>
+            <tr className="text-[11px] text-ink-muted uppercase tracking-wide border-b border-black/10">
+              <th className="w-8 py-1.5 font-medium text-right pr-2">#</th>
+              <th className="text-left py-1.5 px-2 font-medium">Concepto</th>
+              <th className="text-right py-1.5 px-2 font-medium w-24">Cantidad</th>
+              <th className="text-right py-1.5 px-2 font-medium w-36">Precio unitario</th>
+              <th className="text-right py-1.5 px-2 font-medium w-36">Importe</th>
+              <th className="w-8" />
+            </tr>
+          </thead>
+          <tbody>
+            {filas.map((f, i) => {
+              const imp = importeDe(f.cantidad, f.precio);
+              const blanca = vacia(f) && !f.id && i === filas.length - 1;
+              const mal = (c: Columna) => marcada?.fila === i && marcada.columna === c ? " ring-2 ring-mauve-900/50 bg-mauve-50" : "";
+              return (
+                <tr key={f.clave} data-hoja-fila={i} data-concepto={f.id ?? undefined} className="border-b border-black/5 align-top">
+                  <td className="py-1.5 pr-2 text-[11px] text-ink-muted text-right tabular-nums">{blanca ? "" : i + 1}</td>
+                  <td className="py-0.5">
+                    <input data-fila={i} data-col="descripcion" type="text" maxLength={300} value={f.descripcion}
+                      placeholder={blanca ? "Escribe o pega aquí…" : ""} aria-label={`Concepto del renglón ${i + 1}`}
+                      onChange={(e) => cambiar(i, "descripcion", e.target.value)} onKeyDown={(e) => tecla(e, i, "descripcion")}
+                      onPaste={(e) => pegar(e, i, "descripcion")} className={celda + mal("descripcion")} />
+                    {f.cotizacion_id && (
+                      <span className="block px-2 -mt-0.5 mb-1 text-[10px] text-sky-900" data-de-cotizacion>
+                        Cotización {numeroDeCot.get(f.cotizacion_id) ?? ""}{f.cotizacion_folio ? ` · ${f.cotizacion_folio}` : ""}{f.cotizacion_nombre ? ` · ${f.cotizacion_nombre}` : ""}
+                      </span>
+                    )}
                   </td>
-                  <td className="py-1 pl-3 text-xs text-ink-dim text-right tabular-nums whitespace-nowrap">{formatMonto(c.importe, "MXN")}</td>
-                  <td className="py-1 text-right whitespace-nowrap w-14">
-                    <button type="button" aria-label="Editar" onClick={() => editar(c)} className="text-ink-muted hover:text-ink-dim p-1"><IconPencil size={13} /></button>
-                    <button type="button" aria-label="Quitar" data-concepto-borrar onClick={() => void borrar(c)} className="text-ink-muted hover:text-mauve-900 p-1"><IconTrash size={13} /></button>
+                  {(["cantidad", "precio"] as const).map((c) => (
+                    <td key={c} className="py-0.5">
+                      <input data-fila={i} data-col={c} type="text" inputMode="decimal" value={f[c]}
+                        aria-label={`${c === "cantidad" ? "Cantidad" : "Precio unitario"} del renglón ${i + 1}`}
+                        onChange={(e) => cambiar(i, c, e.target.value)} onKeyDown={(e) => tecla(e, i, c)}
+                        onPaste={(e) => pegar(e, i, c)} onBlur={() => alSalir(i, c)}
+                        className={`${celda} text-right tabular-nums${mal(c)}`} />
+                    </td>
+                  ))}
+                  <td className="py-1.5 px-2 text-right tabular-nums text-ink-dim whitespace-nowrap" data-hoja-importe>
+                    {blanca ? "" : imp === null ? <span className="text-ink-muted">—</span> : formatMonto(imp, "MXN")}
+                  </td>
+                  <td className="py-1 text-right">
+                    {!blanca && (
+                      <button type="button" aria-label={`Quitar el renglón ${i + 1}`} data-hoja-quitar onClick={() => quitar(i)}
+                        className="text-ink-muted hover:text-mauve-900 p-1"><IconX size={13} /></button>
+                    )}
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ))}
+              );
+            })}
+          </tbody>
+          <tfoot className="text-sm">
+            <tr>
+              <td />
+              <td className="pt-2 px-2">
+                <button type="button" data-hoja-agregar onClick={() => mover(filas.length - 1, COLUMNAS[0], 1)}
+                  className="text-xs text-ink-muted hover:text-ink-dim inline-flex items-center gap-1">
+                  <IconPlus size={12} /> Renglón
+                </button>
+              </td>
+              <td colSpan={2} className="pt-2 px-2 text-right text-xs text-ink-muted">
+                {conteo} concepto{conteo === 1 ? "" : "s"} · {proyecto.iva_incluido ? "total con IVA" : "subtotal"}
+              </td>
+              <td className="pt-2 px-2 text-right font-medium text-ink-dim tabular-nums whitespace-nowrap" data-hoja-total>{formatMonto(suma, "MXN")}</td>
+              <td />
+            </tr>
+            <tr className="text-[11px] text-ink-muted">
+              <td />
+              <td colSpan={4} className="px-2 pt-0.5 text-right tabular-nums" data-hoja-desglose>
+                Subtotal {formatMonto(d.subtotal, "MXN")} · IVA {formatMonto(d.iva, "MXN")} · Total {formatMonto(d.total, "MXN")}
+              </td>
+              <td />
+            </tr>
+          </tfoot>
+        </table>
+      </div>
 
-      {abierto && (
-        <form data-conceptos-form className="mt-3 grid gap-2 sm:grid-cols-[1fr_6rem_9rem_auto] items-end"
-          onSubmit={(e) => { e.preventDefault(); void guardar(); }}>
-          <label className="text-xs text-ink-muted">
-            Concepto
-            <input data-concepto-descripcion type="text" maxLength={160} value={form.descripcion} placeholder="Cocina integral, anticipo de obra…"
-              onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
-              className="mt-1 block w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm text-ink" />
-          </label>
-          <label className="text-xs text-ink-muted">
-            Cantidad
-            <input data-concepto-cantidad type="number" min={0} step="any" value={form.cantidad}
-              onChange={(e) => setForm({ ...form, cantidad: e.target.value })}
-              className="mt-1 block w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm text-ink" />
-          </label>
-          <label className="text-xs text-ink-muted">
-            Precio unitario
-            <input data-concepto-precio type="number" step="0.01" value={form.precio} placeholder="0.00"
-              onChange={(e) => setForm({ ...form, precio: e.target.value })}
-              className="mt-1 block w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm text-ink" />
-          </label>
-          <div className="flex gap-1.5">
-            <button type="submit" data-concepto-guardar disabled={guardando}
-              className="bg-ink text-cream rounded-xl px-3 py-2 text-sm font-medium disabled:opacity-50">
-              {guardando ? "Guardando…" : editando ? "Guardar" : "Agregar"}
+      <p className="text-[11px] text-ink-muted mt-2">
+        Tab y Enter para moverte; pega un rango de Sheets o Excel (concepto, cantidad, precio) en cualquier celda.
+      </p>
+
+      {cambiada && (
+        <div data-hoja-cambios className="mt-3 flex items-center justify-between gap-2 flex-wrap bg-cream/70 rounded-xl px-3 py-2">
+          <span className="text-xs text-ink-dim">Cambios sin guardar · el precio pasa a <span className="font-medium tabular-nums">{formatMonto(suma, "MXN")}</span></span>
+          <span className="flex gap-1.5">
+            <button type="button" onClick={descartar} disabled={guardando} className="border border-black/10 rounded-xl px-3 py-1.5 text-xs text-ink-dim">Descartar</button>
+            <button type="button" data-hoja-guardar onClick={() => void guardar()} disabled={guardando}
+              className="bg-ink text-cream rounded-xl px-3 py-1.5 text-xs font-medium inline-flex items-center gap-1 disabled:opacity-50">
+              <IconDeviceFloppy size={13} /> {guardando ? "Guardando…" : "Guardar la hoja"}
             </button>
-            <button type="button" onClick={() => { setAbierto(false); setEditando(null); setError(""); }}
-              className="border border-black/10 rounded-xl px-3 py-2 text-sm text-ink-dim">
-              Cancelar
-            </button>
-          </div>
-        </form>
+          </span>
+        </div>
       )}
 
       {aviso && <p data-conceptos-aviso className="text-xs text-mint-900 bg-mint-50 px-3 py-2 rounded-xl mt-2">{aviso}</p>}

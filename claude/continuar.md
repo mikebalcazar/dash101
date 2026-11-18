@@ -10,6 +10,36 @@ no se pudo medir desde aquí y se dice cómo se mide.
 
 ---
 
+# 18-nov-2026 · la hoja del presupuesto (API 0.106.0)
+
+**Medido aquí: contra staging en `next dev`, escribir, Enter, pegar tres
+renglones como los copia Sheets, guardar ($78,000 en la API) y guardar como
+plantilla; cero errores de JavaScript. `pruebas/hoja.spec.ts` (nueva, sin
+red) 15/15. `tsc` limpio.**
+
+Mike preguntó si el presupuesto podía importarse de un Sheets o editarse en
+una hoja dentro de dash, y escogió con botones «Hoja dentro de dash».
+
+- `components/conceptos-de-cobro.tsx` es ahora la hoja: concepto, cantidad,
+  precio unitario e importe; Tab, Enter (Mayús+Enter sube) y flechas; un
+  renglón en blanco siempre al final; pegar un rango de Sheets o Excel en
+  cualquier celda (las columnas de más se ignoran). Los cambios se ven al
+  momento y se guardan de un jalón con «Guardar la hoja» (PUT
+  /proyectos/:id/conceptos, todo o nada); «Descartar» regresa a lo
+  guardado; irse con cambios lo pregunta el navegador.
+- Los importados de quote101 dicen de qué cotización vienen en su renglón y
+  se editan como los demás. «Importar de quote» se apaga mientras hay
+  cambios sin guardar.
+- «Plantillas»: guardar la hoja como plantilla, usar una (se agrega al final
+  y hay que guardar) y borrarla. Tabla `plantillas_presupuesto`.
+- Lo que se lee de lo pegado y lo que se manda vive en `lib/hoja.ts`.
+- Ojo, tema: `focus:bg-white` NO lo cubre globals.css (el vidrio oscuro);
+  la celda se ponía blanca con letra clara. Se usa `focus:bg-white/10`.
+- De paso: «renglónes» (con acento) en la lista de cotizaciones; ya dice
+  «renglones».
+
+---
+
 # 18-nov-2026 · el proyecto sólo lleva sus conceptos: fuera la lista de ítems y el bloque de quell101
 
 Mike, con la pantalla de HOLCIM enfrente: «Mueve la liga al nombre del

@@ -911,6 +911,78 @@ test('18-nov: el proyecto sólo lleva sus conceptos: sin lista de ítems ni obra
   await ctx.close();
 });
 
+test('18-nov: la hoja del presupuesto: se escribe, se pega un rango de Sheets, se guarda y el total es el precio; y se guarda como plantilla', async () => {
+  const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes`)).find((c) => c.nombre === CLIENTE_PRUEBAS);
+  if (!cliente) cliente = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS } });
+  const proyecto = await api(pag, `/orgs/${ORG}/proyectos`, {
+    method: 'POST',
+    body: { nombre: `Hoja ${Date.now().toString(36).slice(-5)}`, cliente_id: cliente.id, estado: 'activo' },
+  });
+
+  /* Mike, 18-nov-2026, con botones: «Hoja dentro de dash». Una cuadrícula
+   * como Sheets: se escribe, Enter baja, se pega un rango copiado de Sheets o
+   * Excel, y el total de abajo es el precio del proyecto. */
+  await pag.goto(`${URL}/proyectos/${proyecto.id}`, { waitUntil: 'load' });
+  const hoja = pag.locator('[data-hoja]');
+  await hoja.waitFor({ timeout: 20000 });
+  const celda = (fila, col) => hoja.locator(`[data-fila="${fila}"][data-col="${col}"]`);
+
+  await celda(0, 'descripcion').fill('Cocina integral');
+  await celda(0, 'cantidad').fill('2');
+  await celda(0, 'precio').fill('1500');
+  assert.match(await hoja.locator('[data-hoja-importe]').first().innerText(), /\$3,000\b/, 'el importe se multiplica en el momento');
+  // Enter baja a la misma columna del renglón de abajo, que ya está esperando.
+  await celda(0, 'precio').press('Enter');
+  assert.equal(await pag.evaluate(() => document.activeElement?.getAttribute('data-fila')), '1', 'Enter baja un renglón');
+
+  /* Lo que llega al copiar tres renglones de Sheets: tabuladores, comas de
+   * miles, signo de pesos, una columna de importe que se ignora y el salto
+   * del final. Se pega en la primera celda del renglón 2. */
+  await celda(1, 'descripcion').evaluate((el) => {
+    const dt = new DataTransfer();
+    dt.setData('text/plain', 'Puertas de intercomunicación\t6\t$7,500.00\t$45,000.00\r\nCubierta de cuarzo (m²)\t3.5\t9,000\t31500\r\nDescuento\t1\t-1,500\t\r\n');
+    el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+  });
+  await hoja.locator('[data-hoja-fila="3"]').waitFor({ timeout: 5000 });
+  assert.equal(await celda(2, 'descripcion').inputValue(), 'Cubierta de cuarzo (m²)', 'cada celda en su lugar');
+  assert.match(await hoja.locator('[data-hoja-total]').innerText(), /\$78,000\b/, '3,000 + 45,000 + 31,500 − 1,500');
+
+  await hoja.locator('[data-hoja-guardar]').click();
+  await pag.getByText(/Hoja guardada · 4 conceptos/).waitFor({ timeout: 20000 });
+  const p = await api(pag, `/orgs/${ORG}/proyectos/${proyecto.id}`);
+  assert.equal(p.precio_venta, 78_000_00, 'el total de la hoja es el precio del proyecto');
+  assert.equal(p.n_conceptos, 4);
+  const guardados = filas(await api(pag, `/orgs/${ORG}/conceptos?proyecto_id=${proyecto.id}`)).sort((a, b) => a.orden - b.orden);
+  assert.deepEqual(guardados.map((c) => [c.descripcion, c.cantidad, c.monto]), [
+    ['Cocina integral', 2, 3_000_00], ['Puertas de intercomunicación', 6, 45_000_00], ['Cubierta de cuarzo (m²)', 3.5, 31_500_00], ['Descuento', 1, -1_500_00],
+  ]);
+  // Y la tarjeta del ingreso ya lo dice: el proyecto se vuelve a leer al guardar.
+  await pag.locator('[data-precio-venta]', { hasText: '$78,000' }).waitFor({ timeout: 15000 });
+
+  // Quitar un renglón y guardar: se quita de la base y el precio baja.
+  await hoja.locator('[data-hoja-fila="3"] [data-hoja-quitar]').click();
+  await hoja.locator('[data-hoja-guardar]').click();
+  await pag.getByText(/Hoja guardada · 3 conceptos/).waitFor({ timeout: 20000 });
+  assert.equal((await api(pag, `/orgs/${ORG}/proyectos/${proyecto.id}`)).precio_venta, 79_500_00, 'sin el descuento');
+
+  // Guardarla como plantilla, y que la plantilla traiga sus renglones en centavos.
+  const nombre = `Navegador ${Date.now().toString(36).slice(-5)}`;
+  await hoja.locator('[data-plantillas]').click();
+  await hoja.locator('[data-plantilla-nombre]').fill(nombre);
+  await hoja.locator('[data-plantilla-guardar]').click();
+  await pag.getByText(`Plantilla «${nombre}» guardada con 3 renglones`).waitFor({ timeout: 20000 });
+  const pl = filas(await api(pag, `/orgs/${ORG}/plantillas_presupuesto`)).find((x) => x.nombre === nombre);
+  assert.ok(pl, 'la plantilla quedó en la API');
+  assert.deepEqual(pl.renglones.map((r) => r.precio_unitario), [1_500_00, 7_500_00, 9_000_00]);
+  await api(pag, `/orgs/${ORG}/plantillas_presupuesto/${pl.id}`, { method: 'DELETE' });
+
+  console.log(`    hoja: 4 renglones (uno escrito, tres pegados) = ${pesos2(p.precio_venta)}; plantilla de 3`);
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
 test('el estado de cuenta del proyecto: la lista suma el subtotal y el IVA se desglosa', async () => {
   /* Encargo de Mike del 21-sep: «necesito poder exportar un estado de cuenta
    * en pdf y un excel con lo siguiente de cada proyecto: saldo general,

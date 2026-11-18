@@ -18,7 +18,8 @@ import { createCliente } from "@/lib/clientes";
 import { createProyecto, getProyecto } from "@/lib/proyectos";
 import { createProveedor } from "@/lib/proveedores";
 import {
-  borrarConcepto, cambiarConcepto, cotizacionesParaImportar, crearConcepto, importarCotizacion, listarConceptos, pagosPendientes,
+  borrarConcepto, borrarPlantilla, cambiarConcepto, cotizacionesParaImportar, crearConcepto, crearPlantilla, guardarHoja, importarCotizacion,
+  listarConceptos, listarPlantillas, pagosPendientes,
 } from "@/lib/conceptos";
 import { estadoDelProyecto } from "@/lib/estado-proyecto";
 import { agrupar } from "@/components/conceptos-de-cobro";
@@ -125,5 +126,40 @@ describe("lo que se les debe a los contratistas", () => {
     expect(d.proyectos[0]).toMatchObject({ nombre: "Casa Ruiz", pendiente: 30_000 });
     expect(d.contratistas[0]).toMatchObject({ nombre: "Herrería Juárez", pendiente: 30_000, proyectos: 1 });
     expect((await pagosPendientes(ids.proyecto)).total).toBe(30_000);
+  });
+});
+
+/* 0.106.0 · Mike, 18-nov-2026, con botones: «Hoja dentro de dash». La hoja
+ * se guarda completa y en PESOS; la API la pasa a centavos y suma. */
+describe("la hoja del presupuesto", () => {
+  it("se guarda completa: los importados se quedan con su grupo, uno nuevo nace, y el precio es la suma", async () => {
+    const antes = await listarConceptos(ids.proyecto);
+    const r = await guardarHoja(ids.proyecto, [
+      ...antes.map((c) => ({ id: c.id, descripcion: c.descripcion, cantidad: c.cantidad, precio_unitario: c.precio_unitario })),
+      { descripcion: "Flete", cantidad: 1, precio_unitario: 3_000.5 },
+    ]);
+    expect(r).toMatchObject({ creados: 1, cambiados: antes.length, quitados: 0 });
+    expect(r.conceptos.at(-1)).toMatchObject({ descripcion: "Flete", importe: 3_000.5, cotizacion_id: null });
+    expect((await getProyecto(ids.proyecto))!.precio_venta).toBe(242_000 + 3_000.5);
+    expect(agrupar(r.conceptos).map((g) => g.nombre)).toEqual(["Planta baja", "Planta alta", "Otros conceptos"]);
+  });
+
+  it("lo que no viene se quita", async () => {
+    const hoy = await listarConceptos(ids.proyecto);
+    const r = await guardarHoja(ids.proyecto, hoy.filter((c) => c.descripcion !== "Flete"));
+    expect(r.quitados).toBe(1);
+    expect((await getProyecto(ids.proyecto))!.precio_venta).toBe(242_000);
+  });
+
+  it("una plantilla guarda sus renglones en pesos y se vuelve a leer igual", async () => {
+    const nombre = `Prueba ${Date.now().toString(36)}`;
+    const p = await crearPlantilla(nombre, [{ descripcion: "Cocina", cantidad: 1, precio_unitario: 150_000.25 }]);
+    try {
+      expect(p.renglones).toEqual([{ descripcion: "Cocina", cantidad: 1, precio_unitario: 150_000.25 }]);
+      expect((await listarPlantillas()).find((x) => x.id === p.id)?.nombre).toBe(nombre);
+    } finally {
+      await borrarPlantilla(p.id);
+    }
+    expect((await listarPlantillas()).some((x) => x.id === p.id)).toBe(false);
   });
 });
