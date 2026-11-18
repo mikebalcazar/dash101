@@ -29,7 +29,7 @@ import {
   borrarPlantilla, cotizacionesParaImportar, crearPlantilla, guardarHoja, importarCotizacion, listarConceptos, listarPlantillas,
   type Concepto, type CotizacionParaImportar, type Plantilla,
 } from "@/lib/conceptos";
-import { desglose, estadoDelProyecto } from "@/lib/estado-proyecto";
+import { estadoDelProyecto } from "@/lib/estado-proyecto";
 import { ErrorApi } from "@/lib/api/cliente";
 import { formatMonto } from "@/lib/format";
 import {
@@ -143,7 +143,6 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
 
   const suma = useMemo(() => Math.round(filas.reduce((t, f) => t + (importeDe(f.cantidad, f.precio) ?? 0) * 100, 0)) / 100, [filas]);
   const conteo = useMemo(() => filas.filter((f) => !(vacia(f) && !f.id)).length, [filas]);
-  const d = desglose(suma, Boolean(proyecto.iva_incluido), proyecto.tasa_iva ?? 1600);
 
   /* Número de cada cotización importada, en el orden en que aparece en la
    * hoja: el mismo que usa el estado de cuenta para decir «Cotización 2». */
@@ -296,7 +295,8 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
   };
 
   if (cargando) return null;
-  const iva = proyecto.iva_incluido ? "IVA incluido" : "más IVA";
+  /* 0.107.0 · los conceptos son antes de IVA, siempre (Mike, 18-nov-2026). */
+  const iva = "sin IVA";
   /* Sin `focus:bg-white`: el tema es vidrio oscuro y esa variante no la
    * cubre globals.css, así que la celda se ponía blanca con letra clara. */
   const celda = "w-full bg-transparent px-2 py-1.5 text-sm text-ink focus:outline-none focus:bg-white/10 focus:ring-2 focus:ring-marca/60 rounded-md";
@@ -477,15 +477,15 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
                 </button>
               </td>
               <td colSpan={2} className="pt-2 px-2 text-right text-xs text-ink-muted">
-                {conteo} concepto{conteo === 1 ? "" : "s"} · {proyecto.iva_incluido ? "total con IVA" : "subtotal"}
+                {conteo} concepto{conteo === 1 ? "" : "s"} · precio sin IVA
               </td>
               <td className="pt-2 px-2 text-right font-medium text-ink-dim tabular-nums whitespace-nowrap" data-hoja-total>{formatMonto(suma, "MXN")}</td>
               <td />
             </tr>
             <tr className="text-[11px] text-ink-muted">
               <td />
-              <td colSpan={4} className="px-2 pt-0.5 text-right tabular-nums" data-hoja-desglose>
-                Subtotal {formatMonto(d.subtotal, "MXN")} · IVA {formatMonto(d.iva, "MXN")} · Total {formatMonto(d.total, "MXN")}
+              <td colSpan={4} className="px-2 pt-0.5 text-right" data-hoja-desglose>
+                Sin IVA. El IVA no se le suma al precio: el que se cobra se ve aparte, en el estado de cuenta.
               </td>
               <td />
             </tr>
