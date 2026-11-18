@@ -98,7 +98,9 @@ export default function ProyectosPage() {
       ) : (
         <div className="grid grid-cols-2 gap-3">
           {proyectos.map((p) => {
-            const pctCobrado = p.precio_venta > 0 ? (p.cobrado / p.precio_venta) * 100 : 0;
+            // 0.107.0 · sin IVA, contra el precio que también va sin IVA.
+            const cobradoSinIva = p.cobrado_sin_iva ?? p.cobrado;
+            const pctCobrado = p.precio_venta > 0 ? (cobradoSinIva / p.precio_venta) * 100 : 0;
             const pctPagado =
               p.compromiso_total > 0 ? (p.pagado / p.compromiso_total) * 100 : 0;
             return (
@@ -123,7 +125,7 @@ export default function ProyectosPage() {
                   <div>
                     <p className="text-ink-muted">Cobrado</p>
                     <p className="font-medium text-mint-900">
-                      {formatMonto(p.cobrado, "MXN", { short: true })}
+                      {formatMonto(cobradoSinIva, "MXN", { short: true })}
                     </p>
                     <div className="h-1 bg-cream rounded-full mt-1 overflow-hidden">
                       <div

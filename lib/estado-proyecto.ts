@@ -37,16 +37,41 @@ export interface RenglonDelEstado {
   fecha_entrega: string | null;
 }
 
+/** 0.107.0 · Una factura que respalda un pago, como la manda `/estado`. */
+export interface FacturaDelPago {
+  id: string;
+  uuid: string;
+  serie: string | null;
+  folio: string | null;
+  fecha: string;
+  /** En PESOS. */
+  total: number;
+  /** En PESOS: cuánto de este pago cubre esa factura. */
+  monto_aplicado: number;
+}
+
 export interface PagoDelEstado {
   id: string;
   fecha: string;
-  /** En PESOS. */
+  /** En PESOS: lo que tocó el banco, con IVA. */
   monto: number;
+  /** 0.107.0 · En PESOS: el subtotal, que es lo que cuenta en el estado de
+   *  cuenta del proyecto (Mike, 18-nov-2026: «los cobros (facturas) se
+   *  contabilizan en el estado de cuenta sin IVA»). */
+  sin_iva: number;
+  /** 0.107.0 · En PESOS: el IVA del pago, que va aparte. */
+  iva: number;
   descripcion: string | null;
   cuenta_nombre: string | null;
   facturado: boolean;
   requiere_factura: boolean;
+  /** 0.107.0 · las facturas vigentes que lo respaldan. */
+  facturas: FacturaDelPago[];
 }
+
+/** «A-123» si la factura trae serie y folio; si no, el principio del UUID. */
+export const nombreDeFactura = (f: Pick<FacturaDelPago, 'serie' | 'folio' | 'uuid'>) =>
+  [f.serie, f.folio].filter(Boolean).join('-') || f.uuid.slice(0, 8).toUpperCase();
 
 /** 0.105.0 · Un concepto de cobro como lo pinta el estado de cuenta. */
 export interface ConceptoDelEstado {
@@ -82,9 +107,13 @@ export interface EstadoDelProyecto {
   /** 0.105.0 · los conceptos de cobro, agrupados por cotización. */
   grupos: GrupoDelEstado[];
   movimientos: PagoDelEstado[];
-  /** Todo en PESOS, menos `tasa_iva`, que va en PUNTOS BASE (1600 = 16 %). */
+  /** Todo en PESOS, menos `tasa_iva`, que va en PUNTOS BASE (1600 = 16 %).
+   *  0.107.0 · SIN IVA: subtotal = total = precio (los conceptos); `cobrado`
+   *  es la suma de subtotales; `saldo`, la resta; `iva_cobrado` va aparte
+   *  (`iva` dice lo mismo); `cobrado_con_iva` es lo que tocó el banco. */
   totales: {
     subtotal: number; iva: number; total: number;
+    iva_cobrado: number; cobrado_con_iva: number;
     tasa_iva: number; iva_incluido: boolean;
     /** null: el precio está por cargar y no hay contra qué restar. */
     cobrado: number; saldo: number | null; piezas: number;
@@ -143,11 +172,17 @@ export async function estadoDelProyecto(proyecto_id: string): Promise<EstadoDelP
     grupos: ((r.grupos ?? []) as Array<Record<string, any>>).map(grupo),
     movimientos: (r.movimientos ?? []).map((m: Record<string, any>) => ({
       id: String(m.id), fecha: String(m.fecha ?? ''), monto: aPesos(m.monto),
+      sin_iva: aPesos(m.sin_iva ?? m.monto), iva: aPesos(m.iva),
       descripcion: m.descripcion ?? null, cuenta_nombre: m.cuenta_nombre ?? null,
       facturado: Boolean(m.facturado), requiere_factura: Boolean(m.requiere_factura),
+      facturas: ((m.facturas ?? []) as Array<Record<string, any>>).map((f) => ({
+        id: String(f.id), uuid: String(f.uuid ?? ''), serie: f.serie ?? null, folio: f.folio ?? null,
+        fecha: String(f.fecha ?? ''), total: aPesos(f.total), monto_aplicado: aPesos(f.monto_aplicado),
+      })),
     })),
     totales: {
       subtotal: aPesos(r.totales.subtotal), iva: aPesos(r.totales.iva), total: aPesos(r.totales.total),
+      iva_cobrado: aPesos(r.totales.iva_cobrado ?? r.totales.iva), cobrado_con_iva: aPesos(r.totales.cobrado_con_iva ?? r.totales.cobrado),
       tasa_iva: Number(r.totales.tasa_iva ?? 1600), iva_incluido: Boolean(r.totales.iva_incluido),
       cobrado: aPesos(r.totales.cobrado),
       saldo: r.totales.saldo === null ? null : aPesos(r.totales.saldo),

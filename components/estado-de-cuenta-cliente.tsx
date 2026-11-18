@@ -12,9 +12,9 @@
  *
  * 0.105.0 · Mike, 18-nov-2026: «un estado de cuenta por cliente (incluyendo
  * todos sus proyectos (cotización y pagos) global». Cada proyecto trae lo
- * cotizado —sus conceptos de cobro, agrupados por cotización— y lo pagado, y
- * el saldo es contra el TOTAL CON IVA, como en el de cada proyecto, para que
- * los dos papeles digan lo mismo. Un proyecto con el precio por cargar
+ * cotizado —sus conceptos de cobro, agrupados por cotización— y lo pagado.
+ * 0.107.0 · todo SIN IVA, como en el de cada proyecto, y el IVA cobrado
+ * aparte (Mike, 18-nov-2026), para que los dos papeles digan lo mismo. Un proyecto con el precio por cargar
  * enseña lo cobrado pero no tiene saldo. Aquí no se suma nada: la API manda
  * los totales. */
 
@@ -52,9 +52,9 @@ export function DocumentoEstadoDeCuenta({ d }: { d: EstadoDeCuenta }) {
         {/* El saldo global. Es lo primero que se busca al abrir el papel. */}
         <div className="grid grid-cols-3 gap-3 my-5 no-partir">
           {[
-            { que: "Cotizado, con IVA", cuanto: d.totales.total, tono: "text-ink-dim" },
-            { que: "Cobrado", cuanto: d.totales.cobrado, tono: "text-mint-900" },
-            { que: "Saldo a favor de la empresa", cuanto: d.totales.saldo, tono: d.totales.saldo > 0 ? "text-mauve-900" : "text-ink-dim" },
+            { que: "Cotizado, sin IVA", cuanto: d.totales.total, tono: "text-ink-dim" },
+            { que: "Cobrado, sin IVA", cuanto: d.totales.cobrado, tono: "text-mint-900" },
+            { que: "Saldo, sin IVA", cuanto: d.totales.saldo, tono: d.totales.saldo > 0 ? "text-mauve-900" : "text-ink-dim" },
           ].map((k) => (
             <div key={k.que} data-kpi={k.que} className="bg-cream/60 rounded-xl p-3 print:bg-transparent print:border print:border-black/15">
               <p className="text-[11px] text-ink-muted">{k.que}</p>
@@ -72,7 +72,7 @@ export function DocumentoEstadoDeCuenta({ d }: { d: EstadoDeCuenta }) {
               <thead className="text-xs text-ink-muted uppercase tracking-wide border-b border-black/10">
                 <tr>
                   <th className="text-left py-1.5 font-medium">Proyecto</th>
-                  <th className="text-right py-1.5 font-medium">Total con IVA</th>
+                  <th className="text-right py-1.5 font-medium">Precio sin IVA</th>
                   <th className="text-right py-1.5 font-medium">Cobrado</th>
                   <th className="text-right py-1.5 font-medium">Saldo</th>
                 </tr>
@@ -146,9 +146,7 @@ export function DocumentoEstadoDeCuenta({ d }: { d: EstadoDeCuenta }) {
                         </tbody>
                       ))}
                       <tfoot className="text-xs">
-                        <tr><td /><td className="py-0.5 text-right text-ink-muted">Subtotal</td><td className="py-0.5 text-right tabular">{formatMonto(p.subtotal, "MXN")}</td></tr>
-                        <tr><td /><td className="py-0.5 text-right text-ink-muted">IVA</td><td className="py-0.5 text-right tabular">{formatMonto(p.iva, "MXN")}</td></tr>
-                        <tr className="font-medium"><td /><td className="py-0.5 text-right">Total</td><td className="py-0.5 text-right tabular">{formatMonto(p.total, "MXN")}</td></tr>
+                        <tr className="font-medium"><td /><td className="py-0.5 text-right">Precio, sin IVA</td><td className="py-0.5 text-right tabular">{formatMonto(p.total, "MXN")}</td></tr>
                       </tfoot>
                     </table>
                   </div>
@@ -191,8 +189,9 @@ export function DocumentoEstadoDeCuenta({ d }: { d: EstadoDeCuenta }) {
         )}
 
         <footer className="text-[11px] text-ink-muted pt-4 border-t border-black/10 mt-4">
-          Cifras en pesos mexicanos. El saldo es lo cotizado con IVA menos lo cobrado a la fecha de
-          este documento; un proyecto con el precio por cargar no tiene saldo todavía.
+          Cifras en pesos mexicanos, sin IVA: el saldo es lo cotizado menos lo cobrado a la fecha de
+          este documento. El IVA cobrado va aparte: <span data-iva-cobrado-cliente>{formatMonto(d.totales.iva_cobrado, "MXN")}</span>.
+          Un proyecto con el precio por cargar no tiene saldo todavía.
         </footer>
       </article>
 

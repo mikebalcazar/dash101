@@ -93,6 +93,8 @@ export interface FilaProyecto {
   /* 0.105.0 · cuántos conceptos de cobro tiene: 0 es «precio por cargar».
    * Una API de antes no lo manda. */
   n_conceptos?: number;
+  /* 0.107.0 · cachés SIN IVA. Una API de antes no los manda. */
+  cobrado_sin_iva?: number; iva_cobrado?: number; pagado_sin_iva?: number; iva_pagado?: number;
   creado_at: string; actualizado_at: string | null;
 }
 export interface FilaItem { id: string; proyecto_id: string | null; nombre: string; descripcion: string | null; monto: number; cantidad: number; estado: string; etapa: number; clave: string | null; tipo: string | null; fecha_entrega: string | null; origen: { quell_id?: string } | null; partida?: string; orden?: number;
@@ -221,6 +223,12 @@ export function proyecto(
     partidas: partes.partidas.filter((p) => p.proyecto_id === f.id).map(partida),
     tasa_iva: Number(f.tasa_iva ?? 1600), iva_incluido: Number(f.iva_incluido ?? 0) === 1,
     n_conceptos: Number(f.n_conceptos ?? 0),
+    /* 0.107.0 · el estado de cuenta del proyecto va SIN IVA (Mike, 18-nov-2026).
+     * Una API de antes no los manda: ahí se lee lo del banco, como antes. */
+    cobrado_sin_iva: f.cobrado_sin_iva === undefined ? cobrado : aPesos(f.cobrado_sin_iva),
+    iva_cobrado: aPesos(f.iva_cobrado ?? 0),
+    pagado_sin_iva: f.pagado_sin_iva === undefined ? pagado : aPesos(f.pagado_sin_iva),
+    iva_pagado: aPesos(f.iva_pagado ?? 0),
     // Una API anterior a 0.105.0 no manda la cuenta: ahí el precio era de los ítems.
     precio_por_cargar: f.n_conceptos !== undefined && Number(f.n_conceptos) === 0,
     estado: f.estado, fecha_inicio: ts(f.fecha_inicio ?? f.creado_at),

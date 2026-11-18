@@ -983,7 +983,7 @@ test('18-nov: la hoja del presupuesto: se escribe, se pega un rango de Sheets, s
   await ctx.close();
 });
 
-test('el estado de cuenta del proyecto: la lista suma el subtotal y el IVA se desglosa', async () => {
+test('el estado de cuenta del proyecto va sin IVA, y un pago se abre y se liga a su factura', async () => {
   /* Encargo de Mike del 21-sep: «necesito poder exportar un estado de cuenta
    * en pdf y un excel con lo siguiente de cada proyecto: saldo general,
    * lista de productos en proyecto, subtotal, IVA y total de proyecto
@@ -1029,6 +1029,22 @@ test('el estado de cuenta del proyecto: la lista suma el subtotal y el IVA se de
       contraparte_tipo: 'cliente', contraparte_id: cliente.id, descripcion: 'Anticipo del estado',
     },
   });
+  /* 0.107.0 · Mike, 18-nov-2026: «NECESITO PODER LIGAR LOS PAGOS CARGADOS
+   * NUEVOS CON LAS FACTURAS EXISTENTES». Un pago de $11,600 sin factura y una
+   * factura que ya existe por $10,000 + $1,600 de IVA. */
+  const pago = await api(pag, `/orgs/${ORG}/movimientos`, {
+    method: 'POST',
+    body: {
+      tipo: 'ingreso', monto: 11_600_00, fecha: '2026-03-02',
+      cuenta_id: cuenta.id, proyecto_id: proyecto.id,
+      contraparte_tipo: 'cliente', contraparte_id: cliente.id, descripcion: 'Estimación del estado',
+    },
+  });
+  const uuid = `NAVEGADOR-${Date.now().toString(36).toUpperCase()}`;
+  const factura = await api(pag, `/orgs/${ORG}/fiscal/cfdi`, {
+    method: 'POST',
+    body: { uuid, tipo: 'ingreso', razon_social: CLIENTE_PRUEBAS, subtotal: 10_000_00, iva: 1_600_00, total: 11_600_00, fecha: '2026-03-02' },
+  });
 
   // Se llega por donde llega Mike: el botón del proyecto, no la dirección.
   await pag.goto(`${URL}/proyectos/${proyecto.id}`, { waitUntil: 'load' });
@@ -1036,18 +1052,36 @@ test('el estado de cuenta del proyecto: la lista suma el subtotal y el IVA se de
   await pag.getByRole('heading', { name: 'Estado de cuenta' }).waitFor({ timeout: 30000 });
   await pag.getByText('Lo que se cobra').first().waitFor({ timeout: 20000 });
 
-  /* CON CENTAVOS, y es parte de lo que se mide: el resto de dash101 pinta
-   * el dinero redondeado a pesos enteros, y aquí no se puede. Con «IVA
-   * incluido» el subtotal casi nunca es redondo, y sin centavos la columna
-   * que suma el cliente no da el total de abajo. */
+  /* 0.107.0 · SIN IVA (Mike, 18-nov-2026): «En los estados de cuenta de
+   * los proyectos, siempre haz las cuentas sin IVA y desglosa por aparte el
+   * IVA». Con centavos: el papel se lo suma el cliente. Antes de ligar, el
+   * pago de $11,600 no tiene factura y cuenta completo. */
   const dice = await texto(pag);
-  assert.ok(dice.includes(pesos2(30_000_00)), `el subtotal sale con centavos: ${pesos2(30_000_00)}`);
-  assert.ok(dice.includes(pesos2(4_800_00)), `y el IVA al 16%: ${pesos2(4_800_00)}`);
-  assert.ok(dice.includes(pesos2(34_800_00)), `y el total: ${pesos2(34_800_00)}`);
-  assert.ok(dice.includes(pesos2(10_000_00)), 'el pago aparece');
-  assert.ok(dice.includes(pesos2(24_800_00)), 'y el saldo es contra el total con IVA');
+  assert.ok(dice.includes(pesos2(30_000_00)), `el precio sin IVA, con centavos: ${pesos2(30_000_00)}`);
+  assert.ok(!dice.includes(pesos2(34_800_00)), 'ya no se le suma 16 % al precio');
   assert.ok(/Generado el/.test(dice), 'trae la fecha del día que se genera');
-  assert.ok(/IVA 16%/.test(dice), 'dice la tasa con la que se hizo la cuenta');
+  assert.equal(await pag.locator('[data-pagado-sin-iva]').innerText(), pesos2(21_600_00), 'sin factura, el pago cuenta completo');
+
+  // Picar el pago abre su panel: su dinero, sin factura, y la factura que existe para ligarla.
+  await pag.locator(`[data-pago="${pago.id}"]`).click();
+  const panel = pag.locator(`[data-panel-pago="${pago.id}"]`);
+  await panel.waitFor({ timeout: 15000 });
+  await panel.locator('[data-sin-factura]').waitFor({ timeout: 15000 });
+  assert.equal(await panel.locator('[data-abrir-movimiento]').getAttribute('href'), `/movimientos/${pago.id}/editar`, 'y lleva al movimiento');
+  const ligar = panel.locator(`[data-ligar-factura="${factura.id}"]`);
+  await ligar.waitFor({ timeout: 15000 });
+  assert.match(await ligar.innerText(), /Ligar \$11,600\.00/, 'propone aplicarle todo el pago');
+  await ligar.click();
+  await panel.locator(`[data-factura-ligada="${factura.id}"]`).waitFor({ timeout: 15000 });
+  assert.equal(await panel.locator('[data-pago-cifra="iva"]').innerText(), pesos2(1_600_00), 'el pago se lleva el IVA de su factura');
+  await pag.keyboard.press('Escape');
+  assert.equal(await pag.locator('[data-panel-pago]').count(), 0, 'Escape cierra el panel');
+
+  // El papel ya lo dice: la factura en su renglón, $10,000 sin IVA y el IVA aparte.
+  await pag.locator(`[data-pago="${pago.id}"] [data-pago-factura]`, { hasText: uuid.slice(0, 8) }).waitFor({ timeout: 15000 });
+  assert.equal(await pag.locator('[data-pagado-sin-iva]').innerText(), pesos2(20_000_00), '10,000 + 10,000, sin IVA');
+  assert.equal(await pag.locator('[data-iva-cobrado]').innerText(), pesos2(1_600_00), 'el IVA cobrado, aparte');
+  assert.equal(await pag.locator('[data-saldo]').innerText(), pesos2(10_000_00), 'saldo: 30,000 − 20,000');
 
   /* Las dos salidas que pidió.
    *
@@ -1072,7 +1106,11 @@ test('el estado de cuenta del proyecto: la lista suma el subtotal y el IVA se de
   const { size } = await stat(await archivo.path());
   assert.ok(size > 500, `y el archivo trae contenido: ${size} bytes`);
 
-  console.log(`    ${pesos2(30_000_00)} + ${pesos2(4_800_00)} = ${pesos2(34_800_00)}, saldo ${pesos2(24_800_00)}`);
+  // Que la factura de prueba no se quede viva en la demo: fuera la liga y cancelada.
+  await api(pag, `/orgs/${ORG}/fiscal/cfdi/${factura.id}/desligar`, { method: 'POST', body: { movimiento_id: pago.id } });
+  await api(pag, `/orgs/${ORG}/fiscal/cfdi/${factura.id}/cancelar`, { method: 'POST' });
+
+  console.log(`    precio ${pesos2(30_000_00)} sin IVA, pagado ${pesos2(20_000_00)}, IVA ${pesos2(1_600_00)} aparte; factura ligada desde el estado de cuenta`);
   assert.deepEqual(errores, [], 'cero errores de JavaScript');
   await ctx.close();
 });
