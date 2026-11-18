@@ -877,8 +877,17 @@ test('editar los ítems del proyecto: se borra uno, se guarda, y NO vuelve', asy
   /* Mike, 6-oct (con botones): el plan de pagos del proyecto. Se agrega una
    * parcialidad de $300 sobre un proyecto de $350: queda pendiente, el
    * resumen dice que $50 siguen sin fecha, y el flujo la cuenta. Es el
-   * proyecto propio de esta prueba, así que escribir aquí no toca la demo. */
-  await pag.locator('[data-plan-pagos]').waitFor({ timeout: 10000 });
+   * proyecto propio de esta prueba, así que escribir aquí no toca la demo.
+   *
+   * 0.105.0 · el precio ya no lo suman los ítems: son los conceptos de cobro
+   * (Mike, 18-nov-2026). Se le carga el mismo $350 como concepto y se vuelve
+   * a abrir, para que el plan tenga contra qué medirse. */
+  await api(pag, `/orgs/${ORG}/conceptos`, {
+    method: 'POST',
+    body: { proyecto_id: proyecto.id, descripcion: 'Precio del proyecto', cantidad: 1, precio_unitario: 350_00 },
+  });
+  await pag.reload({ waitUntil: 'load' });
+  await pag.locator('[data-plan-pagos]').waitFor({ timeout: 20000 });
   assert.equal(await pag.locator('[data-parcialidad]').count(), 0, 'nace sin plan');
   await pag.locator('[data-plan-agregar]').click();
   await pag.locator('[data-plan-fecha]').fill('2026-11-20');
