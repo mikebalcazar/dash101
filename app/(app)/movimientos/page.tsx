@@ -51,6 +51,12 @@ export default function MovimientosPage() {
   const [filtroTipo, setFiltroTipo] = useState<TipoMovimiento | "todos" | "generales">("todos");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [cleanupNotice, setCleanupNotice] = useState("");
+  /* Va aquí, con los demás hooks, y no abajo junto a `irALaOrden`: estaba
+   * después del «Cargando…», así que el primer render llamaba 8 hooks y el
+   * siguiente 9. Con Next 15 no se notaba porque `useRouter` no usaba hooks
+   * por dentro; con Next 16 sí (un useMemo), y la pantalla tronaba con el
+   * error #310 de React (18-nov-2026, prueba de navegador de staging). */
+  const router = useRouter();
 
   const load = () => {
     if (!empresa?.id) {
@@ -137,8 +143,8 @@ export default function MovimientosPage() {
   /* 0.56.1 · Un egreso que dejó una orden pagada lleva a la orden, con su
    * historia y sus papeles (Mike, 30-sep-2026: «se pasen al movimiento con
    * toda la info que traían»). La orden se busca por el movimiento en la
-   * API; si no viene de una orden, no pasa nada. */
-  const router = useRouter();
+   * API; si no viene de una orden, no pasa nada. (`router` se toma arriba,
+   * con los demás hooks.) */
   const deOrden = (m: Movimiento) => m.categoria === "orden_de_compra" || m.categoria === "reembolso";
   const irALaOrden = async (mid: string) => {
     try {
