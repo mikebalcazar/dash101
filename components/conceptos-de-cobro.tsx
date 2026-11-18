@@ -190,8 +190,7 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
       const v = numeroDeHoja(f.precio);
       return v === null ? f : { ...f, precio: pesos(v) };
     })));
-    setAviso(`Se pegaron ${rango.filter((r) => r.some((c) => c)).length} renglones. Revisa y guarda.`);
-    setTimeout(() => setAviso(""), 3000);
+    avisar(`Se pegaron ${rango.filter((r) => r.some((c) => c)).length} renglones. Revisa y guarda.`, 3000);
   };
 
   /* Un precio se lee con sus comas al salir de la celda, como en Sheets. */
@@ -201,7 +200,15 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
     if (v !== null && filas[i].precio !== pesos(v)) setFilas((prev) => prev.map((f, k) => (k === i ? { ...f, precio: pesos(v) } : f)));
   };
 
-  const avisar = (texto: string) => { setAviso(texto); setTimeout(() => setAviso(""), 2500); };
+  /* Un solo reloj para el aviso. Con uno por aviso, el de «Hoja guardada»
+   * borraba el siguiente («Plantilla … guardada») si llegaba antes de sus
+   * 2.5 s: lo cachó la prueba de navegador del 18-nov. */
+  const reloj = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const avisar = (texto: string, ms = 2500) => {
+    if (reloj.current) clearTimeout(reloj.current);
+    setAviso(texto);
+    reloj.current = setTimeout(() => setAviso(""), ms);
+  };
 
   const guardar = async () => {
     setError("");
