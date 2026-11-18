@@ -16,9 +16,8 @@ import { formatMonto, formatMontoExact } from "@/lib/format";
 import { Timestamp } from "firebase/firestore";
 import { IconArrowLeft, IconTrash, IconPlus, IconEdit, IconFileText } from "@tabler/icons-react";
 import { formatDateShort } from "@/lib/format";
-import { ObraDelProyecto } from "@/components/obra-del-proyecto";
+import { LigaDeLaObra } from "@/components/obra-del-proyecto";
 import { desglose } from "@/lib/estado-proyecto";
-import { ItemsDelProyecto } from "@/components/items-del-proyecto";
 import { FusionarProyecto } from "@/components/fusionar-proyecto";
 import { PlanDePagos } from "@/components/plan-de-pagos";
 import { ConceptosDeCobro } from "@/components/conceptos-de-cobro";
@@ -45,37 +44,6 @@ interface PartidaForm {
   monto_acordado: string;
 }
 
-interface ItemForm {
-  id: string;
-  nombre: string;
-  descripcion: string;
-  /** Cuántas piezas iguales. «20 puertas del mismo acabado y precio». */
-  cantidad: string;
-  /** Lo que cuesta UNA pieza. Es lo que se captura. */
-  unitario: string;
-  /** cantidad × unitario. No se teclea: se calcula, y es lo que se guarda,
-   *  porque `precio_venta` es la suma de los importes de las líneas. */
-  monto: string;
-  fecha_entrega: string; // yyyy-mm-dd | ""
-  /** La partida (pestaña) en la que va. Vacía es «sin partida». */
-  partida: string;
-}
-
-/** El importe de la línea a partir de lo que se capturó. Se redondea al
- *  centavo aquí y no al guardar: lo que se ve en pantalla y lo que se manda
- *  tienen que ser el mismo número. */
-function importe(cantidad: string, unitario: string): string {
-  const c = Math.trunc(parseFloat(cantidad) || 0);
-  const u = parseFloat(unitario) || 0;
-  if (c <= 0 || u <= 0) return "0";
-  return (Math.round(c * u * 100) / 100).toFixed(2);
-}
-
-function tsToInput(t: unknown): string {
-  const ts = t as Timestamp | null | undefined;
-  return ts && typeof ts.toDate === "function" ? aDia(ts.toDate()) : "";
-}
-
 export default function ProyectoDetallePage() {
   const router = useRouter();
   const params = useParams();
@@ -83,7 +51,7 @@ export default function ProyectoDetallePage() {
 
   const [proyecto, setProyecto] = useState<Proyecto | null>(null);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
-  const [editMode, setEditMode] = useState<"no" | "proyecto" | "items">("no");
+  const [editMode, setEditMode] = useState<"no" | "proyecto">("no");
 
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
@@ -95,7 +63,6 @@ export default function ProyectoDetallePage() {
    * arranca en «+ IVA», que es como se venían leyendo todas las cifras. */
   const [ivaIncluido, setIvaIncluido] = useState(false);
   const [partidasEdit, setPartidasEdit] = useState<PartidaForm[]>([]);
-  const [itemsEdit, setItemsEdit] = useState<ItemForm[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -128,23 +95,6 @@ export default function ProyectoDetallePage() {
           monto_acordado: String(pt.monto_acordado),
         }))
       );
-      setItemsEdit(
-        (p.items ?? []).map((pr) => {
-          // El precio por pieza sale de dividir: lo que se guarda es el
-          // importe de la línea. Con cantidad 1 son el mismo número.
-          const cant = pr.cantidad && pr.cantidad > 0 ? pr.cantidad : 1;
-          return {
-            id: pr.id,
-            nombre: pr.nombre,
-            descripcion: pr.descripcion ?? "",
-            cantidad: String(cant),
-            unitario: (Math.round((pr.monto / cant) * 100) / 100).toFixed(2),
-            monto: String(pr.monto),
-            partida: pr.partida ?? "",
-            fecha_entrega: tsToInput(pr.fecha_entrega),
-          };
-        })
-      );
     });
   };
 
@@ -173,9 +123,10 @@ export default function ProyectoDetallePage() {
         }
       }
 
-      /* 0.105.0 · un ítem ya no necesita precio: el del proyecto son sus
-       * conceptos de cobro (Mike, 18-nov-2026: «Ya no va a ir ligada a los
-       * ítems»). Hasta aquí se exigía monto en cada uno. */
+      /* 18-nov-2026 · Los ítems ya no se editan aquí ni se mandan: el
+       * proyecto sólo lleva sus conceptos de cobro (Mike: «Sólo existirán
+       * los conceptos que se importen desde quote … y los que se agreguen
+       * manualmente en la tabla de dash»). Sin `items`, guardar no los toca. */
 
       await updateProyecto(id, {
         nombre: nombre.trim(),
@@ -183,17 +134,6 @@ export default function ProyectoDetallePage() {
         estado,
         iva_incluido: ivaIncluido,
         fecha_inicio: fechaInicio ? delDia(fechaInicio) : undefined,
-        items: itemsEdit
-          .filter((pr) => pr.nombre.trim())
-          .map((pr) => ({
-            id: pr.id || undefined,
-            nombre: pr.nombre.trim(),
-            descripcion: pr.descripcion.trim() || undefined,
-            cantidad: Math.trunc(parseFloat(pr.cantidad) || 1) || 1,
-            monto: parseFloat(pr.monto) || 0,
-            fecha_entrega: pr.fecha_entrega ? new Date(pr.fecha_entrega + "T12:00:00") : null,
-            partida: pr.partida.trim(),
-          })),
         partidas: partidasValidas.map((p) => ({
           proveedor_id: p.proveedor_id,
           proveedor_nombre: p.proveedor_nombre,
@@ -277,7 +217,10 @@ export default function ProyectoDetallePage() {
           {/* Header */}
           <div className="flex justify-between items-start gap-3 mb-4">
             <div className="min-w-0 flex-1">
-              <h2 className="text-xl font-medium text-ink-dim">{p.nombre}</h2>
+              <h2 className="text-xl font-medium text-ink-dim flex items-center gap-1.5">
+                {p.nombre}
+                <LigaDeLaObra proyectoId={p.id!} />
+              </h2>
               <div className="flex items-center gap-2 mt-1 text-xs text-ink-muted flex-wrap">
                 <span>{p.cliente_nombre}</span>
                 <span className="opacity-40">·</span>
@@ -402,17 +345,6 @@ export default function ProyectoDetallePage() {
 
           <PlanDePagos proyecto={p} />
 
-          {/* La obra de quell101, si la hay (contrato 0.22.0). */}
-          <ObraDelProyecto proyectoId={p.id!} />
-
-          {/* Los ítems del proyecto: en su orden, por partidas y sin
-              repetidos (contrato 0.30.0). */}
-          <ItemsDelProyecto
-            proyecto={p}
-            alCambiar={() => { void loadProyecto(); }}
-            alEditarLista={() => setEditMode("items")}
-          />
-
           {/* Lo acordado con cada proveedor. Se llamaba «Partidas de
               proveedores»; desde que los ítems tienen su propia partida —el
               capítulo de la cotización— dos cosas distintas se llamaban
@@ -530,7 +462,6 @@ export default function ProyectoDetallePage() {
         </>
       ) : (
         <ProyectoEditForm
-          seccion={editMode === "items" ? "items" : "proyecto"}
           proyecto={p}
           proveedores={proveedores}
           nombre={nombre}
@@ -547,8 +478,6 @@ export default function ProyectoDetallePage() {
           setFechaInicio={setFechaInicio}
           partidas={partidasEdit}
           setPartidas={setPartidasEdit}
-          items={itemsEdit}
-          setItems={setItemsEdit}
           onSave={handleSave}
           onCancel={() => {
             setEditMode("no");
@@ -566,17 +495,6 @@ export default function ProyectoDetallePage() {
 // --- Edit form (extracted for clarity) ---
 
 interface EditFormProps {
-  /** Qué parte se está editando. Mike, 20-sep, con la pantalla enfrente: «el
-   *  botón de editar de arriba debería ser para la info del proyecto. Abajo
-   *  en la sección de la lista de ítems debería haber otro botón de editar
-   *  para editar la lista».
-   *
-   *  Es UN solo formulario que enseña una mitad u otra, y no dos
-   *  formularios: guardar manda el proyecto completo —nombre, ítems y
-   *  partidas—, así que partirlo en dos guardados dejaría a cada uno
-   *  pisando lo que el otro no enseñó. Lo que no se ve se manda tal como
-   *  se cargó. */
-  seccion: "proyecto" | "items";
   proyecto: Proyecto;
   proveedores: Proveedor[];
   nombre: string;
@@ -594,8 +512,6 @@ interface EditFormProps {
   setFechaInicio: (v: string) => void;
   partidas: PartidaForm[];
   setPartidas: React.Dispatch<React.SetStateAction<PartidaForm[]>>;
-  items: ItemForm[];
-  setItems: React.Dispatch<React.SetStateAction<ItemForm[]>>;
   onSave: (e: React.FormEvent) => void;
   onCancel: () => void;
   saving: boolean;
@@ -623,34 +539,12 @@ function ProyectoEditForm(props: EditFormProps) {
   );
   const precioNum = parseFloat(props.precioVenta) || 0;
 
-  /** Las partidas que ya existen en la lista, para proponerlas al teclear. */
-  const partidasDeLaLista = Array.from(new Set(props.items.map((p) => p.partida.trim()).filter(Boolean)));
-  /** Tocar la cantidad o el precio por pieza recalcula el importe en el
-   *  momento: si se guardara con el importe viejo, el precio de venta diría
-   *  una cosa y la pantalla otra. */
-  const updateItem = (i: number, patch: Partial<ItemForm>) =>
-    props.setItems((prev) =>
-      prev.map((p, idx) => {
-        if (idx !== i) return p;
-        const nuevo = { ...p, ...patch };
-        if (patch.cantidad !== undefined || patch.unitario !== undefined) {
-          nuevo.monto = importe(nuevo.cantidad, nuevo.unitario);
-        }
-        return nuevo;
-      }),
-    );
-  const removeItem = (i: number) =>
-    props.setItems((prev) => prev.filter((_, idx) => idx !== i));
-  const sumaItems = props.items.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
-
   return (
     <form onSubmit={props.onSave} className="space-y-4">
       <h2 className="text-lg font-medium text-ink-dim">
-        {props.seccion === "items" ? "Editar la lista de ítems" : "Editar el proyecto"}
+        Editar el proyecto
       </h2>
 
-      {props.seccion === "proyecto" && (
-        <>
       <div>
         <label className="text-xs font-medium text-ink-dim block mb-1.5">Nombre</label>
         <input
@@ -755,130 +649,7 @@ function ProyectoEditForm(props: EditFormProps) {
           );
         })()}
       </div>
-        </>
-      )}
 
-      {props.seccion === "items" && (
-      <div className="pt-2">
-        <div className="flex justify-between items-baseline mb-1">
-          <label className="text-xs font-medium text-ink-dim">Ítems del proyecto</label>
-        </div>
-        {/* Mike, 2-oct (con botones): dash101 no genera ítems. Aquí se
-            editan los que ya hay; quitar uno lo saca del alcance. Hasta hoy
-            había un «Agregar» en este renglón. */}
-        <p className="text-[11px] text-ink-muted mb-2">
-          Lo que el cliente ve en su estado de cuenta. Cada ingreso se asigna a un ítem. Un ítem nuevo se levanta en quell101 o se cotiza en quote101.
-        </p>
-        <datalist id="partidas-de-la-lista">
-          {partidasDeLaLista.map((pa) => <option key={pa} value={pa} />)}
-        </datalist>
-        {props.items.length === 0 ? (
-          <div className="bg-cream/60 rounded-xl p-4 text-center text-xs text-ink-muted">
-            Sin ítems.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {props.items.map((pr, i) => (
-              <div key={i} className="bg-white border border-black/10 rounded-xl p-3 space-y-2">
-                <div className="flex gap-2 items-start">
-                  <input
-                    type="text"
-                    placeholder="Ítem (p. ej. Puerta de clóset)"
-                    value={pr.nombre}
-                    onChange={(e) => updateItem(i, { nombre: e.target.value })}
-                    className="flex-1 min-w-0 bg-bg border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
-                  />
-                  {/* Cantidad y precio POR PIEZA. «20 puertas del mismo
-                    * acabado y precio» se captura así, no multiplicando a
-                    * mano. El importe de la línea se calcula y se enseña
-                    * abajo: es lo que se guarda y lo que suma al precio de
-                    * venta. */}
-                  <input
-                    type="number"
-                    step="1"
-                    min="1"
-                    aria-label="Cantidad"
-                    placeholder="Cant."
-                    value={pr.cantidad}
-                    onChange={(e) => updateItem(i, { cantidad: e.target.value })}
-                    className="w-16 bg-bg border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none text-right"
-                  />
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    aria-label="Precio por pieza"
-                    placeholder="$ c/u"
-                    value={pr.unitario}
-                    onChange={(e) => updateItem(i, { unitario: e.target.value })}
-                    className="w-24 bg-bg border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none text-right"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeItem(i)}
-                    className="text-ink-muted hover:text-mauve-900 p-1"
-                  >
-                    <IconTrash size={14} />
-                  </button>
-                </div>
-                <div className="flex gap-2 items-center">
-                  <input
-                    type="text"
-                    placeholder="Descripción corta (material, medidas…)"
-                    value={pr.descripcion}
-                    onChange={(e) => updateItem(i, { descripcion: e.target.value })}
-                    className="flex-1 min-w-0 bg-bg border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
-                  />
-                  {/* La partida (pestaña) del ítem. Texto libre con las que
-                    * ya hay como propuesta: escribir «Cocina» crea la pestaña
-                    * si no existía. */}
-                  <input
-                    type="text"
-                    list="partidas-de-la-lista"
-                    aria-label="Partida"
-                    placeholder="Partida (pestaña)"
-                    value={pr.partida}
-                    onChange={(e) => updateItem(i, { partida: e.target.value })}
-                    className="w-36 bg-bg border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
-                  />
-                  <label className="text-[10px] text-ink-muted whitespace-nowrap">Entrega</label>
-                  <input
-                    type="date"
-                    value={pr.fecha_entrega}
-                    onChange={(e) => updateItem(i, { fecha_entrega: e.target.value })}
-                    className="w-36 bg-bg border border-black/10 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
-                  />
-                  <span className="text-xs text-ink-dim whitespace-nowrap tabular-nums w-28 text-right">
-                    {formatMontoExact(parseFloat(pr.monto) || 0)}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        {props.items.length > 0 && (
-          <div className="mt-2 flex justify-between text-xs px-1">
-            <span className="text-ink-muted">Suma de los ítems</span>
-            <span
-              className={`font-medium ${
-                precioNum > 0 && Math.abs(sumaItems - precioNum) > 0.5
-                  ? "text-mauve-900"
-                  : "text-ink-dim"
-              }`}
-            >
-              {formatMontoExact(sumaItems)}
-              {precioNum > 0 && Math.abs(sumaItems - precioNum) > 0.5 && (
-                <span className="ml-2 font-normal text-mauve-900">
-                  ≠ precio venta {formatMontoExact(precioNum)}
-                </span>
-              )}
-            </span>
-          </div>
-        )}
-      </div>
-      )}
-
-      {props.seccion === "proyecto" && (
       <div className="pt-2">
         <div className="flex justify-between items-baseline mb-2">
           <label className="text-xs font-medium text-ink-dim">Partidas de proveedores</label>
@@ -966,7 +737,6 @@ function ProyectoEditForm(props: EditFormProps) {
           </div>
         )}
       </div>
-      )}
 
       {props.error && (
         <p className="text-xs text-mauve-900 bg-mauve-50 px-3 py-2 rounded-xl">{props.error}</p>
@@ -995,4 +765,3 @@ function ProyectoEditForm(props: EditFormProps) {
   );
 }
 
-// --- Los ítems del proyecto (vista) ---
