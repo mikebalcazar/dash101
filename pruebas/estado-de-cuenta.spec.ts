@@ -78,12 +78,13 @@ describe("el estado de cuenta, como lo pinta la pantalla", () => {
      * note. */
     const d = await estadoDeCuenta(ids.holcim);
     expect(d.totales.vendido).toBe(500_000);
-    // 0.105.0 · el saldo va contra el total con IVA: 580,000 − 280,000.
-    expect(d.totales.total).toBe(580_000);
+    // 0.107.0 · todo SIN IVA (Mike, 18-nov-2026): 500,000 − 280,000.
+    expect(d.totales.total).toBe(500_000);
     expect(d.totales.cobrado, "200,000 + 80,000").toBe(280_000);
-    expect(d.totales.saldo).toBe(300_000);
+    expect(d.totales.saldo).toBe(220_000);
+    expect(d.totales.iva_cobrado, "cobros sin factura: sin IVA").toBe(0);
     expect(d.proyectos[0].precio_venta).toBe(500_000);
-    expect(d.proyectos[0].total).toBe(580_000);
+    expect(d.proyectos[0].total).toBe(500_000);
     expect(d.proyectos[0].grupos[0].conceptos[0].descripcion).toBe("Alcance");
     expect(d.proyectos[0].pagos[0].monto).toBe(200_000);
   });

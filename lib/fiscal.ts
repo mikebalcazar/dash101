@@ -15,7 +15,7 @@
 
 import { aCentavos, aPesos } from './api/adaptar';
 import { pedir } from './api/cliente';
-import { org } from './fuente';
+import { apiBase, org } from './fuente';
 
 const base = () => `/orgs/${org()}/fiscal`;
 
@@ -191,6 +191,69 @@ export async function ligarCfdi(cfdi_id: string, movimiento_id: string, montoPes
   );
   return { ...r, cfdi: cfdiDePesos(r.cfdi), aplicado_total: aPesos(r.aplicado_total) };
 }
+
+/* ─────────────── las facturas de un pago (0.107.0) ───────────────
+ *
+ * Mike, 18-nov-2026: «NECESITO PODER LIGAR LOS PAGOS CARGADOS NUEVOS CON LAS
+ * FACTURAS EXISTENTES. Así poder ver la factura o el movimiento en detalle si
+ * doy clic sobre él. Esto dentro del estado de cuenta de un proyecto.» */
+
+export interface FacturaDeUnPago extends Cfdi {
+  serie: string | null;
+  folio: string | null;
+  tiene_xml: boolean;
+  /** En PESOS: cuánto de ESTE pago cubre. */
+  monto_aplicado: number;
+}
+
+export interface FacturaPosible extends Cfdi {
+  serie: string | null;
+  folio: string | null;
+  tiene_xml: boolean;
+  /** En PESOS: lo que le falta por ligar a la factura. */
+  restante: number;
+  /** En PESOS: lo que se le aplicaría a este pago al ligarla. */
+  aplica: number;
+  /** Es del RFC del cliente del proyecto. */
+  mismo_rfc: boolean;
+  /** Días entre la factura y el pago. */
+  dias: number;
+}
+
+export interface FacturasDelPago {
+  /** En PESOS. `falta`: lo del pago que ninguna factura cubre todavía. */
+  movimiento: { id: string; monto: number; subtotal: number; iva: number; facturado: boolean; falta: number };
+  ligadas: FacturaDeUnPago[];
+  posibles: FacturaPosible[];
+}
+
+export async function facturasDelPago(movimiento_id: string): Promise<FacturasDelPago> {
+  const r = await pedir<{ movimiento: Record<string, any>; ligadas: Array<Record<string, any>>; posibles: Array<Record<string, any>> }>(
+    `${base()}/movimientos/${encodeURIComponent(movimiento_id)}/facturas`,
+  );
+  const comun = (f: Record<string, any>) => ({
+    ...cfdiDePesos(f as FilaCfdi), serie: f.serie ?? null, folio: f.folio ?? null, tiene_xml: Boolean(f.tiene_xml),
+  });
+  return {
+    movimiento: {
+      id: String(r.movimiento.id), monto: aPesos(r.movimiento.monto), subtotal: aPesos(r.movimiento.subtotal ?? r.movimiento.monto),
+      iva: aPesos(r.movimiento.iva), facturado: Boolean(r.movimiento.facturado), falta: aPesos(r.movimiento.falta),
+    },
+    ligadas: r.ligadas.map((f) => ({ ...comun(f), monto_aplicado: aPesos(f.monto_aplicado) })),
+    posibles: r.posibles.map((f) => ({
+      ...comun(f), restante: aPesos(f.restante), aplica: aPesos(f.aplica), mismo_rfc: Boolean(f.mismo_rfc), dias: Number(f.dias ?? 0),
+    })),
+  };
+}
+
+/** Quitar una liga equivocada: el pago vuelve a estar sin esa factura y la
+ *  API le reparte otra vez su IVA. */
+export const desligarCfdi = (cfdi_id: string, movimiento_id: string) =>
+  pedir(`${base()}/cfdi/${encodeURIComponent(cfdi_id)}/desligar`, { method: 'POST', body: { movimiento_id } });
+
+/** El XML de una factura que entró leída de su archivo. Una liga y no un
+ *  fetch: el navegador lo baja con la sesión. */
+export const ligaDelXml = (cfdi_id: string) => `${apiBase()}/orgs/${org()}/fiscal/cfdi/${encodeURIComponent(cfdi_id)}/xml`;
 
 /** Una factura cancelada no se borra: sale del IVA del mes y se queda a la
  *  vista. Borrarla dejaría un hueco que nadie sabe explicar tres meses

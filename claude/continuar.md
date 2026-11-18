@@ -10,6 +10,37 @@ no se pudo medir desde aquí y se dice cómo se mide.
 
 ---
 
+# 18-nov-2026 · el estado de cuenta del proyecto sin IVA, y ligar pagos con facturas (API 0.107.0)
+
+**Medido aquí: contra staging en `next dev`, un pago de $11,600 sin factura se
+abre, propone «Ligar $11,600.00», queda con $1,600 de IVA, y el papel dice
+pagado $20,000 sin IVA, IVA $1,600 aparte y saldo $10,000; la tarjeta del
+proyecto, 67 %. Cero errores de JavaScript. `tsc` limpio.**
+
+Mike, por recado de dash101 (muro 2026-11-18-2130): «En los estados de cuenta
+de los proyectos, siempre haz las cuentas sin IVA y desglosa por aparte el IVA
+que se haya pagado o cobrado.» Y el mismo día: «NECESITO PODER LIGAR LOS PAGOS
+CARGADOS NUEVOS CON LAS FACTURAS EXISTENTES. Así poder ver la factura o el
+movimiento en detalle si doy clic sobre él.»
+
+- Estado de cuenta del proyecto: precio, pagado y saldo SIN IVA; el IVA
+  cobrado aparte. Columnas de los pagos: factura, sin IVA, IVA.
+- Cada pago se pica (o Enter) y abre `components/pago-y-facturas.tsx`: su
+  dinero (sin IVA, IVA, banco), «Abrir el movimiento», sus facturas (XML,
+  quitar la liga) y las que se le pueden ligar, primero las del cliente.
+- Tarjeta «Ingreso del cliente» y lista de proyectos: cobrado SIN IVA contra
+  el precio (era cobrado con IVA entre precio sin IVA: HOLCIM decía 80 % y
+  eran 70 %). «Egreso»: pagado sin IVA e IVA pagado aparte. El capital
+  disponible sigue siendo lo del banco.
+- Estado de cuenta del cliente: sin IVA, IVA cobrado aparte.
+- «Editar el proyecto» ya no tiene «Más IVA / IVA incluido»: el precio va
+  sin IVA siempre.
+- Sin tocar: el flujo, el plan de pagos y el inicio siguen restando lo del
+  banco del precio (son dinero que entra, con IVA). Si se quiere distinto, es
+  decisión de Mike.
+
+---
+
 # 18-nov-2026 · la hoja del presupuesto (API 0.106.0)
 
 **Medido aquí: contra staging en `next dev`, escribir, Enter, pegar tres

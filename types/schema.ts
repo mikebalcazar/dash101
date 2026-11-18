@@ -206,6 +206,14 @@ export interface Proyecto {
    *  y no hay saldo que calcular. */
   precio_por_cargar?: boolean;
   n_conceptos?: number;
+  /** Contrato 0.107.0 · SIN IVA, en pesos (Mike, 18-nov-2026: «En los
+   *  estados de cuenta de los proyectos, siempre haz las cuentas sin IVA y
+   *  desglosa por aparte el IVA»). `cobrado` y `pagado` siguen siendo lo
+   *  que tocó el banco, con IVA: los usan las cuentas y el flujo. */
+  cobrado_sin_iva?: number;
+  iva_cobrado?: number;
+  pagado_sin_iva?: number;
+  iva_pagado?: number;
   estado: EstadoProyecto;
   fecha_inicio: Timestamp | FieldValue;
   fecha_fin_estimada?: Timestamp | null;

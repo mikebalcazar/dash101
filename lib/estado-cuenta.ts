@@ -44,8 +44,11 @@ export interface ProyectoDelCliente {
   subtotal: number;
   iva: number;
   total: number;
+  /** 0.107.0 · SIN IVA: la suma de los subtotales de sus pagos. */
   cobrado: number;
-  /** Contra el TOTAL CON IVA. null: el precio está por cargar. */
+  /** 0.107.0 · el IVA que se le cobró, aparte. */
+  iva_cobrado: number;
+  /** 0.107.0 · SIN IVA: precio menos lo cobrado. null: por cargar. */
   saldo: number | null;
   precio_por_cargar: boolean;
   /** Lo cotizado: los conceptos de cobro, agrupados por cotización. */
@@ -62,7 +65,9 @@ export interface EstadoDeCuenta {
   otros_pagos: CobroDelCliente[];
   /** En PESOS. `total` es lo cotizado con IVA de los proyectos con precio;
    *  `por_cargar`, cuántos proyectos no lo tienen todavía. */
-  totales: { vendido: number; total: number; cobrado: number; saldo: number; sin_proyecto: number; por_cargar: number };
+  totales: { vendido: number; total: number; cobrado: number; saldo: number; sin_proyecto: number; por_cargar: number;
+    /** 0.107.0 · todo lo de arriba va SIN IVA; esto es el IVA cobrado, aparte. */
+    iva_cobrado: number };
 }
 
 const grupo = (g: Record<string, any>): GrupoDelEstado => ({
@@ -90,7 +95,7 @@ export async function estadoDeCuenta(cliente_id: string): Promise<EstadoDeCuenta
     cliente: EstadoDeCuenta['cliente'];
     proyectos: Array<Record<string, unknown>>;
     otros_pagos: Array<Record<string, unknown>>;
-    totales: { vendido: number; total?: number; cobrado: number; saldo: number; sin_proyecto: number; por_cargar?: number };
+    totales: { vendido: number; total?: number; cobrado: number; saldo: number; sin_proyecto: number; por_cargar?: number; iva_cobrado?: number };
   }>(`/orgs/${org()}/clientes/${encodeURIComponent(cliente_id)}/estado-de-cuenta`);
 
   return {
@@ -104,6 +109,7 @@ export async function estadoDeCuenta(cliente_id: string): Promise<EstadoDeCuenta
       iva: aPesos((p.iva ?? 0) as number),
       total: aPesos((p.total ?? p.precio_venta) as number),
       cobrado: aPesos(p.cobrado as number),
+      iva_cobrado: aPesos((p.iva_cobrado ?? 0) as number),
       saldo: p.saldo === null ? null : aPesos(p.saldo as number),
       precio_por_cargar: Boolean(p.precio_por_cargar),
       grupos: ((p.grupos as Array<Record<string, any>>) ?? []).map(grupo),
@@ -115,6 +121,7 @@ export async function estadoDeCuenta(cliente_id: string): Promise<EstadoDeCuenta
       cobrado: aPesos(r.totales.cobrado),
       saldo: aPesos(r.totales.saldo), sin_proyecto: aPesos(r.totales.sin_proyecto),
       por_cargar: Number(r.totales.por_cargar ?? 0),
+      iva_cobrado: aPesos((r.totales.iva_cobrado ?? 0) as number),
     },
   };
 }

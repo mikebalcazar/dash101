@@ -19,6 +19,12 @@
  * que un día no dijeran lo mismo. Aquí queda una liga a
  * `/proyectos/:id/estado.xlsx`.
  *
+ * 0.107.0 · SIN IVA (Mike, 18-nov-2026): «En los estados de cuenta de los
+ * proyectos, siempre haz las cuentas sin IVA y desglosa por aparte el IVA
+ * que se haya pagado o cobrado.» Y cada pago se abre con un clic: su detalle,
+ * sus facturas y las que se le pueden ligar («NECESITO PODER LIGAR LOS PAGOS
+ * CARGADOS NUEVOS CON LAS FACTURAS EXISTENTES»).
+ *
  * AQUÍ NO SE SUMA NADA. Todos los totales llegan resueltos de la API, que es
  * la MISMA ruta que abre peek101. Es lo que garantiza que el papel que manda
  * la empresa y el que baja el cliente digan lo mismo.
@@ -27,8 +33,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { IconArrowLeft, IconPrinter, IconTableExport } from "@tabler/icons-react";
-import { estadoDelProyecto, ligaDelExcel, tituloDelGrupo, type EstadoDelProyecto } from "@/lib/estado-proyecto";
+import { IconArrowLeft, IconChevronRight, IconPrinter, IconTableExport } from "@tabler/icons-react";
+import { estadoDelProyecto, ligaDelExcel, nombreDeFactura, tituloDelGrupo, type EstadoDelProyecto, type PagoDelEstado } from "@/lib/estado-proyecto";
+import { PagoYFacturas } from "@/components/pago-y-facturas";
 /* `formatMontoExact` y no `formatMonto`: éste último redondea a pesos
  * enteros, y en un papel que se le manda a un cliente eso rompe la cuenta.
  * Con «IVA incluido» el subtotal casi nunca es redondo —de $111,250 salen
@@ -54,9 +61,11 @@ export default function EstadoDelProyectoPage() {
   const [d, setD] = useState<EstadoDelProyecto | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
+  const [abierto, setAbierto] = useState<PagoDelEstado | null>(null);
 
-  const cargar = useCallback(async () => {
-    setCargando(true); setError("");
+  const cargar = useCallback(async (callado = false) => {
+    if (!callado) setCargando(true);
+    setError("");
     try { setD(await estadoDelProyecto(id)); }
     catch (e) { setError(e instanceof Error ? e.message : "No se pudo abrir el estado de cuenta."); }
     finally { setCargando(false); }
@@ -98,7 +107,7 @@ export default function EstadoDelProyectoPage() {
       </div>
 
       <p className="print:hidden text-xs text-ink-muted mb-4">
-        El PDF lo hace tu navegador: al picarle se abre la ventana de imprimir y ahí escoges{" "}
+        Pica un pago para ver su detalle y ligarle una factura. El PDF lo hace tu navegador: al picarle se abre la ventana de imprimir y ahí escoges{" "}
         <b>«Guardar como PDF»</b>. El Excel trae dos hojas, los conceptos y los pagos, con los
         mismos números. Es el mismo documento que tu cliente puede bajar desde su portal.
       </p>
@@ -124,9 +133,9 @@ export default function EstadoDelProyectoPage() {
         {/* El saldo general. Es lo primero que se busca al abrir el papel. */}
         <div className="grid grid-cols-3 gap-3 my-5 no-partir">
           {[
-            { que: "Total del proyecto", dice: t.precio_por_cargar ? "Por cargar" : formatMontoExact(t.total, "MXN"), tono: "text-ink-dim" },
-            { que: "Pagado", dice: formatMontoExact(t.cobrado, "MXN"), tono: "text-mint-900" },
-            { que: "Saldo", dice: t.precio_por_cargar || t.saldo === null ? "—" : formatMontoExact(t.saldo, "MXN"), tono: (t.saldo ?? 0) > 0 ? "text-mauve-900" : "text-ink-dim" },
+            { que: "Precio, sin IVA", dice: t.precio_por_cargar ? "Por cargar" : formatMontoExact(t.total, "MXN"), tono: "text-ink-dim" },
+            { que: "Pagado, sin IVA", dice: formatMontoExact(t.cobrado, "MXN"), tono: "text-mint-900" },
+            { que: "Saldo, sin IVA", dice: t.precio_por_cargar || t.saldo === null ? "—" : formatMontoExact(t.saldo, "MXN"), tono: (t.saldo ?? 0) > 0 ? "text-mauve-900" : "text-ink-dim" },
           ].map((k) => (
             <div key={k.que} data-kpi={k.que} className="bg-cream/60 rounded-xl p-3 print:bg-transparent print:border print:border-black/15">
               <p className="text-[11px] text-ink-muted">{k.que}</p>
@@ -134,10 +143,9 @@ export default function EstadoDelProyectoPage() {
             </div>
           ))}
         </div>
-        <p className="text-[11px] text-ink-muted -mt-3 mb-5">
-          El saldo es contra el <b>total con IVA</b>, que es lo que se va a pagar. En las otras
-          pantallas de dash101 el saldo del proyecto se enseña sin IVA, porque ahí la pregunta es
-          cuánto se vendió; aquí es cuánto se debe.
+        <p className="text-[11px] text-ink-muted -mt-3 mb-5" data-iva-aparte>
+          Todo va <b>sin IVA</b>: el precio son los conceptos y lo pagado es el subtotal de cada pago.
+          El IVA que se cobró va aparte: <span className="tabular">{formatMontoExact(t.iva_cobrado, "MXN")}</span>.
         </p>
 
         {/* 0.105.0 · Lo que se cobra: los conceptos, agrupados por cotización
@@ -185,20 +193,10 @@ export default function EstadoDelProyectoPage() {
               </tbody>
             ))}
             <tfoot>
-              <tr>
-                <td colSpan={2} />
-                <td className="py-1.5 text-right text-ink-muted">Subtotal</td>
-                <td className="py-1.5 text-right tabular">{formatMontoExact(t.subtotal, "MXN")}</td>
-              </tr>
-              <tr>
-                <td colSpan={2} />
-                <td className="py-1.5 text-right text-ink-muted">IVA {t.tasa_iva / 100}%</td>
-                <td className="py-1.5 text-right tabular">{formatMontoExact(t.iva, "MXN")}</td>
-              </tr>
               <tr className="border-t-2 border-black/20 font-medium">
                 <td colSpan={2} />
-                <td className="py-2 text-right">Total</td>
-                <td className="py-2 text-right tabular">{formatMontoExact(t.total, "MXN")}</td>
+                <td className="py-2 text-right">Precio, sin IVA</td>
+                <td className="py-2 text-right tabular" data-precio-sin-iva>{formatMontoExact(t.total, "MXN")}</td>
               </tr>
             </tfoot>
           </table>
@@ -208,39 +206,63 @@ export default function EstadoDelProyectoPage() {
         {d.movimientos.length === 0 ? (
           <p className="text-sm text-ink-muted">Todavía no hay pagos de este proyecto.</p>
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full text-sm" data-pagos>
             <thead className="text-xs text-ink-muted uppercase tracking-wide border-b border-black/10">
               <tr>
                 <th className="text-left py-1.5 font-medium">Fecha</th>
                 <th className="text-left py-1.5 font-medium">Concepto</th>
-                <th className="text-right py-1.5 font-medium">Monto</th>
+                <th className="text-left py-1.5 font-medium hidden sm:table-cell">Factura</th>
+                <th className="text-right py-1.5 font-medium">Sin IVA</th>
+                <th className="text-right py-1.5 font-medium">IVA</th>
+                <th className="w-5 print:hidden" />
               </tr>
             </thead>
             <tbody>
+              {/* Cada pago se abre con un clic (o Enter): su detalle, sus
+                  facturas y las que se le pueden ligar. En el papel impreso
+                  no hay nada que picar. */}
               {d.movimientos.map((m) => (
-                <tr key={m.id} className="border-b border-black/5 no-partir">
+                <tr key={m.id} data-pago={m.id} tabIndex={0} role="button" aria-label={`Abrir el pago del ${m.fecha}`}
+                  onClick={() => setAbierto(m)} onKeyDown={(e) => { if (e.key === "Enter") setAbierto(m); }}
+                  className="border-b border-black/5 no-partir cursor-pointer hover:bg-cream/50 focus:outline-none focus:bg-cream/50 print:cursor-auto">
                   <td className="py-1.5 text-ink-dim tabular">{m.fecha}</td>
                   <td className="py-1.5 text-ink-dim">
                     {m.descripcion || "Pago"}
                     {m.cuenta_nombre && <span className="text-ink-muted text-xs"> · {m.cuenta_nombre}</span>}
                   </td>
-                  <td className="py-1.5 text-right tabular text-mint-900">{formatMontoExact(m.monto, "MXN")}</td>
+                  <td className="py-1.5 text-xs hidden sm:table-cell" data-pago-factura>
+                    {m.facturas.length
+                      ? <span className="text-ink-dim">{m.facturas.map(nombreDeFactura).join(", ")}</span>
+                      : <span className="text-ink-muted print:hidden">Sin factura · ligar</span>}
+                  </td>
+                  <td className="py-1.5 text-right tabular text-mint-900">{formatMontoExact(m.sin_iva, "MXN")}</td>
+                  <td className="py-1.5 text-right tabular text-ink-muted">{m.iva ? formatMontoExact(m.iva, "MXN") : "—"}</td>
+                  <td className="py-1.5 text-right text-ink-muted print:hidden"><IconChevronRight size={14} /></td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr className="border-t-2 border-black/20 font-medium">
                 <td colSpan={2} className="py-2">Pagado</td>
-                <td className="py-2 text-right tabular">{formatMontoExact(t.cobrado, "MXN")}</td>
+                <td className="hidden sm:table-cell" />
+                <td className="py-2 text-right tabular" data-pagado-sin-iva>{formatMontoExact(t.cobrado, "MXN")}</td>
+                <td className="py-2 text-right tabular text-ink-muted" data-iva-cobrado>{formatMontoExact(t.iva_cobrado, "MXN")}</td>
+                <td className="print:hidden" />
               </tr>
               <tr className="font-medium">
-                <td colSpan={2} className="py-1">Saldo</td>
+                <td colSpan={2} className="py-1">Saldo, sin IVA</td>
+                <td className="hidden sm:table-cell" />
                 <td className="py-1 text-right tabular" data-saldo>{saldoDice}</td>
+                <td colSpan={2} />
               </tr>
             </tfoot>
           </table>
         )}
       </article>
+
+      {abierto && (
+        <PagoYFacturas pago={abierto} alCerrar={() => setAbierto(null)} alCambiar={() => { void cargar(true); }} />
+      )}
     </div>
   );
 }

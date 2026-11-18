@@ -30,7 +30,7 @@ import { createCuenta } from "@/lib/cuentas";
 import { createMovimiento } from "@/lib/movimientos";
 import { createProyecto, getProyecto, updateProyecto } from "@/lib/proyectos";
 import { bajar } from "@/lib/api/cliente";
-import { desglose, estadoDelProyecto, ligaDelExcel } from "@/lib/estado-proyecto";
+import { estadoDelProyecto, ligaDelExcel } from "@/lib/estado-proyecto";
 import { crearConcepto } from "@/lib/conceptos";
 
 const CORREO = process.env.CORREO_SUPERADMIN ?? "mike@forespot.com";
@@ -88,7 +88,9 @@ describe("los cinco pedazos que pidió Mike", () => {
     const d = await estadoDelProyecto(ids.proyecto);
     expect(d.totales.saldo, "1) saldo general").toBeTypeOf("number");
     expect(d.items.length, "2) lista de productos").toBe(2);
-    expect(d.totales.subtotal + d.totales.iva, "3) subtotal, IVA y total").toBe(d.totales.total);
+    // 0.107.0 · sin IVA: el precio es el subtotal y el total; el IVA es el cobrado, aparte.
+    expect(d.totales.subtotal, "3) precio sin IVA").toBe(d.totales.total);
+    expect(d.totales.iva, "y el IVA cobrado, aparte").toBe(d.totales.iva_cobrado);
     expect(d.movimientos.length, "4) movimientos del proyecto").toBe(1);
     expect(d.generado_at, "5) la fecha del día que se genera").toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(Math.abs(Date.now() - Date.parse(d.generado_at))).toBeLessThan(180_000);
@@ -139,46 +141,32 @@ describe("0.105.0 · los conceptos de cobro", () => {
   });
 });
 
-describe("el IVA de la obra", () => {
-  it("nace en «+ IVA» y el saldo va contra el total", async () => {
+describe("0.107.0 · sin IVA, con el IVA aparte", () => {
+  /* Mike, 18-nov-2026: «En los estados de cuenta de los proyectos, siempre
+   * haz las cuentas sin IVA y desglosa por aparte el IVA que se haya pagado o
+   * cobrado.» Hasta 0.106 el papel le sumaba 16 % al precio. */
+  it("el precio no lleva IVA y el saldo es precio menos lo cobrado sin IVA", async () => {
     const d = await estadoDelProyecto(ids.proyecto);
-    expect(d.totales.iva_incluido).toBe(false);
     expect(d.totales.subtotal).toBe(111_250);
-    expect(d.totales.iva).toBe(17_800);
-    expect(d.totales.total).toBe(129_050);
-    expect(d.totales.saldo).toBe(129_050 - 50_000);
-  });
-
-  it("la vista previa del formulario da lo MISMO que el servidor", async () => {
-    /* La única cuenta que se hace del lado del navegador, comparada contra
-     * la del servidor con la misma obra. Si se separan un centavo, el botón
-     * de «IVA incluido» promete un total que el papel no dice. */
-    for (const incluido of [false, true]) {
-      await updateProyecto(ids.proyecto, { iva_incluido: incluido });
-      const d = await estadoDelProyecto(ids.proyecto);
-      const previa = desglose(111_250, incluido, d.totales.tasa_iva);
-      expect(previa.subtotal, `subtotal con iva_incluido=${incluido}`).toBe(d.totales.subtotal);
-      expect(previa.iva, `IVA con iva_incluido=${incluido}`).toBe(d.totales.iva);
-      expect(previa.total, `total con iva_incluido=${incluido}`).toBe(d.totales.total);
-    }
-  });
-
-  it("«IVA incluido» desglosa hacia atrás y cuadra", async () => {
-    await updateProyecto(ids.proyecto, { iva_incluido: true });
-    const d = await estadoDelProyecto(ids.proyecto);
     expect(d.totales.total).toBe(111_250);
-    expect(Math.round((d.totales.subtotal + d.totales.iva) * 100)).toBe(Math.round(d.totales.total * 100));
+    expect(d.totales.cobrado).toBe(50_000);
+    expect(d.totales.saldo).toBe(111_250 - 50_000);
   });
 
-  it("cambiar el interruptor no mueve un peso guardado", async () => {
-    const antes = (await getProyecto(ids.proyecto))!.precio_venta;
-    await updateProyecto(ids.proyecto, { iva_incluido: false });
+  it("un pago sin factura cuenta completo y no trae IVA; el banco dice lo mismo", async () => {
+    const d = await estadoDelProyecto(ids.proyecto);
+    expect(d.movimientos[0]).toMatchObject({ monto: 50_000, sin_iva: 50_000, iva: 0, facturas: [] });
+    expect(d.totales.iva_cobrado).toBe(0);
+    expect(d.totales.cobrado_con_iva).toBe(50_000);
+  });
+
+  it("el proyecto trae sus cachés sin IVA en pesos", async () => {
     const p = (await getProyecto(ids.proyecto))!;
-    expect(p.precio_venta).toBe(antes);
-    expect(p.iva_incluido).toBe(false);
-    expect(p.items!.reduce((t, i) => t + i.monto, 0)).toBe(antes);
+    expect(p.cobrado_sin_iva).toBe(50_000);
+    expect(p.iva_cobrado).toBe(0);
   });
 });
+
 
 describe("el Excel", () => {
   it("la liga apunta a la ruta de la API y baja un .xlsx de verdad", async () => {

@@ -17,7 +17,6 @@ import { Timestamp } from "firebase/firestore";
 import { IconArrowLeft, IconTrash, IconPlus, IconEdit, IconFileText } from "@tabler/icons-react";
 import { formatDateShort } from "@/lib/format";
 import { LigaDeLaObra } from "@/components/obra-del-proyecto";
-import { desglose } from "@/lib/estado-proyecto";
 import { FusionarProyecto } from "@/components/fusionar-proyecto";
 import { PlanDePagos } from "@/components/plan-de-pagos";
 import { ConceptosDeCobro } from "@/components/conceptos-de-cobro";
@@ -178,10 +177,17 @@ export default function ProyectoDetallePage() {
     );
 
   const p = proyecto;
-  const pctCobrado = p.precio_venta > 0 ? (p.cobrado / p.precio_venta) * 100 : 0;
-  const pctPagado = p.compromiso_total > 0 ? (p.pagado / p.compromiso_total) * 100 : 0;
-  const porCobrar = p.precio_venta - p.cobrado;
-  const porPagar = p.compromiso_total - p.pagado;
+  /* 0.107.0 · El proyecto se lee SIN IVA (Mike, 18-nov-2026: «En los estados
+   * de cuenta de los proyectos, siempre haz las cuentas sin IVA y desglosa
+   * por aparte el IVA que se haya pagado o cobrado»). Hasta aquí se dividía
+   * lo cobrado CON IVA entre el precio sin IVA: HOLCIM decía 80 % cobrado y
+   * eran 70 %. El capital disponible de arriba sí es lo del banco. */
+  const cobradoSinIva = p.cobrado_sin_iva ?? p.cobrado;
+  const pagadoSinIva = p.pagado_sin_iva ?? p.pagado;
+  const pctCobrado = p.precio_venta > 0 ? (cobradoSinIva / p.precio_venta) * 100 : 0;
+  const pctPagado = p.compromiso_total > 0 ? (pagadoSinIva / p.compromiso_total) * 100 : 0;
+  const porCobrar = p.precio_venta - cobradoSinIva;
+  const porPagar = p.compromiso_total - pagadoSinIva;
   /* 0.105.0 · sin conceptos de cobro el precio está POR CARGAR: no vale $0,
    * no se sabe todavía. No hay porcentaje cobrado, ni pendiente, ni margen. */
   const porCargar = Boolean(p.precio_por_cargar);
@@ -275,8 +281,8 @@ export default function ProyectoDetallePage() {
                 <span className="font-medium" data-precio-venta>{porCargar ? "Por cargar" : formatMonto(p.precio_venta, "MXN")}</span>
               </div>
               <div className="flex justify-between text-sm text-mint-900 mb-1.5">
-                <span>Cobrado</span>
-                <span className="font-medium">{formatMonto(p.cobrado, "MXN")}</span>
+                <span>Cobrado <span className="text-[10px] text-mint-label">sin IVA</span></span>
+                <span className="font-medium" data-cobrado-sin-iva>{formatMonto(cobradoSinIva, "MXN")}</span>
               </div>
               <div className="h-1.5 bg-white/50 rounded-full overflow-hidden">
                 <div
@@ -288,10 +294,13 @@ export default function ProyectoDetallePage() {
                 {porCargar
                   ? <span>Sin precio no hay saldo: carga los conceptos de cobro</span>
                   : <>
-                      <span>{pctCobrado.toFixed(0)}% cobrado</span>
+                      <span data-pct-cobrado>{pctCobrado.toFixed(0)}% cobrado</span>
                       <span>{formatMonto(porCobrar, "MXN")} pendiente</span>
                     </>}
               </div>
+              {(p.iva_cobrado ?? 0) > 0 && (
+                <p className="text-[10px] text-mint-label mt-1" data-iva-cobrado>IVA cobrado, aparte: {formatMonto(p.iva_cobrado ?? 0, "MXN")}</p>
+              )}
             </div>
 
             <div className="bg-mauve-50 rounded-2xl p-4">
@@ -301,8 +310,8 @@ export default function ProyectoDetallePage() {
                 <span className="font-medium">{formatMonto(p.compromiso_total, "MXN")}</span>
               </div>
               <div className="flex justify-between text-sm text-mauve-900 mb-1.5">
-                <span>Pagado</span>
-                <span className="font-medium">{formatMonto(p.pagado, "MXN")}</span>
+                <span>Pagado <span className="text-[10px] text-mauve-label">sin IVA</span></span>
+                <span className="font-medium">{formatMonto(pagadoSinIva, "MXN")}</span>
               </div>
               <div className="h-1.5 bg-white/50 rounded-full overflow-hidden">
                 <div
@@ -314,6 +323,9 @@ export default function ProyectoDetallePage() {
                 <span>{pctPagado.toFixed(0)}% pagado</span>
                 <span>{formatMonto(porPagar, "MXN")} pendiente</span>
               </div>
+              {(p.iva_pagado ?? 0) > 0 && (
+                <p className="text-[10px] text-mauve-label mt-1">IVA pagado, aparte: {formatMonto(p.iva_pagado ?? 0, "MXN")}</p>
+              )}
             </div>
           </div>
 
@@ -600,55 +612,14 @@ function ProyectoEditForm(props: EditFormProps) {
         </div>
       </div>
 
-      {/* Cómo lleva el IVA esta obra.
-       *
-       * Va pegado al precio de venta porque es una pregunta SOBRE esa cifra,
-       * no un ajuste aparte: dice si lo que está capturado arriba es el
-       * subtotal o el total. Mike lo escogió con botones el 21-sep, «que lo
-       * diga cada proyecto», porque en su taller conviven HOLCIM, que pide
-       * desglose, y una casa cotizada «con todo».
-       *
-       * No mueve un solo peso guardado. Sólo cambia lo que dice el estado de
-       * cuenta, y por eso la consecuencia va escrita con el número: el que
-       * lo marque mal lo va a ver aquí y no en el papel que ya mandó. */}
-      <div>
-        <label className="text-xs font-medium text-ink-dim block mb-1.5">
-          El precio de venta, ¿cómo va?
-        </label>
-        <div className="flex gap-2">
-          {[
-            { v: false, t: "Más IVA", dice: "es el subtotal y el IVA se suma" },
-            { v: true, t: "IVA incluido", dice: "ya lo trae y se desglosa" },
-          ].map((o) => (
-            <button
-              key={o.t}
-              type="button"
-              onClick={() => props.setIvaIncluido(o.v)}
-              aria-pressed={props.ivaIncluido === o.v}
-              className={`flex-1 text-left rounded-xl px-3 py-2 text-xs border transition ${
-                props.ivaIncluido === o.v
-                  ? "bg-ink text-cream border-ink"
-                  : "bg-white text-ink-dim border-black/10 hover:border-black/25"
-              }`}
-            >
-              <span className="block font-medium">{o.t}</span>
-              <span className={`block text-[11px] ${props.ivaIncluido === o.v ? "opacity-75" : "text-ink-muted"}`}>
-                {o.dice}
-              </span>
-            </button>
-          ))}
-        </div>
-        {(() => {
-          const d = desglose(parseFloat(props.precioVenta) || 0, props.ivaIncluido, props.proyecto.tasa_iva ?? 1600);
-          return (
-            <p className="text-[11px] text-ink-muted mt-1.5">
-              En el estado de cuenta se va a leer: subtotal {formatMonto(d.subtotal, "MXN")}, IVA{" "}
-              {formatMonto(d.iva, "MXN")}, total {formatMonto(d.total, "MXN")}. No cambia nada de lo
-              guardado.
-            </p>
-          );
-        })()}
-      </div>
+      {/* 0.107.0 · Aquí se escogía «Más IVA» o «IVA incluido». Ya no: Mike,
+          18-nov-2026, «los conceptos son antes de IVA y los cobros (facturas)
+          se contabilizan en el estado de cuenta sin IVA». El precio va sin IVA
+          siempre, y el IVA que se cobra se ve aparte. */}
+      <p className="text-[11px] text-ink-muted" data-precio-sin-iva>
+        El precio va <b>sin IVA</b>. En el estado de cuenta, lo cobrado también se cuenta sin IVA y el
+        IVA que se cobró se ve aparte.
+      </p>
 
       <div className="pt-2">
         <div className="flex justify-between items-baseline mb-2">
