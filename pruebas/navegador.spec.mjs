@@ -939,8 +939,9 @@ test('editar los ítems del proyecto: se borra uno, se guarda, y NO vuelve', asy
   assert.deepEqual(quedaron, ['Cocina grande', 'Isla'], 'quedó LO QUE SE VE: ni el borrado ni copias');
 
   const p = await api(pag, `/orgs/${ORG}/proyectos/${proyecto.id}`);
-  // 0.105.0 · los ítems ya no le ponen precio (Mike, 18-nov-2026): por cargar.
-  assert.equal(p.precio_venta, 0, 'el precio no sale de los ítems');
+  // 0.105.0 · los ítems ya no le ponen precio (Mike, 18-nov-2026): el precio
+  // es el concepto de $350 que se le cargó arriba, por más ítems que se editen.
+  assert.equal(p.precio_venta, 350_00, 'el precio es el concepto, no sale de los ítems');
 
   // Guardar otra vez sin tocar nada tampoco duplica.
   await pag.getByRole('button', { name: /Editar la lista/ }).first().click();
