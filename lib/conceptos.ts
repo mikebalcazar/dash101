@@ -74,6 +74,63 @@ export async function borrarConcepto(id: string): Promise<void> {
   await pedir(`/orgs/${org()}/conceptos/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
+/* ─────────────── la hoja del presupuesto (0.106.0) ───────────────
+ *
+ * Mike, 18-nov-2026, con botones: «Hoja dentro de dash». La hoja se guarda
+ * completa: los renglones con id se quedan, los nuevos nacen y los que no
+ * vienen se quitan. Todo o nada, y la API suma el precio una vez. */
+
+export interface RenglonDeHoja {
+  id?: string | null;
+  descripcion: string;
+  cantidad: number;
+  /** En PESOS. */
+  precio_unitario: number;
+}
+
+export async function guardarHoja(proyecto_id: string, renglones: RenglonDeHoja[]): Promise<{ conceptos: Concepto[]; creados: number; cambiados: number; quitados: number }> {
+  const r = await pedir<{ conceptos: FilaConcepto[]; creados: number; cambiados: number; quitados: number }>(
+    `/orgs/${org()}/proyectos/${encodeURIComponent(proyecto_id)}/conceptos`,
+    {
+      method: 'PUT',
+      body: { renglones: renglones.map((x) => ({ id: x.id ?? null, descripcion: x.descripcion.trim(), cantidad: x.cantidad, precio_unitario: aCentavos(x.precio_unitario) })) },
+    },
+  );
+  return { conceptos: r.conceptos.map(concepto), creados: r.creados, cambiados: r.cambiados, quitados: r.quitados };
+}
+
+/* Las plantillas: un nombre y sus renglones. Usarla llena la hoja; no mueve
+ * un peso hasta que la hoja se guarda. */
+
+export interface Plantilla {
+  id: string;
+  nombre: string;
+  /** precio_unitario en PESOS. */
+  renglones: Array<{ descripcion: string; cantidad: number; precio_unitario: number }>;
+}
+
+interface FilaPlantilla { id: string; nombre: string; renglones: Array<{ descripcion: string; cantidad: number; precio_unitario: number }> | null }
+
+const plantilla = (f: FilaPlantilla): Plantilla => ({
+  id: f.id, nombre: f.nombre,
+  renglones: (f.renglones ?? []).map((r) => ({ descripcion: r.descripcion, cantidad: Number(r.cantidad ?? 1), precio_unitario: aPesos(r.precio_unitario) })),
+});
+
+export async function listarPlantillas(): Promise<Plantilla[]> {
+  return (await listarCompleto<FilaPlantilla>('plantillas_presupuesto')).map(plantilla);
+}
+
+export async function crearPlantilla(nombre: string, renglones: Plantilla['renglones']): Promise<Plantilla> {
+  return plantilla(await pedir<FilaPlantilla>(`/orgs/${org()}/plantillas_presupuesto`, {
+    method: 'POST',
+    body: { nombre: nombre.trim(), renglones: renglones.map((r) => ({ descripcion: r.descripcion.trim(), cantidad: r.cantidad, precio_unitario: aCentavos(r.precio_unitario) })) },
+  }));
+}
+
+export async function borrarPlantilla(id: string): Promise<void> {
+  await pedir(`/orgs/${org()}/plantillas_presupuesto/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
 /* ─────────────── importar de quote101 ─────────────── */
 
 export interface CotizacionParaImportar {
