@@ -78,6 +78,10 @@ export default function NuevaOrdenPage() {
    * de pedir el reembolso (la orden ya no lleva cuenta). */
   const [cuentaGuardada, setCuentaGuardada] = useState<CuentaDeReembolso | null>(null);
   const [cambiandoCuenta, setCambiandoCuenta] = useState(false);
+  /* Hasta que /permisos conteste no se sabe si hay cuenta guardada: antes se
+   * pintaba la forma de cuenta nueva y, al llegar la guardada, se cambiaba
+   * debajo del dedo (y de la prueba del navegador, 18-nov). Se espera. */
+  const [cuentaLeida, setCuentaLeida] = useState(false);
   const [rcClabe, setRcClabe] = useState("");
   const [rcBanco, setRcBanco] = useState("");
   const [rcBeneficiario, setRcBeneficiario] = useState("");
@@ -85,8 +89,8 @@ export default function NuevaOrdenPage() {
   const clabeLimpia = rcClabe.replace(/[\s-]/g, "");
   const firma = useRef<FirmaCuenta>(null);
   const [firmado, setFirmado] = useState(false);
-  const cuentaCuadra = !formaCuenta
-    || (clabeValida(clabeLimpia) && rcBanco.trim().length > 0 && rcBeneficiario.trim().length > 0 && firmado);
+  const cuentaCuadra = (!reembolso || cuentaLeida) && (!formaCuenta
+    || (clabeValida(clabeLimpia) && rcBanco.trim().length > 0 && rcBeneficiario.trim().length > 0 && firmado));
 
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
@@ -112,6 +116,7 @@ export default function NuevaOrdenPage() {
         // La primera vez, el beneficiario es quien pide.
         if (!p.cuenta_reembolso?.clabe && user?.displayName) setRcBeneficiario((b) => b || user.displayName || "");
       } catch { /* se decide al mandar */ }
+      setCuentaLeida(true);
     })();
   }, [empresa, cargandoEmpresa]);
 
@@ -283,7 +288,10 @@ export default function NuevaOrdenPage() {
 
         {/* 0.92.0 · A qué cuenta se me regresa: sólo en reembolso. Mike,
             10-oct-2026: nunca a un proveedor ni a un tercero. */}
-        {reembolso && (
+        {reembolso && !cuentaLeida && (
+          <p className="text-xs text-ink-muted" data-cuenta-buscando>Buscando tu cuenta para el reembolso…</p>
+        )}
+        {reembolso && cuentaLeida && (
           <div data-cuenta-reembolso>
             <span className={ETIQUETA}>A qué cuenta te lo regresamos</span>
             <p className="text-xs text-ink-muted mb-2">
