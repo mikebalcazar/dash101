@@ -90,6 +90,9 @@ export interface FilaProyecto {
   /* 0.39.0 · cómo lleva el IVA esta obra en su estado de cuenta. `tasa_iva`
    * en PUNTOS BASE (1600 = 16 %); `iva_incluido` 0/1. */
   tasa_iva?: number; iva_incluido?: number;
+  /* 0.105.0 · cuántos conceptos de cobro tiene: 0 es «precio por cargar».
+   * Una API de antes no lo manda. */
+  n_conceptos?: number;
   creado_at: string; actualizado_at: string | null;
 }
 export interface FilaItem { id: string; proyecto_id: string | null; nombre: string; descripcion: string | null; monto: number; cantidad: number; estado: string; etapa: number; clave: string | null; tipo: string | null; fecha_entrega: string | null; origen: { quell_id?: string } | null; partida?: string; orden?: number;
@@ -217,6 +220,9 @@ export function proyecto(
     disponible: cobrado - pagado, margen_proyectado: aPesos(f.precio_venta) - compromiso,
     partidas: partes.partidas.filter((p) => p.proyecto_id === f.id).map(partida),
     tasa_iva: Number(f.tasa_iva ?? 1600), iva_incluido: Number(f.iva_incluido ?? 0) === 1,
+    n_conceptos: Number(f.n_conceptos ?? 0),
+    // Una API anterior a 0.105.0 no manda la cuenta: ahí el precio era de los ítems.
+    precio_por_cargar: f.n_conceptos !== undefined && Number(f.n_conceptos) === 0,
     estado: f.estado, fecha_inicio: ts(f.fecha_inicio ?? f.creado_at),
     fecha_fin_estimada: aTimestamp(f.fecha_fin_estimada), fecha_cierre: aTimestamp(f.fecha_cierre),
     creado_at: ts(f.creado_at), creado_por: '', actualizado_at: aTimestamp(f.actualizado_at) ?? undefined,

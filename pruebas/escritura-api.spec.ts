@@ -10,6 +10,7 @@
  * se reinicia al terminar con DELETE /admin/orgs/:o (existe solo fuera de
  * producción). La org `demo` no se toca: es la que ven peek101 y las capturas. */
 
+import { crearConcepto } from "@/lib/conceptos";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sembrarItems } from "./sembrar";
 import type { Timestamp } from "firebase/firestore";
@@ -127,7 +128,7 @@ describe("la empresa, cuentas, cliente, proveedor", () => {
 });
 
 describe("el proyecto: precio, ítems, partidas y los cachés que la API recalcula", () => {
-  it("el proyecto nace sin ítems (dash101 no los genera, 2-oct); sembrado uno por la API, el precio es su suma", async () => {
+  it("el proyecto nace sin ítems (dash101 no los genera, 2-oct); el precio es la suma de sus conceptos de cobro (0.105.0)", async () => {
     ids.proyecto = await createProyecto(uid, {
       nombre: "Cocina de prueba", cliente_id: ids.cliente, cliente_nombre: "Cliente de Prueba",
       precio_venta: 5000, partidas: [{ proveedor_id: ids.proveedor, proveedor_nombre: "Maderas de Prueba", concepto: "Tablero", monto_acordado: 1200.75 }],
@@ -135,8 +136,14 @@ describe("el proyecto: precio, ítems, partidas y los cachés que la API recalcu
     });
     expect((await getProyecto(ids.proyecto))!.items, "el precio_venta ya no fabrica el ítem de la regla 1").toHaveLength(0);
     await sembrarItems(ORG, ids.proyecto, ids.cliente, [{ nombre: "Cocina de prueba", monto: 5000 }]);
+    // 0.105.0 · el ítem ya no le pone precio (Mike, 18-nov-2026): por cargar.
+    const sinPrecio = (await getProyecto(ids.proyecto))!;
+    expect(sinPrecio.precio_venta).toBe(0);
+    expect(sinPrecio.precio_por_cargar).toBe(true);
+    await crearConcepto(ids.proyecto, { descripcion: "Cocina de prueba", cantidad: 1, precio_unitario: 5000 });
     const p = (await getProyecto(ids.proyecto))!;
     expect(p.precio_venta).toBe(5000);
+    expect(p.precio_por_cargar).toBe(false);
     expect(p.items).toHaveLength(1);
     expect(p.items![0].nombre).toBe("Cocina de prueba");
     expect(p.items![0].monto).toBe(5000);
@@ -213,14 +220,14 @@ describe("el proyecto: precio, ítems, partidas y los cachés que la API recalcu
     expect(await listPlanDeProyecto(ids.proyecto)).toEqual([]);
   });
 
-  it("editar: ítems por id, partidas por proveedor; el precio es la suma de los ítems", async () => {
+  it("editar: ítems por id, partidas por proveedor; el precio no se mueve con los ítems", async () => {
     const antes = (await getProyecto(ids.proyecto))!;
     const cocina = antes.items![0].id;
     // La isla entra por la API (como desde quote101); dash101 sólo la edita.
     const [isla] = await sembrarItems(ORG, ids.proyecto, ids.cliente, [{ nombre: "Isla", monto: 1 }]);
     await updateProyecto(ids.proyecto, {
       nombre: "Cocina de prueba II",
-      precio_venta: 999, // se ignora siempre: el precio es la suma de los ítems
+      precio_venta: 999, // se ignora siempre: el precio son los conceptos de cobro
       items: [{ id: cocina, nombre: "Cocina", monto: 6000, fecha_entrega: new Date(2026, 9, 15) }, { id: isla, nombre: "Isla", monto: 1500 }],
       partidas: [{ proveedor_id: ids.proveedor, proveedor_nombre: "Maderas de Prueba", concepto: "Tablero y chapa", monto_acordado: 700.25 }],
       estado: "pausado",
@@ -229,7 +236,7 @@ describe("el proyecto: precio, ítems, partidas y los cachés que la API recalcu
     expect(p.nombre).toBe("Cocina de prueba II");
     expect(p.estado).toBe("pausado");
     expect(p.items).toHaveLength(2);
-    expect(p.precio_venta).toBe(7500);
+    expect(p.precio_venta, "0.105.0 · los ítems cambiaron, el precio no").toBe(5000);
     const c = p.items!.find((x) => x.id === cocina)!;
     expect(c.nombre).toBe("Cocina");
     expect(c.pagado).toBe(2000); // el ingreso sigue apuntando al mismo ítem
@@ -237,7 +244,7 @@ describe("el proyecto: precio, ítems, partidas y los cachés que la API recalcu
     expect(p.partidas).toHaveLength(1);
     expect(p.partidas[0]).toMatchObject({ concepto: "Tablero y chapa", monto_acordado: 700.25, monto_pagado: 700.25, estado: "pagado" });
     expect(p.compromiso_total).toBe(700.25);
-    expect(p.margen_proyectado).toBe(7500 - 700.25);
+    expect(p.margen_proyectado).toBe(5000 - 700.25);
   });
 
   it("quitar un producto lo cancela (no se borra) y deja de contar", async () => {
@@ -246,7 +253,7 @@ describe("el proyecto: precio, ítems, partidas y los cachés que la API recalcu
     await updateProyecto(ids.proyecto, { items: [{ id: cocina.id, nombre: "Cocina", monto: 6000 }] });
     const p = (await getProyecto(ids.proyecto))!;
     expect(p.items).toHaveLength(1);
-    expect(p.precio_venta).toBe(6000);
+    expect(p.precio_venta).toBe(5000);
     const lista = await listProyectos();
     expect(lista).toHaveLength(1);
   });

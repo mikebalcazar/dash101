@@ -16,6 +16,7 @@
  *     lado y reclama.
  */
 
+import { crearConcepto } from "@/lib/conceptos";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sembrarItems } from "./sembrar";
 import { fuente } from "@/lib/fuente";
@@ -51,6 +52,8 @@ beforeAll(async () => {
   });
   // Los ítems entran por la API, como desde quell101 o quote101 (2-oct).
   await sembrarItems(ORG, ids.casa, ids.holcim, [{ nombre: "Alcance", monto: 500_000, cantidad: 1 }]);
+  // 0.105.0 · el precio lo ponen los conceptos de cobro (Mike, 18-nov-2026).
+  await crearConcepto(ids.casa, { descripcion: "Alcance", cantidad: 1, precio_unitario: 500_000 });
 
   const cobrar = (monto: number, proyecto_id: string | null, fecha: Date) =>
     createMovimiento(uid, {
@@ -75,9 +78,13 @@ describe("el estado de cuenta, como lo pinta la pantalla", () => {
      * note. */
     const d = await estadoDeCuenta(ids.holcim);
     expect(d.totales.vendido).toBe(500_000);
+    // 0.105.0 · el saldo va contra el total con IVA: 580,000 − 280,000.
+    expect(d.totales.total).toBe(580_000);
     expect(d.totales.cobrado, "200,000 + 80,000").toBe(280_000);
-    expect(d.totales.saldo).toBe(220_000);
+    expect(d.totales.saldo).toBe(300_000);
     expect(d.proyectos[0].precio_venta).toBe(500_000);
+    expect(d.proyectos[0].total).toBe(580_000);
+    expect(d.proyectos[0].grupos[0].conceptos[0].descripcion).toBe("Alcance");
     expect(d.proyectos[0].pagos[0].monto).toBe(200_000);
   });
 
@@ -89,7 +96,8 @@ describe("el estado de cuenta, como lo pinta la pantalla", () => {
     const deSueltos = d.otros_pagos.reduce((t, c) => t + c.monto, 0);
     expect(deProyectos + deSueltos).toBe(d.totales.cobrado);
     expect(d.proyectos.reduce((t, p) => t + p.precio_venta, 0)).toBe(d.totales.vendido);
-    expect(d.totales.vendido - d.totales.cobrado).toBe(d.totales.saldo);
+    const conPrecio = d.proyectos.filter((p) => !p.precio_por_cargar);
+    expect(conPrecio.reduce((t, p) => t + (p.saldo ?? 0), 0) - d.totales.sin_proyecto).toBe(d.totales.saldo);
     for (const p of d.proyectos) {
       expect(p.pagos.reduce((t, c) => t + c.monto, 0), `los cobros de ${p.nombre}`).toBe(p.cobrado);
     }

@@ -31,6 +31,7 @@ import { createMovimiento } from "@/lib/movimientos";
 import { createProyecto, getProyecto, updateProyecto } from "@/lib/proyectos";
 import { bajar } from "@/lib/api/cliente";
 import { desglose, estadoDelProyecto, ligaDelExcel } from "@/lib/estado-proyecto";
+import { crearConcepto } from "@/lib/conceptos";
 
 const CORREO = process.env.CORREO_SUPERADMIN ?? "mike@forespot.com";
 const ORG = `ep-${(process.env.GITHUB_RUN_ID ?? Date.now().toString(36)).toString().toLowerCase().slice(-12)}`;
@@ -59,6 +60,10 @@ beforeAll(async () => {
     { nombre: "Puerta modelo A", monto: 71_250, cantidad: 25 },
     { nombre: "Clóset", monto: 40_000, cantidad: 1 },
   ]);
+  /* 0.105.0 · el precio son los conceptos de cobro, no los ítems (Mike,
+   * 18-nov-2026). Los mismos dos, para que el papel diga lo de siempre. */
+  await crearConcepto(ids.proyecto, { descripcion: "Puerta modelo A", cantidad: 25, precio_unitario: 2_850 });
+  await crearConcepto(ids.proyecto, { descripcion: "Clóset", cantidad: 1, precio_unitario: 40_000 });
   await createMovimiento(uid, {
     tipo: "ingreso", monto: 50_000, fecha: new Date(2026, 2, 10),
     cuenta_id: ids.cuenta, cuenta_nombre: "Banco",
@@ -107,6 +112,30 @@ describe("los cinco pedazos que pidió Mike", () => {
     const d = await estadoDelProyecto(ids.proyecto);
     expect(JSON.stringify(d.movimientos)).not.toContain("NO LO VE EL CLIENTE");
     expect(d.totales.cobrado).toBe(50_000);
+  });
+});
+
+describe("0.105.0 · los conceptos de cobro", () => {
+  it("escritos a mano van en un solo grupo, y el grupo suma el subtotal", async () => {
+    const d = await estadoDelProyecto(ids.proyecto);
+    expect(d.totales.precio_por_cargar).toBe(false);
+    expect(d.grupos).toHaveLength(1);
+    expect(d.grupos[0].cotizacion_id).toBeNull();
+    expect(d.grupos[0].importe).toBe(d.totales.subtotal);
+    expect(d.grupos[0].conceptos.map((c) => c.descripcion)).toEqual(["Puerta modelo A", "Clóset"]);
+  });
+
+  it("un proyecto sin conceptos tiene el precio por cargar y no tiene saldo", async () => {
+    const otro = await createProyecto(uid, {
+      cliente_id: ids.cliente, cliente_nombre: "HOLCIM", nombre: "Obra sin precio", estado: "activo",
+      partidas: [], fecha_inicio: new Date(2026, 2, 1),
+    });
+    const p = (await getProyecto(otro))!;
+    expect(p.precio_por_cargar).toBe(true);
+    const d = await estadoDelProyecto(otro);
+    expect(d.totales.precio_por_cargar).toBe(true);
+    expect(d.totales.saldo).toBeNull();
+    expect(d.grupos).toHaveLength(0);
   });
 });
 

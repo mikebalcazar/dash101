@@ -930,7 +930,8 @@ test('editar los ítems del proyecto: se borra uno, se guarda, y NO vuelve', asy
   assert.deepEqual(quedaron, ['Cocina grande', 'Isla'], 'quedó LO QUE SE VE: ni el borrado ni copias');
 
   const p = await api(pag, `/orgs/${ORG}/proyectos/${proyecto.id}`);
-  assert.equal(p.precio_venta, 150_00, 'y el precio de venta es la suma de los que quedaron');
+  // 0.105.0 · los ítems ya no le ponen precio (Mike, 18-nov-2026): por cargar.
+  assert.equal(p.precio_venta, 0, 'el precio no sale de los ítems');
 
   // Guardar otra vez sin tocar nada tampoco duplica.
   await pag.getByRole('button', { name: /Editar la lista/ }).first().click();
@@ -985,7 +986,8 @@ test('la cantidad: 20 puertas a $1,500 son $30,000 de línea, no $600,000', asyn
   assert.equal(item.cantidad, 20, 'se guardaron las 20 piezas');
   assert.equal(item.monto, 30_000_00, 'y el importe es el de la línea');
   const p = await api(pag, `/orgs/${ORG}/proyectos/${proyecto.id}`);
-  assert.equal(p.precio_venta, 30_000_00, 'el precio de venta NO se multiplica otra vez');
+  // 0.105.0 · los ítems ya no le ponen precio (Mike, 18-nov-2026).
+  assert.equal(p.precio_venta, 0, 'el precio no sale de los ítems');
 
   const dice = await texto(pag);
   assert.ok(/20/.test(dice), 'la cantidad se ve en la tabla');
@@ -1023,6 +1025,11 @@ test('el estado de cuenta del proyecto: la lista suma el subtotal y el IVA se de
       nombre: 'Puerta del estado', monto: 30_000_00, cantidad: 2, estado: 'vendido', tipo: 'mueble',
     },
   });
+  // 0.105.0 · el precio son los conceptos de cobro (Mike, 18-nov-2026).
+  await api(pag, `/orgs/${ORG}/conceptos`, {
+    method: 'POST',
+    body: { proyecto_id: proyecto.id, descripcion: 'Puerta del estado', cantidad: 2, precio_unitario: 15_000_00 },
+  });
   // En la cuenta de pruebas, no en la primera de la lista: desde que la
   // empresa demo es una sola (1-oct), la primera es «Banco Demo», la de la
   // siembra, y cada corrida le dejaba movimientos.
@@ -1040,7 +1047,7 @@ test('el estado de cuenta del proyecto: la lista suma el subtotal y el IVA se de
   await pag.goto(`${URL}/proyectos/${proyecto.id}`, { waitUntil: 'load' });
   await pag.getByRole('link', { name: /Estado de cuenta/ }).first().click();
   await pag.getByRole('heading', { name: 'Estado de cuenta' }).waitFor({ timeout: 30000 });
-  await pag.getByText('Lo que lleva la obra').first().waitFor({ timeout: 20000 });
+  await pag.getByText('Lo que se cobra').first().waitFor({ timeout: 20000 });
 
   /* CON CENTAVOS, y es parte de lo que se mide: el resto de dash101 pinta
    * el dinero redondeado a pesos enteros, y aquí no se puede. Con «IVA

@@ -506,7 +506,7 @@ export default function NuevoProyectoPage() {
           <div>
             <label className="text-xs font-medium text-ink-dim block mb-1.5">Precio de venta</label>
             <p className="text-[11px] text-ink-muted pt-2" data-precio-de-donde>
-              Arranca en cero: lo suman los ítems que se levanten en quell101 o se aprueben en quote101.
+              Arranca por cargar: es la suma de sus conceptos de cobro, que se agregan en el proyecto o se importan de sus cotizaciones de quote101.
             </p>
           </div>
         </div>

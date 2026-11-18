@@ -49,6 +49,9 @@ export default function ProyectosPage() {
 
   const totalDisp = proyectos.reduce((s, p) => s + (p.disponible ?? 0), 0);
   const totalVenta = proyectos.reduce((s, p) => s + (p.precio_venta ?? 0), 0);
+  /* 0.105.0 · los que todavía no tienen conceptos de cobro (Mike, 18-nov:
+   * «Todos a cero de una vez»): se cuentan aparte, no como $0 vendidos. */
+  const porCargar = proyectos.filter((p) => p.precio_por_cargar).length;
 
   return (
     <div>
@@ -59,7 +62,7 @@ export default function ProyectosPage() {
             {empresa.nombre} ·{" "}
             {proyectos.length === 0
               ? "Sin proyectos"
-              : `${proyectos.length} · Vendido ${formatMonto(totalVenta, empresa.moneda)} · Disponible ${formatMonto(totalDisp, empresa.moneda)}`}
+              : `${proyectos.length} · Vendido ${formatMonto(totalVenta, empresa.moneda)}${porCargar ? ` · ${porCargar} con precio por cargar` : ""} · Disponible ${formatMonto(totalDisp, empresa.moneda)}`}
           </p>
         </div>
         <Link
@@ -144,12 +147,22 @@ export default function ProyectosPage() {
                 </div>
 
                 <div className="pt-2 border-t border-black/5">
-                  <p className="text-[10px] text-ink-muted uppercase tracking-wide">
-                    Disponible
-                  </p>
-                  <p className="text-base font-medium text-ink-dim">
-                    {formatMonto(p.disponible ?? 0, "MXN")}
-                  </p>
+                  <div className="flex justify-between items-end gap-2">
+                    <div>
+                      <p className="text-[10px] text-ink-muted uppercase tracking-wide">
+                        Disponible
+                      </p>
+                      <p className="text-base font-medium text-ink-dim">
+                        {formatMonto(p.disponible ?? 0, "MXN")}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] text-ink-muted uppercase tracking-wide">Precio</p>
+                      {p.precio_por_cargar
+                        ? <p data-precio-por-cargar className="text-[11px] font-medium text-mauve-900">Por cargar</p>
+                        : <p className="text-[11px] font-medium text-ink-dim">{formatMonto(p.precio_venta, "MXN", { short: true })}</p>}
+                    </div>
+                  </div>
                 </div>
               </Link>
             );

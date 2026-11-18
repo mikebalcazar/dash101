@@ -200,6 +200,12 @@ export interface Proyecto {
    *  que es como nacen todas; true = ya viene dentro y el estado de cuenta
    *  lo desglosa hacia atrás. Decisión de Mike del 21-sep. */
   iva_incluido?: boolean;
+  /** Contrato 0.105.0 · el precio son los CONCEPTOS DE COBRO (Mike,
+   *  18-nov-2026: «Ya no va a ir ligada a los ítems»). Sin conceptos el
+   *  precio está POR CARGAR: `precio_venta` vale 0 pero no quiere decir $0,
+   *  y no hay saldo que calcular. */
+  precio_por_cargar?: boolean;
+  n_conceptos?: number;
   estado: EstadoProyecto;
   fecha_inicio: Timestamp | FieldValue;
   fecha_fin_estimada?: Timestamp | null;
