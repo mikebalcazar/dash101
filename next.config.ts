@@ -4,8 +4,6 @@ import type { NextConfig } from "next";
 /* `/s101/*` es la API vista desde el mismo origen (decisión D1). Quién lo
  * reenvía depende de dónde corra la app:
  *
- *   Netlify      la regla de `netlify.toml` (y `public/_redirects` en los
- *                deploy previews, que manda sobre ella).
  *   Cloudflare   el propio Worker, antes de que Next vea la petición
  *                (`worker/index.ts`, fase 4).
  *   next dev     este `rewrite`, contra STAGING: nunca contra producción

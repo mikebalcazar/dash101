@@ -32,6 +32,22 @@ manualmente en la tabla de dash.»
   guardar no toque los ítems; salen las cuatro que medían pantallas que ya no
   existen (cantidad × precio de línea, avance de la obra en la lista, agrupar
   renglones, partidas en pestañas).
+# 18-nov-2026 · Netlify, fuera: los sitios se borraron y sus archivos se van
+
+**Medido aquí: la API de Netlify contestó 204 a los seis borrados y la lista
+quedó en un solo sitio, `bosque-bravo` (no es de la suite, se habla aparte).**
+
+Mike, 18-nov: «Necesitamos desocupar netlify al 100%», y con botones «Borrar
+los 6». Se borraron `conta-master`, `cuenta-taller101`, `cotizador-t101`,
+`shiny-mousse-a355f8`, `supervisor-t101` y `t101draw` con un token que Mike
+puso en los secretos del entorno (él lo revoca). Ninguno tenía dominio propio.
+
+Con los sitios fuera, en este repo se quitan `netlify.toml`,
+`netlify-publica/`, `portal/`, `scripts/redirects.mjs` (y su paso en
+`npm run build`), `.github/workflows/verificar-publicado.yml` —que pedía
+justo esto el día que los sitios no existieran— y las dos secciones de
+`pruebas/corte.spec.ts` que leían esos archivos. La del valor por omisión de
+la fuente se queda.
 
 ---
 
