@@ -820,7 +820,7 @@ test('un cliente nuevo con el correo de otro que ya existe: avisa, enseña quié
  * ve lo que Mike ve.
  */
 
-test('editar los ítems del proyecto: se borra uno, se guarda, y NO vuelve', async () => {
+test('18-nov: el proyecto sólo lleva sus conceptos: sin lista de ítems ni obra de quell101, y guardar el proyecto no toca los ítems', async () => {
   const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
 
@@ -845,34 +845,16 @@ test('editar los ítems del proyecto: se borra uno, se guarda, y NO vuelve', asy
   }
 
   await pag.goto(`${URL}/proyectos/${proyecto.id}`, { waitUntil: 'load' });
-  await pag.getByText('Ítems del proyecto').first().waitFor({ timeout: 20000 });
+  await pag.locator('[data-conceptos]').waitFor({ timeout: 20000 });
 
-  // Mike, 6-oct: picar el ⓘ de un ítem abre el panel de la obra. Este
-  // proyecto no tiene obra en quell101, así que el panel lo dice con
-  // palabras en vez de quedarse en blanco; y Escape lo cierra.
-  await pag.locator('[data-ver-item]').first().click();
-  await pag.locator('[data-panel-item]').waitFor({ timeout: 10000 });
-  await pag.getByText(/ningún plano/).waitFor({ timeout: 15000 });
-  assert.match(await pag.locator('[data-panel-item]').innerText(), /El ítem en la obra/, 'el panel se abre desde la lista del proyecto');
-  await pag.keyboard.press('Escape');
-  assert.equal(await pag.locator('[data-panel-item]').count(), 0, 'y Escape lo cierra');
-  // También picando el nombre.
-  await pag.locator('[data-abrir-item]').first().click();
-  await pag.locator('[data-panel-item]').waitFor({ timeout: 10000 });
-  await pag.locator('[data-panel-item] button[aria-label="Cerrar"]').click();
-  assert.equal(await pag.locator('[data-panel-item]').count(), 0, 'y la ✕ también');
-
-  /* Mike, 6-oct: «en dash quiero que la lista de ítems tenga el mismo estilo
-   * [que la de quell101]. Hoy en dash es muy cansado a la vista». Ya no es
-   * una tabla: un renglón por ítem con la raya del color de su tipo, el
-   * nombre, el importe y la pastilla del cobro. */
-  const lista = pag.locator('[data-lista-items]');
-  await lista.waitFor({ timeout: 10000 });
-  assert.equal(await lista.locator('table').count(), 0, 'la lista de ítems ya no es una tabla');
-  assert.ok(await lista.locator('[data-fila-item]').count() > 0, 'un renglón por ítem');
-  const primera = lista.locator('[data-fila-item]').first();
-  assert.ok(await primera.locator('i[title]').first().evaluate((el) => getComputedStyle(el).backgroundColor !== 'rgba(0, 0, 0, 0)'), 'con la raya del color de su tipo');
-  assert.match(await primera.locator('[data-cobro]').innerText(), /Cobrado|Sin cobro/, 'y la pastilla del cobro');
+  /* Mike, 18-nov-2026: «quita la sección de los elementos de obra que lee de
+   * quell. Ya no vamos a importar de quell en tiempo real (…) Sólo existirán
+   * los conceptos». El proyecto TIENE tres ítems en la API y la pantalla no
+   * enseña ninguno, ni el bloque de la obra. */
+  assert.equal(await pag.getByText('Ítems del proyecto').count(), 0, 'ya no hay lista de ítems');
+  assert.equal(await pag.locator('[data-lista-items]').count(), 0);
+  assert.equal(await pag.getByText('Obra en quell101').count(), 0, 'ni el bloque de la obra');
+  assert.equal(await pag.getByRole('button', { name: /Editar la lista/ }).count(), 0, 'ni el botón para editar la lista');
 
   /* Mike, 6-oct (con botones): el plan de pagos del proyecto. Se agrega una
    * parcialidad de $300 sobre un proyecto de $350: queda pendiente, el
@@ -905,103 +887,26 @@ test('editar los ítems del proyecto: se borra uno, se guarda, y NO vuelve', asy
   assert.equal(guardada[0].monto, 300_00, 'en centavos en la API');
   assert.equal(guardada[0].fecha, '2026-11-20');
 
-  await pag.getByRole('button', { name: /Editar la lista/ }).first().click();
-
-  const renglones = pag.locator('input[placeholder^="Ítem ("]');
-  await renglones.first().waitFor({ timeout: 15000 });
-  assert.equal(await renglones.count(), 3, 'la pantalla abre con los tres que hay');
-
-  // Lo de Mike: cambiarle a uno, BORRAR otro, y guardar.
-  await renglones.nth(0).fill('Cocina grande');
-  const basureros = pag.locator('input[placeholder^="Ítem ("]').locator('xpath=../button');
-  await basureros.nth(1).click(); // fuera «Clóset»
-  assert.equal(await renglones.count(), 2, 'en pantalla ya son dos');
-
+  /* Guardar el proyecto ya no manda los ítems, así que no los puede tocar:
+   * se cambia el nombre, se guarda, y los tres siguen ahí, vendidos. */
+  await pag.getByRole('button', { name: /Editar el proyecto/ }).first().click();
+  await pag.locator('form input[required]').first().fill(`${proyecto.nombre} bis`);
   await pag.getByRole('button', { name: /Guardar cambios/ }).click();
-  /* Dos señales, y en este orden a propósito: el formulario se cierra —eso
-   * es lo estable— y además sale el aviso. El aviso vivía DENTRO del
-   * formulario, que se desmonta al guardar, así que no aparecía nunca;
-   * esta prueba lo cachó y por eso ahora se pinta en la vista.
-   *
-   * Desde el 20-sep son DOS botones: «Editar el proyecto» arriba, para los
-   * datos de la obra, y «Editar la lista» abajo, junto a acomodar y
-   * agrupar. Lo pidió Mike con la pantalla enfrente. Por eso aquí se abre
-   * con uno y se espera al otro. */
-  await pag.getByRole('button', { name: /Editar el proyecto/ }).first().waitFor({ timeout: 30000 });
-  await pag.getByText('Cambios guardados').waitFor({ timeout: 10000 });
-  await pag.waitForTimeout(1000);
-
-  // Y ahora lo que importa: lo que quedó GUARDADO, leído de la API.
+  await pag.getByText('Cambios guardados').waitFor({ timeout: 30000 });
   const quedaron = filas(await api(pag, `/orgs/${ORG}/items?proyecto_id=${proyecto.id}`))
     .filter((i) => i.estado === 'vendido')
     .map((i) => i.nombre)
     .sort();
-  assert.deepEqual(quedaron, ['Cocina grande', 'Isla'], 'quedó LO QUE SE VE: ni el borrado ni copias');
+  assert.deepEqual(quedaron, ['Clóset', 'Cocina', 'Isla'], 'guardar el proyecto no toca sus ítems');
 
   const p = await api(pag, `/orgs/${ORG}/proyectos/${proyecto.id}`);
-  // 0.105.0 · los ítems ya no le ponen precio (Mike, 18-nov-2026): el precio
-  // es el concepto de $350 que se le cargó arriba, por más ítems que se editen.
-  assert.equal(p.precio_venta, 350_00, 'el precio es el concepto, no sale de los ítems');
+  assert.equal(p.nombre, `${proyecto.nombre} bis`, 'el nombre sí se guardó');
+  // El precio es el concepto de $350, no los $350 de los ítems: son dos
+  // cifras iguales a propósito y la que manda es el concepto.
+  assert.equal(p.precio_venta, 350_00, 'el precio es el concepto');
+  assert.equal(p.n_conceptos, 1);
 
-  // Guardar otra vez sin tocar nada tampoco duplica.
-  await pag.getByRole('button', { name: /Editar la lista/ }).first().click();
-  await pag.getByRole('button', { name: /Guardar cambios/ }).click();
-  await pag.getByRole('button', { name: /Editar el proyecto/ }).first().waitFor({ timeout: 30000 });
-  await pag.waitForTimeout(1000);
-  const otraVez = filas(await api(pag, `/orgs/${ORG}/items?proyecto_id=${proyecto.id}`))
-    .filter((i) => i.estado === 'vendido');
-  assert.equal(otraVez.length, 2, 'guardar dos veces seguidas no agrega nada');
-
-  console.log(`    ítems tras editar y borrar: ${quedaron.join(', ')} · precio ${pesos2(p.precio_venta)}`);
-  assert.deepEqual(errores, [], 'cero errores de JavaScript');
-  await ctx.close();
-});
-
-test('la cantidad: 20 puertas a $1,500 son $30,000 de línea, no $600,000', async () => {
-  const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
-  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
-
-  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes`))
-    .find((c) => c.nombre === CLIENTE_PRUEBAS);
-  if (!cliente) {
-    cliente = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS } });
-  }
-  const proyecto = await api(pag, `/orgs/${ORG}/proyectos`, {
-    method: 'POST',
-    body: { nombre: `Cantidad ${Date.now().toString(36).slice(-5)}`, cliente_id: cliente.id, estado: 'activo' },
-  });
-  /* Mike, 2-oct (con botones): dash101 no genera ítems. La puerta entra por
-   * la API —como lo haría quote101— y aquí sólo se le cambia la cantidad y
-   * el precio por pieza. Y se mide que el «Agregar» de antes ya no está. */
-  await api(pag, `/orgs/${ORG}/items`, {
-    method: 'POST',
-    body: { nombre: 'Puerta de clóset', monto: 1500_00, cantidad: 1, estado: 'vendido', proyecto_id: proyecto.id, cliente_id: cliente.id },
-  });
-
-  await pag.goto(`${URL}/proyectos/${proyecto.id}`, { waitUntil: 'load' });
-  await pag.getByText('Ítems del proyecto').first().waitFor({ timeout: 20000 });
-  await pag.getByRole('button', { name: /Editar la lista/ }).first().click();
-  await pag.locator('input[placeholder^="Ítem ("]').first().waitFor({ timeout: 15000 });
-  assert.equal(await pag.getByRole('button', { name: 'Agregar' }).count(), 0, 'ya no hay «Agregar»: dash101 no genera ítems');
-
-  await pag.getByLabel('Cantidad').first().fill('20');
-  await pag.getByLabel('Precio por pieza').first().fill('1500');
-
-  await pag.getByRole('button', { name: /Guardar cambios/ }).click();
-  await pag.getByRole('button', { name: /Editar el proyecto/ }).first().waitFor({ timeout: 30000 });
-  await pag.waitForTimeout(1000);
-
-  const item = filas(await api(pag, `/orgs/${ORG}/items?proyecto_id=${proyecto.id}`))
-    .filter((i) => i.estado === 'vendido')[0];
-  assert.equal(item.cantidad, 20, 'se guardaron las 20 piezas');
-  assert.equal(item.monto, 30_000_00, 'y el importe es el de la línea');
-  const p = await api(pag, `/orgs/${ORG}/proyectos/${proyecto.id}`);
-  // 0.105.0 · los ítems ya no le ponen precio (Mike, 18-nov-2026).
-  assert.equal(p.precio_venta, 0, 'el precio no sale de los ítems');
-
-  const dice = await texto(pag);
-  assert.ok(/20/.test(dice), 'la cantidad se ve en la tabla');
-  console.log(`    20 × ${pesos2(1_500_00)} = ${pesos2(item.monto)} de línea`);
+  console.log(`    ítems intactos: ${quedaron.join(', ')} · precio ${pesos2(p.precio_venta)} de 1 concepto`);
   assert.deepEqual(errores, [], 'cero errores de JavaScript');
   await ctx.close();
 });
@@ -1245,39 +1150,6 @@ test('16-oct: en la gráfica del flujo cada semana trae su propio globo, y la l�
   await ctx.close();
 });
 
-test('6-oct: la lista de ítems trae el avance de la obra como en quell101, y el panel se abre también con una pieza del plano (sólo lectura)', async () => {
-  const { ctx, pag, errores } = await pestana(undefined, true);
-  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
-  // Las rutas de quell contestan su JSON sin el sobre {ok, data} de la suite.
-  const quell = (ruta) => pag.evaluate(async (r) => (await fetch(`/s101${r}`, { headers: { 'X-App': 'dash101' }, credentials: 'include' })).json(), ruta);
-  let obra = null, piezas = [];
-  for (const o of ((await quell(`/orgs/${ORG}/quell/projects`)).projects ?? []).filter((x) => x.proyecto_id)) {
-    piezas = ((await quell(`/orgs/${ORG}/quell/projects/${o.id}`)).elements ?? []).filter((e) => e.type !== 'Requerimiento');
-    if (piezas.some((e) => e.item_id)) { obra = o; break; }
-  }
-  assert.ok(obra, 'la demo trae una obra ligada a un proyecto, con piezas juntadas a sus ítems');
-  await pag.goto(`${URL}/proyectos/${obra.proyecto_id}`, { waitUntil: 'load' });
-  await pag.locator('[data-lista-items]').waitFor({ timeout: 30000 });
-  // Con piezas en el plano, arriba van los recuadros por etapa y cada renglón dice su avance.
-  await pag.locator('[data-embudo]').waitFor({ timeout: 15000 });
-  assert.ok(await pag.locator('[data-avance-obra]').count() > 0, 'cada renglón con su avance de obra');
-
-  /* Mike, 6-oct, en «Juntar las piezas del plano con los ítems»: «también
-   * quiero poder ver los detalles de quell del ítem, la barra lateral». Una
-   * pieza que todavía no es ítem abre el panel con su propio identificador. */
-  const pieza = piezas[0];
-  await pag.evaluate(([e, o, n]) => window.dispatchEvent(new CustomEvent('dash101:abrir-item', { detail: { element_id: e, obra_id: o, obra_nombre: n } })), [pieza.id, obra.id, obra.name]);
-  const panel = pag.locator(`[data-panel-item="${pieza.id}"]`);
-  await panel.waitFor({ timeout: 10000 });
-  await panel.getByText(pieza.name).first().waitFor({ timeout: 15000 });
-  const dice = await panel.innerText();
-  assert.ok(!dice.includes('[object Object]'), `la entrega se dice con palabras: ${dice.slice(0, 200)}`);
-  assert.ok((await panel.locator('a[href*="/e/"]').first().getAttribute('href')).includes(pieza.id), 'y la liga abre esa pieza en quell101');
-  await pag.keyboard.press('Escape');
-  assert.deepEqual(errores, [], 'sin errores de JavaScript');
-  await ctx.close();
-});
-
 test('un cobro se captura «falta facturar» y aparece en la lista de pendientes', async () => {
   /* Encargo de Mike del 20-sep. Se recorre lo que él hace: capturar un
    * ingreso diciendo que falta facturarlo, y encontrarlo en Fiscal → Falta la
@@ -1475,120 +1347,6 @@ test('corregir un movimiento SIN contraparte: el botón no se queda apagado', as
   await ctx.close();
 });
 
-test('agrupar dos renglones en un producto: NO se borra ninguno y se pueden mover de grupo', async () => {
-  /* Mike, 20-sep: «son varias puertas iguales en diferente ubicación pero
-   * el producto es el mismo, y no tiene caso tener 21 ítems idénticos
-   * enlistados en dash». Y esa misma tarde: «debe poder moverse de grupo de
-   * producto un ítem ya agrupado. Todos los ítems deberían tener un
-   * dropdown para seleccionar qué producto es».
-   *
-   * Este paso decía «queda uno de dos piezas»: era cierto mientras agrupar
-   * FUSIONABA. Ya no borra renglones —un renglón borrado no se puede mover
-   * de grupo—, así que mide lo de ahora.
-   *
-   * Lo que alcanza y ninguna prueba de API ve: que el botón exista, que la
-   * propuesta se pinte, que después de agrupar la lista enseñe UN renglón
-   * de producto que se abre, y que cada pieza traiga su dropdown. Se espera
-   * por condición, nunca por instante: esta pantalla se arma en partes y
-   * una aserción a destiempo acusa a código que sí sirve. */
-  const { ctx, pag, errores } = await pestana();
-  await entrar(pag, CORREO);
-
-  const cliente = filas(await api(pag, `/orgs/${ORG}/clientes`)).find((c) => c.nombre === CLIENTE_PRUEBAS)
-    ?? await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS } });
-  const proyecto = await api(pag, `/orgs/${ORG}/proyectos`, {
-    method: 'POST',
-    body: { nombre: `Agrupar ${Date.now().toString(36).slice(-5)}`, cliente_id: cliente.id, estado: 'activo' },
-  });
-  for (let i = 0; i < 2; i++) {
-    await api(pag, `/orgs/${ORG}/items`, {
-      method: 'POST',
-      body: { nombre: 'Puerta igualita', monto: 3_000_00, cantidad: 1, estado: 'vendido',
-              proyecto_id: proyecto.id, cliente_id: cliente.id },
-    });
-  }
-  const antes = (await api(pag, `/orgs/${ORG}/proyectos/${proyecto.id}`)).precio_venta;
-
-  await pag.goto(`${URL}/proyectos/${proyecto.id}`, { waitUntil: 'load' });
-  /* Si no aparece, se dice QUÉ había en pantalla. Sin eso, un timeout aquí
-   * acusa a la pantalla sin decir de qué se murió —la lección del 20-sep—. */
-  try {
-    await pag.getByText('Ítems del proyecto').first().waitFor({ timeout: 30000 });
-  } catch {
-    assert.fail(`no cargó el proyecto. La pantalla decía: ${(await texto(pag)).replace(/\s+/g, ' ').slice(0, 400)}`);
-  }
-
-  /* Antes de agrupar, cada ítem ya trae su dropdown: los dos son su propio
-   * producto único y cada uno puede escoger al otro.
-   *
-   * SE ESPERA POR CONDICIÓN. La primera versión de esto preguntaba
-   * `isVisible()` en el instante en que aparecía «Ítems del proyecto», y se
-   * cayó en la puerta de despliegue: el dropdown se pinta con una SEGUNDA
-   * llamada —la de las opciones— que todavía no había vuelto, y mientras no
-   * hay opciones el control no se dibuja, a propósito. O sea que acusó a
-   * código que sí sirve, que es justo contra lo que avisa el comentario de
-   * arriba en este mismo archivo.
-   *
-   * Y se busca la OPCIÓN, no el `<select>`: un `<option>` dentro de un
-   * select cerrado no cuenta como visible para Playwright, así que se espera
-   * a que esté `attached`. Es la manera directa de decir «existe el
-   * dropdown y trae la opción de salirse del grupo».
-   *
-   * EL SELECTOR VIVE DETRÁS DEL «+». Mike lo pidió así el 20-sep: «oculta la
-   * descripción en la lista, sólo que se abra con un signo de más; la info
-   * que se despliega con + es: descripción, pagado, selector de qué producto
-   * es». Así que primero se abre el detalle del renglón y luego se busca. La
-   * versión anterior de este paso lo buscaba en la lista y se cayó en la
-   * puerta: la prueba seguía donde el control ya no estaba. */
-  const masDelItem = pag.getByRole('button', { name: /Ver el detalle de Puerta igualita/ }).first();
-  await masDelItem.waitFor({ timeout: 20000 });
-  await masDelItem.click();
-  try {
-    await pag
-      .locator('select option', { hasText: 'Es su propio producto' })
-      .first()
-      .waitFor({ state: 'attached', timeout: 20000 });
-  } catch {
-    assert.fail(`no salió el dropdown de producto. La pantalla decía: ${(await texto(pag)).replace(/\s+/g, ' ').slice(0, 400)}`);
-  }
-
-  await pag.getByRole('button', { name: /Agrupar en productos/ }).click();
-  /* La lista es de TODOS los ítems y nace sin nada marcado —Mike, 20-sep:
-     «la lista debe ser de todos los ítems, sean o no similares; todo está
-     en gestionar los ítems ya existentes»—, así que primero se marcan. */
-  const marcar = pag.getByRole('button', { name: /^Marcar todos$/ });
-  await marcar.waitFor({ timeout: 20000 });
-  await marcar.click();
-  const juntar = pag.getByRole('button', { name: /^Agrupar 2$/ });
-  await juntar.waitFor({ timeout: 20000 });
-  await juntar.click();
-
-  /* Se espera a que la lista de verdad diga lo que tiene que decir, en vez
-   * de mirar la pantalla en un instante cualquiera. */
-  let quedaron = [];
-  for (let i = 0; i < 40; i++) {
-    quedaron = filas(await api(pag, `/orgs/${ORG}/items?proyecto_id=${proyecto.id}`)).filter((x) => x.estado === 'vendido');
-    if (quedaron.length === 2 && quedaron.every((x) => x.producto_id)) break;
-    await pag.waitForTimeout(500);
-  }
-  assert.equal(quedaron.length, 2, 'los DOS renglones siguen ahí: agrupar ya no borra');
-  assert.ok(quedaron.every((x) => x.cantidad === 1), 'cada uno sigue siendo una pieza');
-  assert.equal(new Set(quedaron.map((x) => x.producto_id)).size, 1, 'y los dos apuntan al mismo producto');
-
-  const p = await api(pag, `/orgs/${ORG}/proyectos/${proyecto.id}`);
-  assert.equal(p.precio_venta, antes, 'agruparlos al mismo precio no cambia lo que se cobra');
-
-  /* Y en la pantalla queda UN renglón de producto que se abre. Es el
-   * encargo original: no tener 21 puertas idénticas enlistadas. */
-  const abrir = pag.getByRole('button', { name: /toca para ver cada pieza/ });
-  await abrir.first().waitFor({ timeout: 20000 });
-  await abrir.first().click();
-  await pag.getByText('Puerta igualita').first().waitFor({ timeout: 10000 });
-
-  assert.deepEqual(errores, [], 'cero errores de JavaScript');
-  await ctx.close();
-});
-
 test('el archivo de la factura: se escoge y se ve antes de guardar', async () => {
   /* Mike, 20-sep: «quiero poder arrastrar los archivos para subirlos. Y que
    * me muestre un preview del archivo abajo».
@@ -1650,82 +1408,6 @@ test('el archivo de la factura: se escoge y se ve antes de guardar', async () =>
  * partida, y como todo caía en «Sin partida», nadie las veía. Se camina lo
  * que él pidió: la barra a la vista, «+» para abrir una pestaña, mover un
  * ítem a ella, renombrarla, y capturar un ítem nuevo directo en ella. */
-
-test('las partidas son pestañas: se crea una con «+», se mueve un ítem, se renombra y se captura en ella', async () => {
-  const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
-  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
-  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes`)).find((c) => c.nombre === CLIENTE_PRUEBAS);
-  if (!cliente) cliente = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS } });
-  const proyecto = await api(pag, `/orgs/${ORG}/proyectos`, {
-    method: 'POST',
-    body: { nombre: `Partidas ${Date.now().toString(36).slice(-5)}`, cliente_id: cliente.id, estado: 'activo' },
-  });
-  const ids = {};
-  for (const [nombre, monto] of [['Cocina', 100_00], ['Clóset', 200_00], ['Isla', 50_00]]) {
-    const it = await api(pag, `/orgs/${ORG}/items`, {
-      method: 'POST',
-      body: { nombre, monto, cantidad: 1, estado: 'vendido', proyecto_id: proyecto.id, cliente_id: cliente.id },
-    });
-    ids[nombre] = it.id;
-  }
-  const partidaDe = async (nombre) => (filas(await api(pag, `/orgs/${ORG}/items?proyecto_id=${proyecto.id}`)).find((i) => i.nombre === nombre)?.partida ?? '');
-
-  await pag.goto(`${URL}/proyectos/${proyecto.id}`, { waitUntil: 'load' });
-  await pag.getByText('Ítems del proyecto').first().waitFor({ timeout: 20000 });
-
-  // 1 · La barra está a la vista aunque todo esté en «Sin partida».
-  const barra = pag.getByRole('tablist', { name: 'Partidas' });
-  await barra.waitFor({ timeout: 15000 });
-  assert.ok(await pag.getByRole('tab', { name: /^Todas \(3\)/ }).isVisible(), 'con «Todas» y sus tres ítems');
-
-  // 2 · «+» abre una pestaña nueva, vacía, y la deja seleccionada.
-  await pag.locator('[data-nueva-partida]').click();
-  await pag.getByLabel('Nombre de la partida nueva').fill('Etapa 2');
-  await pag.locator('[data-crear-partida]').click();
-  const etapa2 = pag.getByRole('tab', { name: /^Etapa 2 \(0\)/ });
-  await etapa2.waitFor({ timeout: 5000 });
-  assert.equal(await etapa2.getAttribute('aria-selected'), 'true', 'la pestaña nueva queda abierta');
-  assert.ok(await pag.locator('[data-partida-abierta="Etapa 2"]').isVisible(), 'con su botón de renombrar');
-
-  // 3 · Mover un ítem a la pestaña, desde su «+».
-  await pag.getByRole('tab', { name: /^Todas/ }).click();
-  await pag.getByRole('button', { name: 'Ver el detalle de Isla' }).click();
-  await pag.locator(`[data-partida-de="${ids.Isla}"]`).selectOption('Etapa 2');
-  await pag.getByRole('tab', { name: /^Etapa 2 \(1\)/ }).waitFor({ timeout: 15000 });
-  assert.equal(await partidaDe('Isla'), 'Etapa 2', 'quedó GUARDADO en el ítem');
-  assert.equal(await partidaDe('Cocina'), '', 'y los demás no se movieron');
-
-  // 4 · Renombrarla: sus ítems cambian de partida.
-  await pag.getByRole('tab', { name: /^Etapa 2 \(1\)/ }).click();
-  await pag.locator('[data-renombrar-partida]').click();
-  await pag.getByLabel('Nombre nuevo de la partida').fill('Etapa dos');
-  await pag.locator('[data-guardar-nombre]').click();
-  await pag.getByRole('tab', { name: /^Etapa dos \(1\)/ }).waitFor({ timeout: 15000 });
-  assert.equal(await partidaDe('Isla'), 'Etapa dos', 'el nombre nuevo llegó al ítem');
-  assert.equal(await pag.getByRole('tab', { name: /^Etapa 2/ }).count(), 0, 'y la vieja ya no está');
-
-  // 5 · Hasta el 2-oct aquí había «Ítem en esta partida». Mike decidió (con
-  //     botones) que dash101 no genera ítems: el botón ya no está, y lo que
-  //     sí se mide es que guardar la lista no le borre la partida a nadie.
-  assert.equal(await pag.locator('[data-nuevo-item-en-partida]').count(), 0, 'ya no hay «Ítem en esta partida»');
-  await pag.getByRole('button', { name: /Editar la lista/ }).first().click();
-  const renglones = pag.locator('input[placeholder^="Ítem ("]');
-  await renglones.first().waitFor({ timeout: 15000 });
-  assert.equal(await renglones.count(), 3, 'los tres que hay, y ninguno de más');
-  await pag.getByRole('button', { name: /Guardar cambios/ }).click();
-  await pag.getByRole('button', { name: /Editar el proyecto/ }).first().waitFor({ timeout: 30000 });
-  await pag.waitForTimeout(1000);
-  assert.equal(await partidaDe('Isla'), 'Etapa dos', 'guardar la lista no le borró la partida a nadie');
-  await pag.getByRole('tab', { name: /^Etapa dos \(1\)/ }).waitFor({ timeout: 15000 });
-
-  console.log(`    partidas: Etapa 2 → Etapa dos, con Isla movida; sin alta de ítems desde dash101`);
-  assert.deepEqual(errores, [], 'cero errores de JavaScript');
-  await ctx.close();
-});
-
-/* ═══════════════ 7 · el otro sentido de la puerta, al final ═══════════════ */
-
-/* ═══════════════ 1-oct: el saldo de la base, la cuenta, el cliente y los gastos generales ═══════════════ */
 
 test('1-oct: el líquido es el saldo que suma la API; la cuenta abre con su historial, el último arriba; un gasto general no lleva proyecto', async () => {
   /* Mike, 1-oct: «ya hay movimientos por más de 70,000 de egresos y el total

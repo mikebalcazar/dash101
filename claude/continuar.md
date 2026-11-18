@@ -10,6 +10,31 @@ no se pudo medir desde aquí y se dice cómo se mide.
 
 ---
 
+# 18-nov-2026 · el proyecto sólo lleva sus conceptos: fuera la lista de ítems y el bloque de quell101
+
+Mike, con la pantalla de HOLCIM enfrente: «Mueve la liga al nombre del
+proyecto y quita esa sección. Y ya quita la sección de los elementos de obra
+que lee de quell. Ya no vamos a importar de quell en tiempo real, o sea no se
+sincronizan. Sólo existirán los conceptos que se importen desde quote
+(autorizados desde allá o importados desde dash) y los que se agreguen
+manualmente en la tabla de dash.»
+
+- La liga a la obra es un ↗ junto al nombre (`LigaDeLaObra`, en
+  `components/obra-del-proyecto.tsx`). Sin obra, no se pinta.
+- Fuera el bloque «Obra en quell101» (ligar, quitar la liga, juntar las
+  piezas del plano con los ítems) y «Ítems del proyecto» con su «Editar la
+  lista»: `components/items-del-proyecto.tsx` y `juntar-items-obra.tsx` se
+  borraron. Ligar una obra se hace ahora desde quell101.
+- «Editar el proyecto» ya no manda `items`: `updateProyecto` sin `items` no
+  los toca (lo mide la prueba de navegador). Los ítems siguen en la API; sólo
+  dash deja de enseñarlos.
+- Navegador: la prueba del proyecto mide que no haya lista ni bloque y que
+  guardar no toque los ítems; salen las cuatro que medían pantallas que ya no
+  existen (cantidad × precio de línea, avance de la obra en la lista, agrupar
+  renglones, partidas en pestañas).
+
+---
+
 # 18-nov-2026 · el precio del proyecto, aparte de los ítems: conceptos de cobro, por pagar a contratistas y estados de cuenta (API 0.105.0)
 
 **Medido aquí: batería contra staging en verde, 38 archivos más
