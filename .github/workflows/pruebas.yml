@@ -44,4 +44,8 @@ jobs:
       # alguien vuelve a meter el SDK —o cualquier cosa gorda— al layout, esto
       # lo dice antes de publicar (29-sep-2026, batería en móvil).
       - name: El arranque no engorda
-        run: node scripts/peso-arranque.mjs 450
+        # 18-nov-2026 · Next 16 (decisión de Mike): medido con el mismo
+        # método, el arranque pasó de 363 KB (Next 15.5) a 458 KB, todo en
+        # los dos paquetes de Next y React; el código de dash no cambió. El
+        # tope sigue justo arriba de lo de hoy.
+        run: node scripts/peso-arranque.mjs 470
