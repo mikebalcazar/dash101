@@ -1,3 +1,5 @@
+> **19-nov-2026 · proyectos: se esconden los que no tienen conceptos, y «Crear proyecto» pregunta si ya existe.** Mike: «oculta de la pantalla de proyectos en dash todos los proyectos que aún no tienen conceptos de cobro. Cuando ponga en crear nuevo proyecto, pregunta si es nuevo o es alguno de los que ya están en la base de datos (que ya hayan sido creados en quell o en quote)». La lista sólo enseña los que tienen conceptos y dice cuántos esconde; «Crear proyecto» pregunta primero: «Es un proyecto nuevo» abre el formulario de siempre; «Ya existe» enseña, con buscador, los proyectos sin conceptos (liga a su página para cargarlos) y las obras de quell101 sin proyecto («Darle proyecto» llena el formulario). navegador +1; las dos pruebas de «nuevo proyecto» eligen «Es un proyecto nuevo».
+
 # Continuar — dash101
 
 Estado al **2026-09-12 16:40 UTC**. Lo escribe la sesión de Claude Code «jr»
