@@ -96,6 +96,7 @@
 .doc-gran-saldo .doc-cifra { font-size: 38pt; display: block; margin-top: 2mm; line-height: 1; }
 .doc-gran-saldo p { margin: 2.5mm 0 0; color: var(--gris); font-size: 8.5pt; }
 .doc-tres { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; }
+.doc-tres.doc-dos { grid-template-columns: repeat(2, 1fr); }
 .doc-tres > div { padding-left: 4mm; border-left: 0.3mm solid var(--linea); }
 .doc-tres .doc-ceja { color: var(--gris); font-size: 6.5pt; }
 .doc-tres .doc-cifra { font-size: 11.5pt; display: block; margin-top: 1.5mm; }
@@ -113,8 +114,6 @@
 .doc-avance i { display: block; height: 100%; background: var(--claro); }
 .doc-avance-txt { font-size: 7pt; color: var(--gris); margin-top: 1mm; }
 .doc-resumen tr.doc-total td { border-bottom: 0; border-top: 0.45mm solid var(--tinta); padding-top: 3.2mm; font-weight: 700; }
-.doc-resumen tr.doc-resta td { color: var(--gris); padding: 2mm 0; font-size: 8.5pt; }
-.doc-resumen tr.doc-neto td { border-top: 0.3mm solid var(--linea); font-weight: 700; font-size: 11pt; color: var(--azul-txt); }
 
 .doc-portada-pie {
   margin-top: auto; padding: 7mm 16mm 10mm; display: flex; justify-content: space-between; align-items: flex-end; gap: 8mm;

@@ -12,7 +12,9 @@
  * y la HOJA DE UN PROYECTO (sus conceptos, sus pagos con su factura y su
  * saldo). El del cliente es una portada y una hoja por proyecto; el de un
  * proyecto, su portada y su hoja. Todo SIN IVA, como el estado de cuenta de
- * siempre (Mike, 18-nov-2026), con el IVA cobrado aparte.
+ * siempre (Mike, 18-nov-2026). La portada no lleva el IVA cobrado ni pagos
+ * sin proyecto (Mike, 19-nov-2026: «También borra el IVA cobrado del PDF»,
+ * «Quita ese concepto»): el saldo por cobrar es la suma de las obras.
  */
 
 import { Fragment } from "react";
@@ -56,20 +58,16 @@ export interface DatosDePortada {
   generado_at: string;
   empresa: { nombre: string; rfc: string | null } | null;
   renglones: RenglonDePortada[];
-  /** Pagos del cliente que no cuelgan de ningún proyecto. SIN IVA. */
-  por_aplicar?: number;
-  iva_cobrado: number;
 }
 
 /** Los renglones que caben en la portada; los demás siguen en la hoja de
  *  resumen. Con un cliente de cuatro o cinco obras todo cabe en la portada. */
-const enPortada = (d: DatosDePortada) => (d.por_aplicar ? 4 : 5);
+const EN_PORTADA = 5;
 
 function TablaDeSaldos({ d, desde, hasta, totales }: { d: DatosDePortada; desde: number; hasta: number; totales: boolean }) {
   const precio = d.renglones.reduce((t, r) => t + r.precio, 0);
   const pagado = d.renglones.reduce((t, r) => t + r.pagado, 0);
   const saldo = d.renglones.reduce((t, r) => t + r.saldo, 0);
-  const neto = saldo - (d.por_aplicar ?? 0);
   return (
     <table>
       <thead>
@@ -94,23 +92,10 @@ function TablaDeSaldos({ d, desde, hasta, totales }: { d: DatosDePortada; desde:
           );
         })}
         {totales && (
-          <>
-            <tr className="doc-total" data-doc-total>
-              <td /><td>Total</td>
-              <td><Cifra n={precio} /></td><td><Cifra n={pagado} /></td><td><Cifra n={saldo} /></td>
-            </tr>
-            {d.por_aplicar ? (
-              <>
-                <tr className="doc-resta">
-                  <td /><td colSpan={3}>Menos pagos recibidos que aún no se aplican a un proyecto</td>
-                  <td>−{pesos(d.por_aplicar).replace("−", "")}</td>
-                </tr>
-                <tr className="doc-neto">
-                  <td /><td colSpan={3}>Saldo por cobrar</td><td><Cifra n={neto} /></td>
-                </tr>
-              </>
-            ) : null}
-          </>
+          <tr className="doc-total" data-doc-total>
+            <td /><td>Total</td>
+            <td><Cifra n={precio} /></td><td><Cifra n={pagado} /></td><td><Cifra n={saldo} /></td>
+          </tr>
         )}
       </tbody>
     </table>
@@ -119,23 +104,22 @@ function TablaDeSaldos({ d, desde, hasta, totales }: { d: DatosDePortada; desde:
 
 /** Si los proyectos no caben en la portada, la tabla sigue aquí. */
 export function ResumenContinuacion({ d }: { d: DatosDePortada }) {
-  if (d.renglones.length <= enPortada(d)) return null;
+  if (d.renglones.length <= EN_PORTADA) return null;
   return (
     <section className="doc-hoja doc-cuerpo" data-doc-resumen>
       <div className="doc-resumen" style={{ marginTop: 0 }}>
         <h2>Saldo por proyecto · continuación</h2>
-        <TablaDeSaldos d={d} desde={enPortada(d)} hasta={d.renglones.length} totales />
+        <TablaDeSaldos d={d} desde={EN_PORTADA} hasta={d.renglones.length} totales />
       </div>
     </section>
   );
 }
 
 export function Portada({ d }: { d: DatosDePortada }) {
-  const caben = d.renglones.length <= enPortada(d);
+  const caben = d.renglones.length <= EN_PORTADA;
   const precio = d.renglones.reduce((t, r) => t + r.precio, 0);
   const pagado = d.renglones.reduce((t, r) => t + r.pagado, 0);
   const saldo = d.renglones.reduce((t, r) => t + r.saldo, 0);
-  const neto = saldo - (d.por_aplicar ?? 0);
   return (
     <section className="doc-hoja doc-portada" data-doc-portada>
       <div className="doc-banda">
@@ -163,27 +147,26 @@ export function Portada({ d }: { d: DatosDePortada }) {
         <div className="doc-gran-saldo">
           <div>
             <div className="doc-ceja">Saldo por cobrar</div>
-            <Cifra n={d.por_aplicar ? neto : saldo} chica />
+            <Cifra n={saldo} chica />
             <p>Al {enLetras(d.generado_at)}, sin IVA.</p>
           </div>
-          <div className="doc-tres">
+          <div className="doc-tres doc-dos">
             <div><div className="doc-ceja">Contratado</div><Cifra n={precio} /></div>
             <div><div className="doc-ceja">Pagado</div><Cifra n={pagado} /></div>
-            <div><div className="doc-ceja">IVA cobrado</div><Cifra n={d.iva_cobrado} /></div>
           </div>
         </div>
 
         <div className="doc-resumen">
           <h2>Saldo por proyecto</h2>
-          <TablaDeSaldos d={d} desde={0} hasta={enPortada(d)} totales={caben} />
-          {!caben && <div className="doc-sigue">Siguen {d.renglones.length - enPortada(d)} proyectos y el total en la hoja siguiente →</div>}
+          <TablaDeSaldos d={d} desde={0} hasta={EN_PORTADA} totales={caben} />
+          {!caben && <div className="doc-sigue">Siguen {d.renglones.length - EN_PORTADA} proyectos y el total en la hoja siguiente →</div>}
         </div>
       </div>
 
       <footer className="doc-portada-pie">
         <div>
           {d.empresa ? <><strong>{d.empresa.nombre}</strong>{d.empresa.rfc ? ` · RFC ${d.empresa.rfc}` : ""}<br /></> : null}
-          Los conceptos se cotizan antes de IVA y los pagos se cuentan sin IVA; el IVA cobrado va aparte.
+          Los conceptos se cotizan antes de IVA y los pagos se cuentan sin IVA.
           El desglose de cada proyecto empieza en la hoja siguiente.
         </div>
         {/* eslint-disable-next-line @next/next/no-img-element */}

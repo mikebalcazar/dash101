@@ -40,15 +40,12 @@ export default function ImprimirCliente() {
 
   const portada = useMemo(() => {
     if (!c) return null;
-    const porAplicar = c.otros_pagos.reduce((t, p) => t + (p.sin_iva ?? p.monto), 0);
     return {
       titulo: c.cliente.nombre,
       subtitulo: [c.cliente.rfc && `RFC ${c.cliente.rfc}`, "Estado de cuenta por proyecto"].filter(Boolean).join(" · "),
       generado_at: hojas[0]?.generado_at ?? new Date().toISOString(),
       empresa: hojas.find((h) => h.empresa)?.empresa ?? null,
       renglones: hojas.map(renglonDe),
-      por_aplicar: porAplicar > 0 ? porAplicar : 0,
-      iva_cobrado: hojas.reduce((t, h) => t + h.totales.iva_cobrado, 0),
     };
   }, [c, hojas]);
 

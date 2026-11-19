@@ -29,7 +29,7 @@ export default function ImprimirProyecto() {
           <Portada d={{
             titulo: e.proyecto.nombre,
             subtitulo: [e.cliente?.nombre, e.cliente?.rfc && `RFC ${e.cliente.rfc}`].filter(Boolean).join(" · "),
-            generado_at: e.generado_at, empresa: e.empresa, renglones: [renglonDe(e)], iva_cobrado: e.totales.iva_cobrado,
+            generado_at: e.generado_at, empresa: e.empresa, renglones: [renglonDe(e)],
           }} />
           <HojaDeProyecto e={e} numero={0} />
         </>
