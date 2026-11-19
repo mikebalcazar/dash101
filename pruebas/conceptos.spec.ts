@@ -135,27 +135,28 @@ describe("la hoja del presupuesto", () => {
   it("se guarda completa: los importados se quedan con su grupo, uno nuevo nace, y el precio es la suma", async () => {
     const antes = await listarConceptos(ids.proyecto);
     const r = await guardarHoja(ids.proyecto, [
-      ...antes.map((c) => ({ id: c.id, descripcion: c.descripcion, cantidad: c.cantidad, precio_unitario: c.precio_unitario })),
-      { descripcion: "Flete", cantidad: 1, precio_unitario: 3_000.5 },
+      ...antes.map((c) => ({ id: c.id, nombre: c.nombre, descripcion: c.descripcion, cantidad: c.cantidad, precio_unitario: c.precio_unitario })),
+      // 0.108.0 · el producto aparte de la descripción.
+      { nombre: "Flete", descripcion: "A Santa Fe, en camioneta", cantidad: 1, precio_unitario: 3_000.5 },
     ]);
     expect(r).toMatchObject({ creados: 1, cambiados: antes.length, quitados: 0 });
-    expect(r.conceptos.at(-1)).toMatchObject({ descripcion: "Flete", importe: 3_000.5, cotizacion_id: null });
+    expect(r.conceptos.at(-1)).toMatchObject({ nombre: "Flete", descripcion: "A Santa Fe, en camioneta", importe: 3_000.5, cotizacion_id: null });
     expect((await getProyecto(ids.proyecto))!.precio_venta).toBe(242_000 + 3_000.5);
     expect(agrupar(r.conceptos).map((g) => g.nombre)).toEqual(["Planta baja", "Planta alta", "Otros conceptos"]);
   });
 
   it("lo que no viene se quita", async () => {
     const hoy = await listarConceptos(ids.proyecto);
-    const r = await guardarHoja(ids.proyecto, hoy.filter((c) => c.descripcion !== "Flete"));
+    const r = await guardarHoja(ids.proyecto, hoy.filter((c) => c.nombre !== "Flete"));
     expect(r.quitados).toBe(1);
     expect((await getProyecto(ids.proyecto))!.precio_venta).toBe(242_000);
   });
 
   it("una plantilla guarda sus renglones en pesos y se vuelve a leer igual", async () => {
     const nombre = `Prueba ${Date.now().toString(36)}`;
-    const p = await crearPlantilla(nombre, [{ descripcion: "Cocina", cantidad: 1, precio_unitario: 150_000.25 }]);
+    const p = await crearPlantilla(nombre, [{ nombre: "Cocina", descripcion: "Integral, nogal", cantidad: 1, precio_unitario: 150_000.25 }]);
     try {
-      expect(p.renglones).toEqual([{ descripcion: "Cocina", cantidad: 1, precio_unitario: 150_000.25 }]);
+      expect(p.renglones).toEqual([{ nombre: "Cocina", descripcion: "Integral, nogal", cantidad: 1, precio_unitario: 150_000.25 }]);
       expect((await listarPlantillas()).find((x) => x.id === p.id)?.nombre).toBe(nombre);
     } finally {
       await borrarPlantilla(p.id);

@@ -10,14 +10,19 @@
  * es leer «$1,250.50» o un rango con una celda vacía en medio.
  */
 
-export type Columna = 'descripcion' | 'cantidad' | 'precio';
-export const COLUMNAS: Columna[] = ['descripcion', 'cantidad', 'precio'];
+/* 0.108.0 · El producto en su columna, aparte de la descripción, como en el
+ * PDF (Mike, 18-nov-2026: «Separar el producto de la descripción»). En la
+ * API se llama `nombre`: un «producto» es del catálogo. */
+export type Columna = 'nombre' | 'descripcion' | 'cantidad' | 'precio';
+export const COLUMNAS: Columna[] = ['nombre', 'descripcion', 'cantidad', 'precio'];
 
 export interface FilaDeHoja {
   /** Para React: estable aunque no tenga id todavía. */
   clave: string;
   /** El concepto que ya existe; null si es nuevo. */
   id: string | null;
+  /** El producto. */
+  nombre: string;
   descripcion: string;
   cantidad: string;
   /** En pesos, como se escribe. */
@@ -32,7 +37,7 @@ let n = 0;
 export const claveNueva = () => `n${Date.now().toString(36)}${(n++).toString(36)}`;
 
 export const filaVacia = (): FilaDeHoja => ({
-  clave: claveNueva(), id: null, descripcion: '', cantidad: '1', precio: '',
+  clave: claveNueva(), id: null, nombre: '', descripcion: '', cantidad: '1', precio: '',
   cotizacion_id: null, cotizacion_nombre: null, cotizacion_folio: null,
 });
 
@@ -106,7 +111,7 @@ export function pegarRango(filas: FilaDeHoja[], desde: number, columna: Columna,
     celdas.forEach((valor, k) => {
       const col = COLUMNAS[c0 + k];
       if (!col) return;
-      if (col === 'descripcion') f.descripcion = valor;
+      if (col === 'descripcion' || col === 'nombre') f[col] = valor;
       else {
         const num = numeroDeHoja(valor);
         // Un número se escribe limpio («1250.5»); lo que no es número se deja
@@ -121,30 +126,30 @@ export function pegarRango(filas: FilaDeHoja[], desde: number, columna: Columna,
 
 /** ¿El renglón está vacío del todo? Esos no se guardan: es la fila en blanco
  *  que siempre queda al final para seguir escribiendo. */
-export const vacia = (f: FilaDeHoja) => !f.descripcion.trim() && !f.precio.trim() && (f.cantidad.trim() === '' || f.cantidad.trim() === '1');
+export const vacia = (f: FilaDeHoja) => !f.nombre.trim() && !f.descripcion.trim() && !f.precio.trim() && (f.cantidad.trim() === '' || f.cantidad.trim() === '1');
 
 export type Revision =
-  | { ok: true; renglones: Array<{ id: string | null; descripcion: string; cantidad: number; precio_unitario: number }> }
+  | { ok: true; renglones: Array<{ id: string | null; nombre: string; descripcion: string; cantidad: number; precio_unitario: number }> }
   | { ok: false; fila: number; columna: Columna; motivo: string };
 
 /** Lo que se manda a guardar, o el primer renglón que no cuadra con su
  *  número (contando desde 1, como lo lee una persona). */
 export function revisar(filas: FilaDeHoja[]): Revision {
-  const renglones: Array<{ id: string | null; descripcion: string; cantidad: number; precio_unitario: number }> = [];
+  const renglones: Array<{ id: string | null; nombre: string; descripcion: string; cantidad: number; precio_unitario: number }> = [];
   for (const [i, f] of filas.entries()) {
     if (vacia(f) && !f.id) continue;
     const fila = i + 1;
-    if (!f.descripcion.trim()) return { ok: false, fila, columna: 'descripcion', motivo: 'escribe qué se cobra' };
+    if (!f.nombre.trim() && !f.descripcion.trim()) return { ok: false, fila, columna: 'nombre', motivo: 'escribe qué se cobra: el producto o la descripción' };
     const cantidad = numeroDeHoja(f.cantidad);
     if (cantidad === null || cantidad <= 0) return { ok: false, fila, columna: 'cantidad', motivo: 'la cantidad tiene que ser un número mayor que cero' };
     const precio = numeroDeHoja(f.precio);
     if (precio === null) return { ok: false, fila, columna: 'precio', motivo: 'el precio unitario tiene que ser un número, en pesos' };
-    renglones.push({ id: f.id, descripcion: f.descripcion.trim(), cantidad, precio_unitario: precio });
+    renglones.push({ id: f.id, nombre: f.nombre.trim(), descripcion: f.descripcion.trim(), cantidad, precio_unitario: precio });
   }
   return { ok: true, renglones };
 }
 
 /** Lo mismo que se guardaría, para saber si la hoja cambió. */
 export const huella = (filas: FilaDeHoja[]) => JSON.stringify(
-  filas.filter((f) => !(vacia(f) && !f.id)).map((f) => [f.id, f.descripcion.trim(), numeroDeHoja(f.cantidad), numeroDeHoja(f.precio)]),
+  filas.filter((f) => !(vacia(f) && !f.id)).map((f) => [f.id, f.nombre.trim(), f.descripcion.trim(), numeroDeHoja(f.cantidad), numeroDeHoja(f.precio)]),
 );

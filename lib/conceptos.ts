@@ -25,6 +25,9 @@ const aPesos = (centavos: unknown) => Math.round(Number(centavos ?? 0)) / 100;
 export interface Concepto {
   id: string;
   proyecto_id: string;
+  /** 0.108.0 · El producto («CAR-02», «Coffee Gradas»), aparte de su
+   *  descripción, como en el PDF. '' si no tiene. */
+  nombre: string;
   descripcion: string;
   cantidad: number;
   /** En PESOS. */
@@ -38,12 +41,12 @@ export interface Concepto {
 }
 
 interface FilaConcepto {
-  id: string; proyecto_id: string; descripcion: string; cantidad: number; precio_unitario: number; monto: number; orden: number;
+  id: string; proyecto_id: string; nombre?: string | null; descripcion: string; cantidad: number; precio_unitario: number; monto: number; orden: number;
   cotizacion_id: string | null; cotizacion_folio: string | null; cotizacion_nombre: string | null;
 }
 
 const concepto = (f: FilaConcepto): Concepto => ({
-  id: f.id, proyecto_id: f.proyecto_id, descripcion: f.descripcion, cantidad: Number(f.cantidad ?? 1),
+  id: f.id, proyecto_id: f.proyecto_id, nombre: f.nombre ?? '', descripcion: f.descripcion ?? '', cantidad: Number(f.cantidad ?? 1),
   precio_unitario: aPesos(f.precio_unitario), importe: aPesos(f.monto), orden: Number(f.orden ?? 0),
   cotizacion_id: f.cotizacion_id ?? null, cotizacion_folio: f.cotizacion_folio ?? null, cotizacion_nombre: f.cotizacion_nombre ?? null,
 });
@@ -53,17 +56,18 @@ export async function listarConceptos(proyecto_id: string): Promise<Concepto[]> 
   return filas.map(concepto).sort((a, b) => a.orden - b.orden);
 }
 
-export interface ConceptoInput { descripcion: string; cantidad: number; /** En PESOS. */ precio_unitario: number }
+export interface ConceptoInput { nombre?: string; descripcion: string; cantidad: number; /** En PESOS. */ precio_unitario: number }
 
 export async function crearConcepto(proyecto_id: string, d: ConceptoInput): Promise<Concepto> {
   const f = await pedir<FilaConcepto>(`/orgs/${org()}/conceptos`, {
-    method: 'POST', body: { proyecto_id, descripcion: d.descripcion.trim(), cantidad: d.cantidad, precio_unitario: aCentavos(d.precio_unitario) },
+    method: 'POST', body: { proyecto_id, nombre: (d.nombre ?? '').trim(), descripcion: d.descripcion.trim(), cantidad: d.cantidad, precio_unitario: aCentavos(d.precio_unitario) },
   });
   return concepto(f);
 }
 
 export async function cambiarConcepto(id: string, d: Partial<ConceptoInput>): Promise<Concepto> {
   const cuerpo: Record<string, unknown> = {};
+  if (d.nombre !== undefined) cuerpo.nombre = d.nombre.trim();
   if (d.descripcion !== undefined) cuerpo.descripcion = d.descripcion.trim();
   if (d.cantidad !== undefined) cuerpo.cantidad = d.cantidad;
   if (d.precio_unitario !== undefined) cuerpo.precio_unitario = aCentavos(d.precio_unitario);
@@ -82,6 +86,8 @@ export async function borrarConcepto(id: string): Promise<void> {
 
 export interface RenglonDeHoja {
   id?: string | null;
+  /** 0.108.0 · El producto; con él o con la descripción basta. */
+  nombre: string;
   descripcion: string;
   cantidad: number;
   /** En PESOS. */
@@ -93,7 +99,7 @@ export async function guardarHoja(proyecto_id: string, renglones: RenglonDeHoja[
     `/orgs/${org()}/proyectos/${encodeURIComponent(proyecto_id)}/conceptos`,
     {
       method: 'PUT',
-      body: { renglones: renglones.map((x) => ({ id: x.id ?? null, descripcion: x.descripcion.trim(), cantidad: x.cantidad, precio_unitario: aCentavos(x.precio_unitario) })) },
+      body: { renglones: renglones.map((x) => ({ id: x.id ?? null, nombre: x.nombre.trim(), descripcion: x.descripcion.trim(), cantidad: x.cantidad, precio_unitario: aCentavos(x.precio_unitario) })) },
     },
   );
   return { conceptos: r.conceptos.map(concepto), creados: r.creados, cambiados: r.cambiados, quitados: r.quitados };
@@ -106,14 +112,14 @@ export interface Plantilla {
   id: string;
   nombre: string;
   /** precio_unitario en PESOS. */
-  renglones: Array<{ descripcion: string; cantidad: number; precio_unitario: number }>;
+  renglones: Array<{ nombre: string; descripcion: string; cantidad: number; precio_unitario: number }>;
 }
 
-interface FilaPlantilla { id: string; nombre: string; renglones: Array<{ descripcion: string; cantidad: number; precio_unitario: number }> | null }
+interface FilaPlantilla { id: string; nombre: string; renglones: Array<{ nombre?: string; descripcion: string; cantidad: number; precio_unitario: number }> | null }
 
 const plantilla = (f: FilaPlantilla): Plantilla => ({
   id: f.id, nombre: f.nombre,
-  renglones: (f.renglones ?? []).map((r) => ({ descripcion: r.descripcion, cantidad: Number(r.cantidad ?? 1), precio_unitario: aPesos(r.precio_unitario) })),
+  renglones: (f.renglones ?? []).map((r) => ({ nombre: r.nombre ?? '', descripcion: r.descripcion ?? '', cantidad: Number(r.cantidad ?? 1), precio_unitario: aPesos(r.precio_unitario) })),
 });
 
 export async function listarPlantillas(): Promise<Plantilla[]> {
@@ -123,7 +129,7 @@ export async function listarPlantillas(): Promise<Plantilla[]> {
 export async function crearPlantilla(nombre: string, renglones: Plantilla['renglones']): Promise<Plantilla> {
   return plantilla(await pedir<FilaPlantilla>(`/orgs/${org()}/plantillas_presupuesto`, {
     method: 'POST',
-    body: { nombre: nombre.trim(), renglones: renglones.map((r) => ({ descripcion: r.descripcion.trim(), cantidad: r.cantidad, precio_unitario: aCentavos(r.precio_unitario) })) },
+    body: { nombre: nombre.trim(), renglones: renglones.map((r) => ({ nombre: r.nombre.trim(), descripcion: r.descripcion.trim(), cantidad: r.cantidad, precio_unitario: aCentavos(r.precio_unitario) })) },
   }));
 }
 

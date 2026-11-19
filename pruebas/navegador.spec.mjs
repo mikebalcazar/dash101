@@ -929,6 +929,8 @@ test('18-nov: la hoja del presupuesto: se escribe, se pega un rango de Sheets, s
   await hoja.waitFor({ timeout: 20000 });
   const celda = (fila, col) => hoja.locator(`[data-fila="${fila}"][data-col="${col}"]`);
 
+  // 0.108.0 · el producto y la descripción, cada uno en su columna.
+  await celda(0, 'nombre').fill('CAR-01');
   await celda(0, 'descripcion').fill('Cocina integral');
   await celda(0, 'cantidad').fill('2');
   await celda(0, 'precio').fill('1500');
@@ -939,14 +941,18 @@ test('18-nov: la hoja del presupuesto: se escribe, se pega un rango de Sheets, s
 
   /* Lo que llega al copiar tres renglones de Sheets: tabuladores, comas de
    * miles, signo de pesos, una columna de importe que se ignora y el salto
-   * del final. Se pega en la primera celda del renglón 2. */
-  await celda(1, 'descripcion').evaluate((el) => {
+   * del final. Se pega en la primera celda (el producto) del renglón 2. */
+  await celda(1, 'nombre').evaluate((el) => {
     const dt = new DataTransfer();
-    dt.setData('text/plain', 'Puertas de intercomunicación\t6\t$7,500.00\t$45,000.00\r\nCubierta de cuarzo (m²)\t3.5\t9,000\t31500\r\nDescuento\t1\t-1,500\t\r\n');
+    dt.setData('text/plain', 'Puertas\tDe intercomunicación\t6\t$7,500.00\t$45,000.00\r\nCubierta\tDe cuarzo (m²)\t3.5\t9,000\t31500\r\nDescuento\t\t1\t-1,500\t\r\n');
     el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
   });
   await hoja.locator('[data-hoja-fila="3"]').waitFor({ timeout: 5000 });
-  assert.equal(await celda(2, 'descripcion').inputValue(), 'Cubierta de cuarzo (m²)', 'cada celda en su lugar');
+  assert.equal(await celda(2, 'nombre').inputValue(), 'Cubierta', 'cada celda en su lugar');
+  assert.equal(await celda(2, 'descripcion').inputValue(), 'De cuarzo (m²)', 'la descripción en la suya');
+  // Mike, 18-nov: «quiero celdas que separen las columnas».
+  const raya = await celda(0, 'descripcion').evaluate((el) => getComputedStyle(el.closest('td')).borderLeftWidth);
+  assert.equal(raya, '1px', 'cada celda con su raya');
   assert.match(await hoja.locator('[data-hoja-total]').innerText(), /\$78,000\b/, '3,000 + 45,000 + 31,500 − 1,500');
 
   await hoja.locator('[data-hoja-guardar]').click();
@@ -955,8 +961,8 @@ test('18-nov: la hoja del presupuesto: se escribe, se pega un rango de Sheets, s
   assert.equal(p.precio_venta, 78_000_00, 'el total de la hoja es el precio del proyecto');
   assert.equal(p.n_conceptos, 4);
   const guardados = filas(await api(pag, `/orgs/${ORG}/conceptos?proyecto_id=${proyecto.id}`)).sort((a, b) => a.orden - b.orden);
-  assert.deepEqual(guardados.map((c) => [c.descripcion, c.cantidad, c.monto]), [
-    ['Cocina integral', 2, 3_000_00], ['Puertas de intercomunicación', 6, 45_000_00], ['Cubierta de cuarzo (m²)', 3.5, 31_500_00], ['Descuento', 1, -1_500_00],
+  assert.deepEqual(guardados.map((c) => [c.nombre, c.descripcion, c.cantidad, c.monto]), [
+    ['CAR-01', 'Cocina integral', 2, 3_000_00], ['Puertas', 'De intercomunicación', 6, 45_000_00], ['Cubierta', 'De cuarzo (m²)', 3.5, 31_500_00], ['Descuento', '', 1, -1_500_00],
   ]);
   // Y la tarjeta del ingreso ya lo dice: el proyecto se vuelve a leer al guardar.
   await pag.locator('[data-precio-venta]', { hasText: '$78,000' }).waitFor({ timeout: 15000 });

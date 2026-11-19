@@ -54,6 +54,8 @@ const enPalabras = (iso: string) =>
 /** Para el nombre del archivo: 2026-09-21, que ordena solo en una carpeta. */
 const enDigitos = (iso: string) => aDia(new Date(iso));
 
+/** La raya de cada celda: separa las columnas (Mike, 18-nov-2026). */
+const RAYA = "border border-black/10";
 const limpio = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 export default function EstadoDelProyectoPage() {
@@ -158,48 +160,54 @@ export default function EstadoDelProyectoPage() {
             Precio por cargar: este proyecto todavía no tiene conceptos de cobro.
           </p>
         ) : (
-          <table className="w-full text-sm mb-5">
-            <thead className="text-xs text-ink-muted uppercase tracking-wide border-b border-black/10">
+          /* 0.108.0 · Las columnas del PDF: el producto aparte de la
+             descripción, y cada celda con su raya (Mike, 18-nov-2026). */
+          <div className="overflow-x-auto mb-5">
+          <table className="w-full min-w-[40rem] text-sm border-collapse" data-tabla-conceptos>
+            <thead className="text-xs text-ink-muted uppercase tracking-wide">
               <tr>
-                <th className="text-left py-1.5 font-medium">Concepto</th>
-                <th className="text-right py-1.5 font-medium">Cant.</th>
-                <th className="text-right py-1.5 font-medium">P. unitario</th>
-                <th className="text-right py-1.5 font-medium">Importe</th>
+                <th className={`${RAYA} text-left py-1.5 px-2 font-medium w-40`}>Producto</th>
+                <th className={`${RAYA} text-left py-1.5 px-2 font-medium`}>Descripción</th>
+                <th className={`${RAYA} text-right py-1.5 px-2 font-medium`}>Cant.</th>
+                <th className={`${RAYA} text-right py-1.5 px-2 font-medium`}>P. unitario</th>
+                <th className={`${RAYA} text-right py-1.5 px-2 font-medium`}>Importe</th>
               </tr>
             </thead>
             {d.grupos.map((g) => (
               <tbody key={g.cotizacion_id ?? "a-mano"} data-grupo={g.cotizacion_id ?? "a-mano"}>
                 {(d.grupos.length > 1 || g.cotizacion_id) && (
                   <tr className="no-partir">
-                    <td colSpan={4} className="pt-3 pb-1 text-xs font-medium text-ink-dim">{tituloDelGrupo(g)}</td>
+                    <td colSpan={5} className="pt-3 pb-1 px-2 text-xs font-medium text-ink-dim">{tituloDelGrupo(g)}</td>
                   </tr>
                 )}
                 {g.conceptos.map((c) => (
-                  <tr key={c.id} className="border-b border-black/5 no-partir">
-                    <td className="py-1.5 text-ink-dim">{c.descripcion}</td>
-                    <td className="py-1.5 text-right tabular">{c.cantidad}</td>
-                    <td className="py-1.5 text-right tabular">{formatMontoExact(c.precio_unitario, "MXN")}</td>
-                    <td className="py-1.5 text-right tabular">{formatMontoExact(c.importe, "MXN")}</td>
+                  <tr key={c.id} className="no-partir align-top" data-concepto={c.id}>
+                    <td className={`${RAYA} py-1.5 px-2 text-ink font-medium`} data-concepto-producto>{c.nombre}</td>
+                    <td className={`${RAYA} py-1.5 px-2 text-ink-dim`} data-concepto-descripcion>{c.descripcion}</td>
+                    <td className={`${RAYA} py-1.5 px-2 text-right tabular`}>{c.cantidad}</td>
+                    <td className={`${RAYA} py-1.5 px-2 text-right tabular whitespace-nowrap`}>{formatMontoExact(c.precio_unitario, "MXN")}</td>
+                    <td className={`${RAYA} py-1.5 px-2 text-right tabular whitespace-nowrap`}>{formatMontoExact(c.importe, "MXN")}</td>
                   </tr>
                 ))}
                 {d.grupos.length > 1 && (
                   <tr className="no-partir">
-                    <td colSpan={3} className="py-1 text-right text-[11px] text-ink-muted">
+                    <td colSpan={4} className="py-1 px-2 text-right text-[11px] text-ink-muted">
                       Suma {g.cotizacion_id ? `de la cotización ${g.numero}` : "de otros conceptos"}
                     </td>
-                    <td className="py-1 text-right tabular text-[11px] text-ink-muted">{formatMontoExact(g.importe, "MXN")}</td>
+                    <td className="py-1 px-2 text-right tabular text-[11px] text-ink-muted">{formatMontoExact(g.importe, "MXN")}</td>
                   </tr>
                 )}
               </tbody>
             ))}
             <tfoot>
-              <tr className="border-t-2 border-black/20 font-medium">
-                <td colSpan={2} />
-                <td className="py-2 text-right">Precio, sin IVA</td>
-                <td className="py-2 text-right tabular" data-precio-sin-iva>{formatMontoExact(t.total, "MXN")}</td>
+              <tr className="font-medium">
+                <td colSpan={3} />
+                <td className="py-2 px-2 text-right whitespace-nowrap">Precio, sin IVA</td>
+                <td className="py-2 px-2 text-right tabular whitespace-nowrap" data-precio-sin-iva>{formatMontoExact(t.total, "MXN")}</td>
               </tr>
             </tfoot>
           </table>
+          </div>
         )}
 
         <h2 className="text-sm font-medium text-ink-dim mb-2">Los pagos</h2>
