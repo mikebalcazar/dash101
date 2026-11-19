@@ -6,7 +6,7 @@
  * medio, o un salto de línea al final que Excel pone y nadie ve.
  */
 import { describe, expect, it } from 'vitest';
-import { esRango, filaVacia, huella, importeDe, leerPegado, numeroDeHoja, pegarRango, revisar, type FilaDeHoja } from '@/lib/hoja';
+import { esRango, filaVacia, huella, importeDe, leerPegado, moverFila, numeroDeHoja, pegarRango, revisar, type FilaDeHoja } from '@/lib/hoja';
 
 const fila = (descripcion: string, cantidad: string, precio: string, id: string | null = null): FilaDeHoja =>
   ({ ...filaVacia(), id, descripcion, cantidad, precio });
@@ -87,6 +87,28 @@ describe('el producto, aparte de la descripción', () => {
   it('cambiar sólo el producto cambia la huella', () => {
     const a = { ...fila('Gradas', '1', '100', 'c1'), nombre: 'CAR-02' };
     expect(huella([a])).not.toBe(huella([{ ...a, nombre: 'CAR-03' }]));
+  });
+});
+
+/* Mike, 19-nov-2026: «quiero poder acomodar el orden de los conceptos». */
+describe('acomodar el orden', () => {
+  const hoja = () => [fila('A', '1', '1', 'a'), fila('B', '1', '1', 'b'), fila('C', '1', '1'), filaVacia()];
+  const nombres = (f: FilaDeHoja[]) => f.map((x) => x.descripcion);
+  it('un renglón sube, baja o salta a otro lugar', () => {
+    expect(nombres(moverFila(hoja(), 2, 0))).toEqual(['C', 'A', 'B', '']);
+    expect(nombres(moverFila(hoja(), 0, 1))).toEqual(['B', 'A', 'C', '']);
+  });
+  it('el renglón en blanco del final no se mueve ni se rebasa', () => {
+    expect(nombres(moverFila(hoja(), 0, 9))).toEqual(['B', 'C', 'A', '']);
+    const h = hoja();
+    expect(moverFila(h, 3, 0)).toBe(h);
+    expect(moverFila(h, 0, -1)).toBe(h);
+  });
+  it('lo que se guarda va en el orden nuevo, y la hoja se sabe cambiada', () => {
+    const h = hoja();
+    const r = revisar(moverFila(h, 2, 0));
+    expect(r.ok && r.renglones.map((x) => x.descripcion)).toEqual(['C', 'A', 'B']);
+    expect(huella(moverFila(h, 2, 0))).not.toBe(huella(h));
   });
 });
 

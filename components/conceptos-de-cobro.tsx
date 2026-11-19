@@ -22,7 +22,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  IconDeviceFloppy, IconFileImport, IconPlus, IconReceipt2, IconTemplate, IconTrash, IconX,
+  IconChevronDown, IconChevronUp, IconDeviceFloppy, IconFileImport, IconGripVertical, IconPlus, IconReceipt2, IconTemplate, IconTrash, IconX,
 } from "@tabler/icons-react";
 import type { Proyecto } from "@/types/schema";
 import {
@@ -33,7 +33,7 @@ import { estadoDelProyecto } from "@/lib/estado-proyecto";
 import { ErrorApi } from "@/lib/api/cliente";
 import { formatMonto } from "@/lib/format";
 import {
-  COLUMNAS, claveNueva, esRango, filaVacia, huella, importeDe, leerPegado, numeroDeHoja, pegarRango, revisar, vacia,
+  COLUMNAS, claveNueva, esRango, filaVacia, huella, importeDe, leerPegado, moverFila, numeroDeHoja, pegarRango, revisar, vacia,
   type Columna, type FilaDeHoja,
 } from "@/lib/hoja";
 
@@ -103,6 +103,8 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
   const [anterior, setAnterior] = useState<number | null>(null);
   const caja = useRef<HTMLDivElement>(null);
   const irA = useRef<{ fila: number; columna: Columna } | null>(null);
+  /** Arrastrar un renglón por su número: de cuál a cuál. */
+  const [arrastre, setArrastre] = useState<{ de: number; sobre: number | null } | null>(null);
 
   const cargar = useCallback(async () => {
     if (!proyecto.id) return;
@@ -157,6 +159,16 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
     setFilas((prev) => conColita(prev.map((f, k) => (k === i ? { ...f, [columna]: valor } : f))));
   };
 
+  /* Acomodar el orden (Mike, 19-nov-2026). El foco se va con el renglón, así
+   * Alt+↑ / Alt+↓ seguidos lo siguen moviendo. Se guarda con la hoja. */
+  const reordenar = (de: number, a: number, columna?: Columna) => {
+    const nuevas = moverFila(filas, de, a);
+    if (nuevas === filas) return;
+    setMarcada(null);
+    setFilas(nuevas);
+    if (columna) irA.current = { fila: nuevas.indexOf(filas[de]), columna };
+  };
+
   const quitar = (i: number) => {
     setMarcada(null);
     setFilas((prev) => conColita(prev.filter((_, k) => k !== i)));
@@ -174,7 +186,8 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
   };
 
   const tecla = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>, i: number, columna: Columna) => {
-    if (e.key === "Enter") { e.preventDefault(); mover(i, columna, e.shiftKey ? -1 : 1); }
+    if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) { e.preventDefault(); reordenar(i, i + (e.key === "ArrowUp" ? -1 : 1), columna); }
+    else if (e.key === "Enter") { e.preventDefault(); mover(i, columna, e.shiftKey ? -1 : 1); }
     else if (e.key === "ArrowDown") { e.preventDefault(); mover(i, columna, 1); }
     else if (e.key === "ArrowUp") { e.preventDefault(); mover(i, columna, -1); }
   };
@@ -430,13 +443,13 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
         <table className="w-full min-w-[40rem] text-sm border-collapse" data-hoja-tabla>
           <thead>
             <tr className="text-[11px] text-ink-muted uppercase tracking-wide">
-              <th className="w-8 py-1.5 font-medium text-right pr-2">#</th>
+              <th className="w-10 py-1.5 font-medium text-right pr-1">#</th>
               <th className={`${raya} text-left py-1.5 px-2 font-medium w-[22%]`}>Producto</th>
               <th className={`${raya} text-left py-1.5 px-2 font-medium`}>Descripción</th>
               <th className={`${raya} text-right py-1.5 px-2 font-medium w-16`}>Cant.</th>
               <th className={`${raya} text-right py-1.5 px-2 font-medium w-28`}>P. unitario</th>
               <th className={`${raya} text-right py-1.5 px-2 font-medium w-28`}>Importe</th>
-              <th className="w-8" />
+              <th className="w-20" />
             </tr>
           </thead>
           <tbody>
@@ -445,8 +458,20 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
               const blanca = vacia(f) && !f.id && i === filas.length - 1;
               const mal = (c: Columna) => marcada?.fila === i && marcada.columna === c ? " ring-2 ring-mauve-900/50 bg-mauve-50" : "";
               return (
-                <tr key={f.clave} data-hoja-fila={i} data-concepto={f.id ?? undefined} className="align-top">
-                  <td className="py-1.5 pr-2 text-[11px] text-ink-muted text-right tabular-nums">{blanca ? "" : i + 1}</td>
+                <tr key={f.clave} data-hoja-fila={i} data-concepto={f.id ?? undefined}
+                  className={`align-top${arrastre && arrastre.sobre === i && arrastre.de !== i ? (arrastre.de > i ? " shadow-[inset_0_2px_0_0_var(--color-marca,#38bdf8)]" : " shadow-[inset_0_-2px_0_0_var(--color-marca,#38bdf8)]") : ""}${arrastre?.de === i ? " opacity-50" : ""}`}
+                  onDragOver={arrastre && !blanca ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (arrastre.sobre !== i) setArrastre({ ...arrastre, sobre: i }); } : undefined}
+                  onDrop={arrastre && !blanca ? (e) => { e.preventDefault(); reordenar(arrastre.de, i); setArrastre(null); } : undefined}>
+                  <td className="py-1.5 pr-1 text-[11px] text-ink-muted text-right tabular-nums whitespace-nowrap">
+                    {!blanca && (
+                      <span draggable data-hoja-arrastrar={i} title="Arrastra para acomodar el orden"
+                        onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(i)); setArrastre({ de: i, sobre: null }); }}
+                        onDragEnd={() => setArrastre(null)}
+                        className="inline-flex items-center gap-0.5 cursor-grab active:cursor-grabbing select-none hover:text-ink-dim">
+                        <IconGripVertical size={12} aria-hidden />{i + 1}
+                      </span>
+                    )}
+                  </td>
                   <td className={`${raya} py-0.5`}>
                     <textarea data-fila={i} data-col="nombre" rows={1} maxLength={200} value={f.nombre}
                       placeholder={blanca ? "Escribe o pega aquí…" : ""} aria-label={`Producto del renglón ${i + 1}`}
@@ -478,10 +503,16 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
                   <td className={`${raya} py-1.5 px-2 text-right tabular-nums text-ink-dim whitespace-nowrap`} data-hoja-importe>
                     {blanca ? "" : imp === null ? <span className="text-ink-muted">—</span> : formatMonto(imp, "MXN")}
                   </td>
-                  <td className="py-1 text-right">
+                  <td className="py-1 text-right whitespace-nowrap">
                     {!blanca && (
-                      <button type="button" aria-label={`Quitar el renglón ${i + 1}`} data-hoja-quitar onClick={() => quitar(i)}
-                        className="text-ink-muted hover:text-mauve-900 p-1"><IconX size={13} /></button>
+                      <>
+                        <button type="button" aria-label={`Subir el renglón ${i + 1}`} title="Subir (Alt+↑)" data-hoja-subir={i} disabled={i === 0}
+                          onClick={() => reordenar(i, i - 1)} className="text-ink-muted hover:text-ink-dim p-0.5 disabled:opacity-25"><IconChevronUp size={13} /></button>
+                        <button type="button" aria-label={`Bajar el renglón ${i + 1}`} title="Bajar (Alt+↓)" data-hoja-bajar={i} disabled={i >= filas.length - 2 && vacia(filas[filas.length - 1]) && !filas[filas.length - 1].id}
+                          onClick={() => reordenar(i, i + 1)} className="text-ink-muted hover:text-ink-dim p-0.5 disabled:opacity-25"><IconChevronDown size={13} /></button>
+                        <button type="button" aria-label={`Quitar el renglón ${i + 1}`} data-hoja-quitar onClick={() => quitar(i)}
+                          className="text-ink-muted hover:text-mauve-900 p-1"><IconX size={13} /></button>
+                      </>
                     )}
                   </td>
                 </tr>
@@ -516,6 +547,7 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
 
       <p className="text-[11px] text-ink-muted mt-2">
         Tab y Enter para moverte; pega un rango de Sheets o Excel (producto, descripción, cantidad, precio) en cualquier celda.
+        Para acomodar el orden, arrastra un renglón por su número, usa ↑ ↓, o Alt+↑ / Alt+↓.
       </p>
 
       {cambiada && (
