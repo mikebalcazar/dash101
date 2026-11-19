@@ -23,6 +23,8 @@ export interface FilaDeHoja {
   id: string | null;
   /** El producto. */
   nombre: string;
+  /** 0.109.0 · La sección dentro de su cotización («N01»); '' sin sección. */
+  seccion: string;
   descripcion: string;
   cantidad: string;
   /** En pesos, como se escribe. */
@@ -37,7 +39,7 @@ let n = 0;
 export const claveNueva = () => `n${Date.now().toString(36)}${(n++).toString(36)}`;
 
 export const filaVacia = (): FilaDeHoja => ({
-  clave: claveNueva(), id: null, nombre: '', descripcion: '', cantidad: '1', precio: '',
+  clave: claveNueva(), id: null, nombre: '', seccion: '', descripcion: '', cantidad: '1', precio: '',
   cotizacion_id: null, cotizacion_nombre: null, cotizacion_folio: null,
 });
 
@@ -146,13 +148,13 @@ export function moverFila(filas: FilaDeHoja[], de: number, a: number): FilaDeHoj
 }
 
 export type Revision =
-  | { ok: true; renglones: Array<{ id: string | null; nombre: string; descripcion: string; cantidad: number; precio_unitario: number }> }
+  | { ok: true; renglones: Array<{ id: string | null; nombre: string; seccion: string; descripcion: string; cantidad: number; precio_unitario: number }> }
   | { ok: false; fila: number; columna: Columna; motivo: string };
 
 /** Lo que se manda a guardar, o el primer renglón que no cuadra con su
  *  número (contando desde 1, como lo lee una persona). */
 export function revisar(filas: FilaDeHoja[]): Revision {
-  const renglones: Array<{ id: string | null; nombre: string; descripcion: string; cantidad: number; precio_unitario: number }> = [];
+  const renglones: Array<{ id: string | null; nombre: string; seccion: string; descripcion: string; cantidad: number; precio_unitario: number }> = [];
   for (const [i, f] of filas.entries()) {
     if (vacia(f) && !f.id) continue;
     const fila = i + 1;
@@ -161,12 +163,73 @@ export function revisar(filas: FilaDeHoja[]): Revision {
     if (cantidad === null || cantidad <= 0) return { ok: false, fila, columna: 'cantidad', motivo: 'la cantidad tiene que ser un número mayor que cero' };
     const precio = numeroDeHoja(f.precio);
     if (precio === null) return { ok: false, fila, columna: 'precio', motivo: 'el precio unitario tiene que ser un número, en pesos' };
-    renglones.push({ id: f.id, nombre: f.nombre.trim(), descripcion: f.descripcion.trim(), cantidad, precio_unitario: precio });
+    renglones.push({ id: f.id, nombre: f.nombre.trim(), seccion: (f.seccion ?? '').trim(), descripcion: f.descripcion.trim(), cantidad, precio_unitario: precio });
   }
   return { ok: true, renglones };
 }
 
 /** Lo mismo que se guardaría, para saber si la hoja cambió. */
 export const huella = (filas: FilaDeHoja[]) => JSON.stringify(
-  filas.filter((f) => !(vacia(f) && !f.id)).map((f) => [f.id, f.nombre.trim(), f.descripcion.trim(), numeroDeHoja(f.cantidad), numeroDeHoja(f.precio)]),
+  filas.filter((f) => !(vacia(f) && !f.id)).map((f) => [f.id, f.nombre.trim(), (f.seccion ?? '').trim(), f.descripcion.trim(), numeroDeHoja(f.cantidad), numeroDeHoja(f.precio)]),
 );
+
+/* ─────────────── los grupos de la hoja (0.109.0) ───────────────
+ *
+ * Mike, 19-nov-2026: «en vez de que diga en cada celda de descripción
+ * "Cotización 1 - Presupuesto General", que se agrupen todos en una sección de
+ * Cotización 1, y luego subagruparlos por las divisiones que venían de nivel
+ * por nivel (N01, N02, N03, etc.)». La hoja sigue siendo una lista en su
+ * orden; los encabezados salen de donde cambia la cotización o la sección. */
+
+export interface Encabezado {
+  tipo: 'cotizacion' | 'seccion';
+  /** Para recordar si está cerrado: `c:<cotización>` o `s:<cotización>:<sección>`. */
+  clave: string;
+  cotizacion_id: string | null;
+  /** '' en el de una cotización; «Sin sección» se pinta cuando una sección se acaba. */
+  seccion: string;
+  conceptos: number;
+  /** En pesos. */
+  importe: number;
+}
+
+export interface GruposDeHoja {
+  /** Los encabezados que van ANTES del renglón i. */
+  antes: Map<number, Encabezado[]>;
+  /** A qué grupos pertenece cada renglón (para esconderlo si se cierran). */
+  claves: string[][];
+}
+
+export function gruposDeHoja(filas: FilaDeHoja[]): GruposDeHoja {
+  const antes = new Map<number, Encabezado[]>();
+  const claves: string[][] = filas.map(() => []);
+  const hayCot = filas.some((f) => f.cotizacion_id);
+  const haySec = filas.some((f) => (f.seccion ?? '').trim());
+  if (!hayCot && !haySec) return { antes, claves };
+  let cotPrevia: string | null | undefined;
+  let secPrevia: string | undefined;
+  let enCot: Encabezado | null = null;
+  let enSec: Encabezado | null = null;
+  for (const [i, f] of filas.entries()) {
+    if (vacia(f) && !f.id) continue;
+    const cot = f.cotizacion_id ?? null;
+    const sec = (f.seccion ?? '').trim();
+    const nuevos: Encabezado[] = [];
+    const cotClave = `c:${cot ?? 'mano'}`;
+    if (cot !== cotPrevia) {
+      enCot = hayCot ? { tipo: 'cotizacion', clave: cotClave, cotizacion_id: cot, seccion: '', conceptos: 0, importe: 0 } : null;
+      if (enCot) nuevos.push(enCot);
+      enSec = null; secPrevia = undefined;
+    }
+    if (sec !== (secPrevia ?? '') || (sec && secPrevia === undefined)) {
+      enSec = sec || secPrevia ? { tipo: 'seccion', clave: `s:${cot ?? 'mano'}:${sec}`, cotizacion_id: cot, seccion: sec, conceptos: 0, importe: 0 } : null;
+      if (enSec) nuevos.push(enSec);
+    }
+    if (nuevos.length) antes.set(i, nuevos);
+    const imp = importeDe(f.cantidad, f.precio) ?? 0;
+    for (const e of [enCot, enSec]) if (e) { e.conceptos++; e.importe = Math.round((e.importe + imp) * 100) / 100; }
+    claves[i] = [enCot?.clave, enSec?.clave].filter((x): x is string => !!x);
+    cotPrevia = cot; secPrevia = sec;
+  }
+  return { antes, claves };
+}

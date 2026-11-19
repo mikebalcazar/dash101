@@ -314,6 +314,8 @@ problema (navegador con internet) y misma solución (un flujo). Pendiente.
 
 > **19-nov-2026 · los conceptos con las columnas del PDF (API 0.108.0).** Mike: «Necesito que la lista de conceptos tengan las mismas columnas que las del PDF. Separar el producto de la descripción. Y visualmente quiero celdas que separen las columnas.» La hoja del proyecto, el estado de cuenta del proyecto y el del cliente: Producto | Descripción | Cant. | P. unitario | Importe, cada celda con raya (`border border-black/10`). El producto es `nombre` en la API. Producto y descripción crecen con su texto (`[field-sizing:content]`); Enter sigue bajando. Pegar de Sheets empieza en Producto.
 
+> **19-nov-2026 · la hoja agrupa y se acomoda a lo ancho (API 0.109.0).** Mike: ancho de columnas ajustable y grupos que se colapsan. La hoja pinta un encabezado por cotización y otro por sección (`conceptos.seccion`), con conceptos y suma, que se abren y cierran (`gruposDeHoja` en lib/hoja.ts, medido); ya no repite «Cotización N» en cada renglón. Las columnas Producto, Cant., P. unitario e Importe se ensanchan arrastrando el borde del encabezado (localStorage `dash101.hoja.anchos`); la descripción se queda con lo que sobra. El estado de cuenta pone el subtítulo de cada sección con su suma.
+
 ## §0 del arranque
 
 | Paso | Resultado |

@@ -30,7 +30,7 @@
  * la empresa y el que baja el cliente digan lo mismo.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { IconArrowLeft, IconChevronRight, IconPrinter, IconTableExport } from "@tabler/icons-react";
@@ -53,6 +53,13 @@ const enPalabras = (iso: string) =>
 
 /** Para el nombre del archivo: 2026-09-21, que ordena solo en una carpeta. */
 const enDigitos = (iso: string) => aDia(new Date(iso));
+
+/** 0.109.0 · Lo que suma la sección que empieza en el concepto k. */
+const sumaDeSeccion = (conceptos: Array<{ seccion: string; importe: number }>, k: number) => {
+  let t = 0;
+  for (let j = k; j < conceptos.length && conceptos[j].seccion === conceptos[k].seccion; j++) t += conceptos[j].importe;
+  return Math.round(t * 100) / 100;
+};
 
 /** La raya de cada celda: separa las columnas (Mike, 18-nov-2026). */
 const RAYA = "border border-black/10";
@@ -168,7 +175,7 @@ export default function EstadoDelProyectoPage() {
               <tr>
                 <th className={`${RAYA} text-left py-1.5 px-2 font-medium w-40`}>Producto</th>
                 <th className={`${RAYA} text-left py-1.5 px-2 font-medium`}>Descripción</th>
-                <th className={`${RAYA} text-right py-1.5 px-2 font-medium`}>Cant.</th>
+                <th className={`${RAYA} text-right py-1.5 px-2 font-medium w-14`}>Cant.</th>
                 <th className={`${RAYA} text-right py-1.5 px-2 font-medium`}>P. unitario</th>
                 <th className={`${RAYA} text-right py-1.5 px-2 font-medium`}>Importe</th>
               </tr>
@@ -180,14 +187,25 @@ export default function EstadoDelProyectoPage() {
                     <td colSpan={5} className="pt-3 pb-1 px-2 text-xs font-medium text-ink-dim">{tituloDelGrupo(g)}</td>
                   </tr>
                 )}
-                {g.conceptos.map((c) => (
-                  <tr key={c.id} className="no-partir align-top" data-concepto={c.id}>
+                {g.conceptos.map((c, k) => (
+                  <Fragment key={c.id}>
+                  {/* 0.109.0 · Cada sección (N01, MEZZANINE…) con su subtítulo. */}
+                  {c.seccion && c.seccion !== (g.conceptos[k - 1]?.seccion ?? "") && (
+                    <tr className="no-partir" data-seccion={c.seccion}>
+                      <td colSpan={4} className={`${RAYA} pt-2 pb-1 px-2 text-[11px] font-medium text-ink-dim uppercase tracking-wide`}>{c.seccion}</td>
+                      <td className={`${RAYA} pt-2 pb-1 px-2 text-right tabular text-[11px] text-ink-muted whitespace-nowrap`}>
+                        {formatMontoExact(sumaDeSeccion(g.conceptos, k), "MXN")}
+                      </td>
+                    </tr>
+                  )}
+                  <tr className="no-partir align-top" data-concepto={c.id}>
                     <td className={`${RAYA} py-1.5 px-2 text-ink font-medium`} data-concepto-producto>{c.nombre}</td>
                     <td className={`${RAYA} py-1.5 px-2 text-ink-dim`} data-concepto-descripcion>{c.descripcion}</td>
                     <td className={`${RAYA} py-1.5 px-2 text-right tabular`}>{c.cantidad}</td>
                     <td className={`${RAYA} py-1.5 px-2 text-right tabular whitespace-nowrap`}>{formatMontoExact(c.precio_unitario, "MXN")}</td>
                     <td className={`${RAYA} py-1.5 px-2 text-right tabular whitespace-nowrap`}>{formatMontoExact(c.importe, "MXN")}</td>
                   </tr>
+                  </Fragment>
                 ))}
                 {d.grupos.length > 1 && (
                   <tr className="no-partir">
