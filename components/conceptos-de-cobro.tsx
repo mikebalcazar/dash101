@@ -20,9 +20,9 @@
  * navegador.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  IconChevronDown, IconChevronUp, IconDeviceFloppy, IconFileImport, IconGripVertical, IconPlus, IconReceipt2, IconTemplate, IconTrash, IconX,
+  IconChevronDown, IconChevronRight, IconChevronUp, IconDeviceFloppy, IconFileImport, IconGripVertical, IconPlus, IconReceipt2, IconTemplate, IconTrash, IconX,
 } from "@tabler/icons-react";
 import type { Proyecto } from "@/types/schema";
 import {
@@ -33,7 +33,7 @@ import { estadoDelProyecto } from "@/lib/estado-proyecto";
 import { ErrorApi } from "@/lib/api/cliente";
 import { formatMonto } from "@/lib/format";
 import {
-  COLUMNAS, claveNueva, esRango, filaVacia, huella, importeDe, leerPegado, moverFila, numeroDeHoja, pegarRango, revisar, vacia,
+  COLUMNAS, claveNueva, esRango, filaVacia, gruposDeHoja, huella, importeDe, leerPegado, moverFila, numeroDeHoja, pegarRango, revisar, vacia,
   type Columna, type FilaDeHoja,
 } from "@/lib/hoja";
 
@@ -43,9 +43,17 @@ const renglones = (n: number) => `${n} ${n === 1 ? "renglón" : "renglones"}`;
 const pesos = (v: number) => v.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const desdeConcepto = (c: Concepto): FilaDeHoja => ({
-  clave: c.id, id: c.id, nombre: c.nombre, descripcion: c.descripcion, cantidad: String(c.cantidad), precio: pesos(c.precio_unitario),
+  clave: c.id, id: c.id, nombre: c.nombre, seccion: c.seccion, descripcion: c.descripcion, cantidad: String(c.cantidad), precio: pesos(c.precio_unitario),
   cotizacion_id: c.cotizacion_id, cotizacion_nombre: c.cotizacion_nombre, cotizacion_folio: c.cotizacion_folio,
 });
+
+/** 0.109.0 · Los anchos de las columnas, en pixeles; la descripción se queda
+ *  con lo que sobra. */
+interface Anchos { nombre: number; cantidad: number; precio: number; importe: number }
+const ANCHOS_DE_FABRICA: Anchos = { nombre: 150, cantidad: 64, precio: 112, importe: 116 };
+const LLAVE_ANCHOS = "dash101.hoja.anchos";
+/** El asa para arrastrar el borde de un encabezado. */
+const ASA = "absolute top-0 h-full w-2 cursor-col-resize select-none touch-none z-10 hover:bg-marca/40";
 
 /** Siempre queda un renglón en blanco al final, para seguir escribiendo. */
 const conColita = (filas: FilaDeHoja[]): FilaDeHoja[] =>
@@ -103,6 +111,33 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
   const [anterior, setAnterior] = useState<number | null>(null);
   const caja = useRef<HTMLDivElement>(null);
   const irA = useRef<{ fila: number; columna: Columna } | null>(null);
+  /* 0.109.0 · Los grupos que están cerrados (Mike, 19-nov-2026: «agrupar
+   * (como colapsar grupos)»). Se abren todos al recargar. */
+  const [cerrados, setCerrados] = useState<Set<string>>(() => new Set());
+  /* Los anchos de las columnas, arrastrando el borde de su encabezado (Mike,
+   * 19-nov-2026: «ajustar el tamaño de las celdas (ancho) para que los
+   * renglones no sean tan angostos en la descripción ni tan amplios en la
+   * cantidad»). La descripción se queda con lo que sobra. Se recuerdan en
+   * este navegador. */
+  const [anchos, setAnchos] = useState<Anchos>(ANCHOS_DE_FABRICA);
+  useEffect(() => {
+    try {
+      const g = JSON.parse(localStorage.getItem(LLAVE_ANCHOS) ?? "null");
+      if (g && typeof g === "object") setAnchos({ ...ANCHOS_DE_FABRICA, ...g });
+    } catch { /* sin memoria del navegador, los de fábrica */ }
+  }, []);
+  const estirar = (col: keyof Anchos, signo: 1 | -1) => (e: React.PointerEvent<HTMLSpanElement>) => {
+    e.preventDefault();
+    const x0 = e.clientX, w0 = anchos[col];
+    const seguir = (ev: PointerEvent) => setAnchos((a) => ({ ...a, [col]: Math.min(600, Math.max(48, Math.round(w0 + signo * (ev.clientX - x0)))) }));
+    const soltar = () => {
+      window.removeEventListener("pointermove", seguir);
+      window.removeEventListener("pointerup", soltar);
+      setAnchos((a) => { try { localStorage.setItem(LLAVE_ANCHOS, JSON.stringify(a)); } catch { /* nada */ } return a; });
+    };
+    window.addEventListener("pointermove", seguir);
+    window.addEventListener("pointerup", soltar);
+  };
   /** Arrastrar un renglón por su número: de cuál a cuál. */
   const [arrastre, setArrastre] = useState<{ de: number; sobre: number | null } | null>(null);
 
@@ -174,8 +209,14 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
     setFilas((prev) => conColita(prev.filter((_, k) => k !== i)));
   };
 
+  const grupos = useMemo(() => gruposDeHoja(filas), [filas]);
+  const escondido = (i: number) => (grupos.claves[i] ?? []).some((k) => cerrados.has(k));
+  const alternar = (clave: string) => setCerrados((c) => { const n = new Set(c); if (n.has(clave)) n.delete(clave); else n.add(clave); return n; });
+  const todasLasClaves = useMemo(() => [...grupos.antes.values()].flat().map((e) => e.clave), [grupos]);
+
   const mover = (i: number, columna: Columna, paso: number) => {
-    const destino = i + paso;
+    let destino = i + paso;
+    while (destino >= 0 && destino < filas.length && escondido(destino)) destino += paso;
     if (destino < 0) return;
     if (destino >= filas.length) {
       if (vacia(filas[i]) && !filas[i].id) return;
@@ -288,7 +329,7 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
   const usar = (p: Plantilla) => {
     setFilas((prev) => conColita([
       ...prev.filter((f) => !(vacia(f) && !f.id)),
-      ...p.renglones.map((r) => ({ ...filaVacia(), clave: claveNueva(), nombre: r.nombre, descripcion: r.descripcion, cantidad: String(r.cantidad), precio: pesos(r.precio_unitario) })),
+      ...p.renglones.map((r) => ({ ...filaVacia(), clave: claveNueva(), nombre: r.nombre, seccion: r.seccion ?? '', descripcion: r.descripcion, cantidad: String(r.cantidad), precio: pesos(r.precio_unitario) })),
     ]));
     setPlantillas(null);
     avisar(`«${p.nombre}» está en la hoja. Revisa y guarda.`);
@@ -301,7 +342,7 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
     if (!r.ok) { setMarcada({ fila: r.fila - 1, columna: r.columna }); setError(`Renglón ${r.fila}: ${r.motivo}.`); return; }
     if (!r.renglones.length) { setError("La hoja está vacía: no hay qué guardar como plantilla."); return; }
     try {
-      const p = await crearPlantilla(nombrePlantilla, r.renglones.map(({ nombre, descripcion, cantidad, precio_unitario }) => ({ nombre, descripcion, cantidad, precio_unitario })));
+      const p = await crearPlantilla(nombrePlantilla, r.renglones.map(({ nombre, seccion, descripcion, cantidad, precio_unitario }) => ({ nombre, seccion, descripcion, cantidad, precio_unitario })));
       setNombrePlantilla("");
       setPlantillas(await listarPlantillas());
       avisar(`Plantilla «${p.nombre}» guardada con ${renglones(p.renglones.length)}`);
@@ -436,20 +477,45 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
         </div>
       )}
 
+      {todasLasClaves.length > 0 && (
+        <div className="flex justify-end gap-2 mb-1 text-[11px]">
+          <button type="button" data-grupos-abrir onClick={() => setCerrados(new Set())} className="text-ink-muted hover:text-ink-dim">Abrir todo</button>
+          <span className="text-ink-muted">·</span>
+          <button type="button" data-grupos-cerrar onClick={() => setCerrados(new Set(todasLasClaves.filter((k) => k.startsWith("s:"))))} className="text-ink-muted hover:text-ink-dim">Cerrar las secciones</button>
+        </div>
+      )}
       <div ref={caja} className="overflow-x-auto -mx-1">
         {/* 0.108.0 · Las columnas del PDF, con el producto aparte de la
             descripción, y cada celda con su raya (Mike, 18-nov-2026: «quiero
             celdas que separen las columnas»). */}
-        <table className="w-full min-w-[40rem] text-sm border-collapse" data-hoja-tabla>
+        <table className="w-full text-sm border-collapse table-fixed" data-hoja-tabla
+          style={{ minWidth: anchos.nombre + anchos.cantidad + anchos.precio + anchos.importe + 40 + 80 + 140 }}>
+          <colgroup>
+            <col style={{ width: 40 }} />
+            <col style={{ width: anchos.nombre }} data-ancho="nombre" />
+            <col />
+            <col style={{ width: anchos.cantidad }} data-ancho="cantidad" />
+            <col style={{ width: anchos.precio }} data-ancho="precio" />
+            <col style={{ width: anchos.importe }} data-ancho="importe" />
+            <col style={{ width: 80 }} />
+          </colgroup>
           <thead>
             <tr className="text-[11px] text-ink-muted uppercase tracking-wide">
-              <th className="w-10 py-1.5 font-medium text-right pr-1">#</th>
-              <th className={`${raya} text-left py-1.5 px-2 font-medium w-[22%]`}>Producto</th>
+              <th className="py-1.5 font-medium text-right pr-1">#</th>
+              <th className={`${raya} text-left py-1.5 px-2 font-medium relative`}>
+                Producto
+                <span role="separator" aria-label="Ancho de Producto" title="Arrastra para cambiar el ancho" data-estirar="nombre"
+                  onPointerDown={estirar("nombre", 1)} className={ASA + " right-0 translate-x-1/2"} />
+              </th>
               <th className={`${raya} text-left py-1.5 px-2 font-medium`}>Descripción</th>
-              <th className={`${raya} text-right py-1.5 px-2 font-medium w-16`}>Cant.</th>
-              <th className={`${raya} text-right py-1.5 px-2 font-medium w-28`}>P. unitario</th>
-              <th className={`${raya} text-right py-1.5 px-2 font-medium w-28`}>Importe</th>
-              <th className="w-20" />
+              {([["cantidad", "Cant."], ["precio", "P. unitario"], ["importe", "Importe"]] as const).map(([col, titulo]) => (
+                <th key={col} className={`${raya} text-right py-1.5 px-2 font-medium relative`}>
+                  <span role="separator" aria-label={`Ancho de ${titulo}`} title="Arrastra para cambiar el ancho" data-estirar={col}
+                    onPointerDown={estirar(col, -1)} className={ASA + " left-0 -translate-x-1/2"} />
+                  {titulo}
+                </th>
+              ))}
+              <th />
             </tr>
           </thead>
           <tbody>
@@ -457,8 +523,37 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
               const imp = importeDe(f.cantidad, f.precio);
               const blanca = vacia(f) && !f.id && i === filas.length - 1;
               const mal = (c: Columna) => marcada?.fila === i && marcada.columna === c ? " ring-2 ring-mauve-900/50 bg-mauve-50" : "";
+              /* Los encabezados de grupo que van antes de este renglón; los de
+                 sección no se pintan si su cotización está cerrada. */
+              const cabezas = (grupos.antes.get(i) ?? []).filter((e) => e.tipo === "cotizacion" || !cerrados.has(`c:${e.cotizacion_id ?? "mano"}`));
               return (
-                <tr key={f.clave} data-hoja-fila={i} data-concepto={f.id ?? undefined}
+                <Fragment key={f.clave}>
+                {cabezas.map((e) => {
+                  const cerrado = cerrados.has(e.clave);
+                  const titulo = e.tipo === "cotizacion"
+                    ? (e.cotizacion_id ? `Cotización ${numeroDeCot.get(e.cotizacion_id) ?? ""}${f.cotizacion_folio ? ` · ${f.cotizacion_folio}` : ""}${f.cotizacion_nombre ? ` · ${f.cotizacion_nombre}` : ""}` : "Otros conceptos")
+                    : (e.seccion || "Sin sección");
+                  return (
+                    <tr key={e.clave} data-hoja-grupo={e.tipo} data-grupo-clave={e.clave} data-cerrado={cerrado || undefined}
+                      className={e.tipo === "cotizacion" ? "bg-black/[0.04]" : ""}>
+                      <td />
+                      <td colSpan={4} className={`${raya} py-1 ${e.tipo === "cotizacion" ? "px-2" : "pl-6 pr-2"}`}>
+                        <button type="button" onClick={() => alternar(e.clave)} aria-expanded={!cerrado} data-alternar-grupo={e.clave}
+                          className={`inline-flex items-center gap-1 text-left text-xs ${e.tipo === "cotizacion" ? "font-semibold text-ink" : "font-medium text-ink-dim"}`}>
+                          {cerrado ? <IconChevronRight size={13} /> : <IconChevronDown size={13} />}
+                          {titulo}
+                          <span className="font-normal text-ink-muted">· {e.conceptos} {e.conceptos === 1 ? "concepto" : "conceptos"}</span>
+                        </button>
+                      </td>
+                      <td className={`${raya} py-1 px-2 text-right tabular-nums text-xs ${e.tipo === "cotizacion" ? "font-semibold text-ink" : "text-ink-dim"}`} data-grupo-importe>
+                        {formatMonto(e.importe, "MXN")}
+                      </td>
+                      <td />
+                    </tr>
+                  );
+                })}
+                {escondido(i) ? null : (
+                <tr data-hoja-fila={i} data-concepto={f.id ?? undefined}
                   className={`align-top${arrastre && arrastre.sobre === i && arrastre.de !== i ? (arrastre.de > i ? " shadow-[inset_0_2px_0_0_var(--color-marca,#38bdf8)]" : " shadow-[inset_0_-2px_0_0_var(--color-marca,#38bdf8)]") : ""}${arrastre?.de === i ? " opacity-50" : ""}`}
                   onDragOver={arrastre && !blanca ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (arrastre.sobre !== i) setArrastre({ ...arrastre, sobre: i }); } : undefined}
                   onDrop={arrastre && !blanca ? (e) => { e.preventDefault(); reordenar(arrastre.de, i); setArrastre(null); } : undefined}>
@@ -485,11 +580,6 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
                       aria-label={`Descripción del renglón ${i + 1}`}
                       onChange={(e) => cambiar(i, "descripcion", e.target.value)} onKeyDown={(e) => tecla(e, i, "descripcion")}
                       onPaste={(e) => pegar(e, i, "descripcion")} className={`${celda} resize-none [field-sizing:content] block${mal("descripcion")}`} />
-                    {f.cotizacion_id && (
-                      <span className="block px-2 -mt-0.5 mb-1 text-[10px] text-sky-900" data-de-cotizacion>
-                        Cotización {numeroDeCot.get(f.cotizacion_id) ?? ""}{f.cotizacion_folio ? ` · ${f.cotizacion_folio}` : ""}{f.cotizacion_nombre ? ` · ${f.cotizacion_nombre}` : ""}
-                      </span>
-                    )}
                   </td>
                   {(["cantidad", "precio"] as const).map((c) => (
                     <td key={c} className={`${raya} py-0.5`}>
@@ -516,6 +606,8 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
                     )}
                   </td>
                 </tr>
+                )}
+                </Fragment>
               );
             })}
           </tbody>

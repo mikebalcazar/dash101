@@ -156,7 +156,7 @@ describe("la hoja del presupuesto", () => {
     const nombre = `Prueba ${Date.now().toString(36)}`;
     const p = await crearPlantilla(nombre, [{ nombre: "Cocina", descripcion: "Integral, nogal", cantidad: 1, precio_unitario: 150_000.25 }]);
     try {
-      expect(p.renglones).toEqual([{ nombre: "Cocina", descripcion: "Integral, nogal", cantidad: 1, precio_unitario: 150_000.25 }]);
+      expect(p.renglones).toEqual([{ nombre: "Cocina", seccion: "", descripcion: "Integral, nogal", cantidad: 1, precio_unitario: 150_000.25 }]);
       expect((await listarPlantillas()).find((x) => x.id === p.id)?.nombre).toBe(nombre);
     } finally {
       await borrarPlantilla(p.id);

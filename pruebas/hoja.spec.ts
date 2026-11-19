@@ -6,7 +6,7 @@
  * medio, o un salto de línea al final que Excel pone y nadie ve.
  */
 import { describe, expect, it } from 'vitest';
-import { esRango, filaVacia, huella, importeDe, leerPegado, moverFila, numeroDeHoja, pegarRango, revisar, type FilaDeHoja } from '@/lib/hoja';
+import { esRango, filaVacia, gruposDeHoja, huella, importeDe, leerPegado, moverFila, numeroDeHoja, pegarRango, revisar, type FilaDeHoja } from '@/lib/hoja';
 
 const fila = (descripcion: string, cantidad: string, precio: string, id: string | null = null): FilaDeHoja =>
   ({ ...filaVacia(), id, descripcion, cantidad, precio });
@@ -82,7 +82,7 @@ describe('el producto, aparte de la descripción', () => {
   });
   it('con el producto o con la descripción basta; se mandan los dos', () => {
     const conProducto = { ...filaVacia(), nombre: 'Lactancia', cantidad: '1', precio: '51400' };
-    expect(revisar([conProducto])).toEqual({ ok: true, renglones: [{ id: null, nombre: 'Lactancia', descripcion: '', cantidad: 1, precio_unitario: 51400 }] });
+    expect(revisar([conProducto])).toEqual({ ok: true, renglones: [{ id: null, nombre: 'Lactancia', seccion: '', descripcion: '', cantidad: 1, precio_unitario: 51400 }] });
   });
   it('cambiar sólo el producto cambia la huella', () => {
     const a = { ...fila('Gradas', '1', '100', 'c1'), nombre: 'CAR-02' };
@@ -117,8 +117,8 @@ describe('lo que se manda a guardar', () => {
     expect(revisar([fila('Cocina', '1', '180,000.00', 'c1'), fila('Puertas', '6', '7500'), filaVacia()])).toEqual({
       ok: true,
       renglones: [
-        { id: 'c1', nombre: '', descripcion: 'Cocina', cantidad: 1, precio_unitario: 180000 },
-        { id: null, nombre: '', descripcion: 'Puertas', cantidad: 6, precio_unitario: 7500 },
+        { id: 'c1', nombre: '', seccion: '', descripcion: 'Cocina', cantidad: 1, precio_unitario: 180000 },
+        { id: null, nombre: '', seccion: '', descripcion: 'Puertas', cantidad: 6, precio_unitario: 7500 },
       ],
     });
   });
@@ -138,3 +138,31 @@ describe('lo que se manda a guardar', () => {
     expect(huella([fila('Cocina', '1', '180000', 'c1')])).not.toBe(huella([fila('Cocina', '2', '180000', 'c1')]));
   });
 });
+
+/* 0.109.0 · Mike, 19-nov-2026: agrupar por cotización y subagrupar por las
+ * divisiones de nivel (N01, N02…), y que se puedan colapsar. */
+describe('los grupos de la hoja', () => {
+  const de = (cot: string | null, seccion: string, descripcion: string, precio = '100'): FilaDeHoja =>
+    ({ ...filaVacia(), id: descripcion, cotizacion_id: cot, seccion, descripcion, cantidad: '1', precio });
+  it('un encabezado por cotización y uno por sección, con sus conceptos y lo que suman', () => {
+    const filas = [de('c1', 'N01', 'Muro'), de('c1', 'N01', 'Barra', '50'), de('c1', 'N02', 'Muro'), de('c2', '', 'Puertas'), de(null, '', 'Flete'), filaVacia()];
+    const g = gruposDeHoja(filas);
+    expect([...g.antes.entries()].map(([i, es]) => [i, es.map((e) => [e.tipo, e.seccion, e.conceptos, e.importe])])).toEqual([
+      [0, [['cotizacion', '', 3, 250], ['seccion', 'N01', 2, 150]]],
+      [2, [['seccion', 'N02', 1, 100]]],
+      [3, [['cotizacion', '', 1, 100]]],
+      [4, [['cotizacion', '', 1, 100]]],
+    ]);
+    expect(g.claves[1]).toEqual(['c:c1', 's:c1:N01']);
+    expect(g.claves[4]).toEqual(['c:mano']);
+    expect(g.claves[5]).toEqual([]);
+  });
+  it('si la sección se acaba dentro de la misma cotización, dice «sin sección»', () => {
+    const g = gruposDeHoja([de('c1', 'N01', 'Muro'), de('c1', '', 'Extra')]);
+    expect(g.antes.get(1)?.map((e) => [e.tipo, e.seccion])).toEqual([['seccion', '']]);
+  });
+  it('una hoja sin cotizaciones ni secciones no lleva encabezados', () => {
+    expect(gruposDeHoja([fila('A', '1', '1'), filaVacia()]).antes.size).toBe(0);
+  });
+});
+

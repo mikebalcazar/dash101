@@ -28,6 +28,8 @@ export interface Concepto {
   /** 0.108.0 · El producto («CAR-02», «Coffee Gradas»), aparte de su
    *  descripción, como en el PDF. '' si no tiene. */
   nombre: string;
+  /** 0.109.0 · La sección dentro de su cotización («N01»); '' sin sección. */
+  seccion: string;
   descripcion: string;
   cantidad: number;
   /** En PESOS. */
@@ -41,12 +43,12 @@ export interface Concepto {
 }
 
 interface FilaConcepto {
-  id: string; proyecto_id: string; nombre?: string | null; descripcion: string; cantidad: number; precio_unitario: number; monto: number; orden: number;
+  id: string; proyecto_id: string; nombre?: string | null; seccion?: string | null; descripcion: string; cantidad: number; precio_unitario: number; monto: number; orden: number;
   cotizacion_id: string | null; cotizacion_folio: string | null; cotizacion_nombre: string | null;
 }
 
 const concepto = (f: FilaConcepto): Concepto => ({
-  id: f.id, proyecto_id: f.proyecto_id, nombre: f.nombre ?? '', descripcion: f.descripcion ?? '', cantidad: Number(f.cantidad ?? 1),
+  id: f.id, proyecto_id: f.proyecto_id, nombre: f.nombre ?? '', seccion: f.seccion ?? '', descripcion: f.descripcion ?? '', cantidad: Number(f.cantidad ?? 1),
   precio_unitario: aPesos(f.precio_unitario), importe: aPesos(f.monto), orden: Number(f.orden ?? 0),
   cotizacion_id: f.cotizacion_id ?? null, cotizacion_folio: f.cotizacion_folio ?? null, cotizacion_nombre: f.cotizacion_nombre ?? null,
 });
@@ -88,6 +90,8 @@ export interface RenglonDeHoja {
   id?: string | null;
   /** 0.108.0 · El producto; con él o con la descripción basta. */
   nombre: string;
+  /** 0.109.0 · La sección; sin ella, la API conserva la que tenía. */
+  seccion?: string;
   descripcion: string;
   cantidad: number;
   /** En PESOS. */
@@ -99,7 +103,7 @@ export async function guardarHoja(proyecto_id: string, renglones: RenglonDeHoja[
     `/orgs/${org()}/proyectos/${encodeURIComponent(proyecto_id)}/conceptos`,
     {
       method: 'PUT',
-      body: { renglones: renglones.map((x) => ({ id: x.id ?? null, nombre: x.nombre.trim(), descripcion: x.descripcion.trim(), cantidad: x.cantidad, precio_unitario: aCentavos(x.precio_unitario) })) },
+      body: { renglones: renglones.map((x) => ({ id: x.id ?? null, nombre: x.nombre.trim(), ...(x.seccion !== undefined ? { seccion: x.seccion.trim() } : {}), descripcion: x.descripcion.trim(), cantidad: x.cantidad, precio_unitario: aCentavos(x.precio_unitario) })) },
     },
   );
   return { conceptos: r.conceptos.map(concepto), creados: r.creados, cambiados: r.cambiados, quitados: r.quitados };
@@ -112,14 +116,14 @@ export interface Plantilla {
   id: string;
   nombre: string;
   /** precio_unitario en PESOS. */
-  renglones: Array<{ nombre: string; descripcion: string; cantidad: number; precio_unitario: number }>;
+  renglones: Array<{ nombre: string; seccion?: string; descripcion: string; cantidad: number; precio_unitario: number }>;
 }
 
-interface FilaPlantilla { id: string; nombre: string; renglones: Array<{ nombre?: string; descripcion: string; cantidad: number; precio_unitario: number }> | null }
+interface FilaPlantilla { id: string; nombre: string; renglones: Array<{ nombre?: string; seccion?: string; descripcion: string; cantidad: number; precio_unitario: number }> | null }
 
 const plantilla = (f: FilaPlantilla): Plantilla => ({
   id: f.id, nombre: f.nombre,
-  renglones: (f.renglones ?? []).map((r) => ({ nombre: r.nombre ?? '', descripcion: r.descripcion ?? '', cantidad: Number(r.cantidad ?? 1), precio_unitario: aPesos(r.precio_unitario) })),
+  renglones: (f.renglones ?? []).map((r) => ({ nombre: r.nombre ?? '', seccion: r.seccion ?? '', descripcion: r.descripcion ?? '', cantidad: Number(r.cantidad ?? 1), precio_unitario: aPesos(r.precio_unitario) })),
 });
 
 export async function listarPlantillas(): Promise<Plantilla[]> {
@@ -129,7 +133,7 @@ export async function listarPlantillas(): Promise<Plantilla[]> {
 export async function crearPlantilla(nombre: string, renglones: Plantilla['renglones']): Promise<Plantilla> {
   return plantilla(await pedir<FilaPlantilla>(`/orgs/${org()}/plantillas_presupuesto`, {
     method: 'POST',
-    body: { nombre: nombre.trim(), renglones: renglones.map((r) => ({ nombre: r.nombre.trim(), descripcion: r.descripcion.trim(), cantidad: r.cantidad, precio_unitario: aCentavos(r.precio_unitario) })) },
+    body: { nombre: nombre.trim(), renglones: renglones.map((r) => ({ nombre: r.nombre.trim(), seccion: (r.seccion ?? '').trim(), descripcion: r.descripcion.trim(), cantidad: r.cantidad, precio_unitario: aCentavos(r.precio_unitario) })) },
   }));
 }
 
