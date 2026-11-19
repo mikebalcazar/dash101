@@ -49,18 +49,20 @@ export default function EstadoDeCuentaPage() {
         <Link href={`/clientes/${id}`} className="text-xs text-ink-muted inline-flex items-center gap-1 hover:text-ink-dim">
           <IconArrowLeft size={13} /> Volver al cliente
         </Link>
-        <button
-          type="button"
-          onClick={() => window.print()}
+        {/* 19-nov-2026 · El documento para mandar: portada con el saldo de
+            cada proyecto y una hoja por proyecto, con la imagen de taller101. */}
+        <Link
+          href={`/imprimir/cliente/${id}`}
+          data-pdf-cliente
           className="bg-ink text-cream rounded-xl px-3 py-2 text-sm font-medium inline-flex items-center gap-1.5"
         >
-          <IconPrinter size={15} /> Guardar como PDF
-        </button>
+          <IconPrinter size={15} /> PDF para mandar
+        </Link>
       </div>
 
       <p className="print:hidden text-xs text-ink-muted mb-4">
-        Al picarle se abre la ventana de imprimir de tu navegador: ahí escoges{" "}
-        <b>«Guardar como PDF»</b> y te queda el archivo para mandarlo.
+        «PDF para mandar» abre el estado de cuenta formal: portada con el saldo de cada proyecto abierto y una hoja por
+        proyecto. Ahí, «Guardar como PDF» y en la ventana de imprimir escoges <b>«Guardar como PDF»</b>.
       </p>
 
       <DocumentoEstadoDeCuenta d={d} />

@@ -805,6 +805,60 @@ test('19-nov: la lista esconde los proyectos sin conceptos y «Crear proyecto �
   await ctx.close();
 });
 
+/* Mike, 19-nov-2026: «todas las obras cerradas (saldo 0 pendiente) hay que
+ * ocultarlas ya, y necesito poder imprimir en PDF el estado de cuenta del
+ * cliente (…) en la portada el saldo de cada proyecto y el total y después el
+ * desglose de cada proyecto y sus pagos. Cada proyecto empieza en hoja nueva.
+ * (…) También poder imprimir el estado de cuenta de proyecto por proyecto.»
+ * Un cliente propio con una obra abierta y una pagada completa. */
+test('19-nov: el estado de cuenta para mandar (cliente y proyecto) y las obras cerradas fuera', async () => {
+  const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  const sello = Date.now().toString(36).slice(-5);
+  const cliente = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: `Cliente del PDF ${sello}` } });
+  const { cuenta } = await cuentaDePruebas(pag);
+  const obra = async (nombre, precio, pagado) => {
+    const p = await api(pag, `/orgs/${ORG}/proyectos`, { method: 'POST', body: { nombre, cliente_id: cliente.id, estado: 'activo' } });
+    await api(pag, `/orgs/${ORG}/conceptos`, { method: 'POST', body: { proyecto_id: p.id, nombre: 'Cocina', descripcion: 'Cocina integral', cantidad: 1, precio_unitario: precio } });
+    await api(pag, `/orgs/${ORG}/movimientos`, { method: 'POST', body: {
+      tipo: 'ingreso', monto: pagado, fecha: '2026-03-01', cuenta_id: cuenta.id, proyecto_id: p.id,
+      contraparte_tipo: 'cliente', contraparte_id: cliente.id, descripcion: 'Anticipo',
+    } });
+    return p;
+  };
+  const abierta = await obra(`Abierta ${sello}`, 30_000_00, 10_000_00);
+  const pagada = await obra(`Pagada ${sello}`, 5_000_00, 5_000_00);
+  try {
+    // La lista de proyectos ya no enseña la pagada (saldo cero).
+    await pag.goto(`${URL}/proyectos`, { waitUntil: 'load' });
+    await pag.getByRole('heading', { name: 'Proyectos' }).waitFor({ timeout: 20000 });
+    await pag.getByText(abierta.nombre).waitFor({ timeout: 20000 });
+    assert.equal(await pag.getByText(pagada.nombre).count(), 0, 'la obra pagada completa no sale en la lista');
+
+    // El de un proyecto: su portada y su hoja.
+    await pag.goto(`${URL}/imprimir/proyecto/${abierta.id}`, { waitUntil: 'load' });
+    await pag.locator('[data-doc-proyecto]').waitFor({ timeout: 30000 });
+    assert.match(await pag.locator('[data-doc-portada] h1').innerText(), new RegExp(abierta.nombre), 'la portada dice el proyecto');
+    assert.match(await pag.locator('[data-doc-portada]').innerText(), /\$20,000/, 'y su saldo: 30,000 − 10,000');
+    assert.equal(await pag.locator('[data-doc-proyecto]').count(), 1, 'una hoja');
+
+    // El del cliente: portada con su obra abierta y una hoja por proyecto; la pagada, sólo si se pide.
+    await pag.goto(`${URL}/imprimir/cliente/${cliente.id}`, { waitUntil: 'load' });
+    await pag.locator('[data-doc-portada]').waitFor({ timeout: 30000 });
+    await pag.locator('[data-doc-proyecto]').first().waitFor({ timeout: 30000 });
+    assert.equal(await pag.locator('[data-doc-proyecto]').count(), 1, 'sólo la obra abierta');
+    assert.equal(await pag.locator(`[data-doc-renglon="${abierta.nombre}"]`).count(), 1, 'la portada trae su saldo');
+    assert.ok(await pag.locator('[data-doc-total]').count() === 1, 'y el total');
+    await pag.locator('[data-incluir-cerradas]').check();
+    await pag.waitForFunction(() => document.querySelectorAll('[data-doc-proyecto]').length === 2, null, { timeout: 30000 });
+    console.log(`    «${cliente.nombre}»: portada, una hoja por obra abierta, la pagada sólo al pedirla`);
+  } finally {
+    try { await api(pag, `/orgs/${ORG}/clientes/${cliente.id}/borrar`, { method: 'POST', body: { modo: 'borrar' } }); } catch { /* se queda en la demo */ }
+  }
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
 /* Mike, 4-oct-2026: «en caso de querer generar un nuevo cliente con el email
  * de otro que ya existe, avisar que ya existe un cliente, presentar su info y
  * preguntar si es ese cliente el que estás buscando y ya usarlo». Aquí, con
@@ -1156,7 +1210,10 @@ test('el estado de cuenta del proyecto va sin IVA, y un pago se abre y se liga a
    * un `<a href>` tiene rol de liga, y buscarlo como botón lo deja sin
    * encontrar. Así se cayó el despliegue #56, con la descarga esperando un
    * clic que nunca ocurrió. */
-  await pag.getByRole('button', { name: /Guardar como PDF/ }).waitFor({ timeout: 10000 });
+  // 19-nov-2026: el PDF es el documento formal, en su propia página.
+  const pdf = pag.getByRole('link', { name: /PDF para mandar/ });
+  await pdf.waitFor({ timeout: 10000 });
+  assert.match(await pdf.getAttribute('href'), /^\/imprimir\/proyecto\//, 'el PDF lleva al documento formal');
   const liga = pag.getByRole('link', { name: /Bajar Excel/ });
   await liga.waitFor({ timeout: 10000 });
   assert.ok(/\/estado\.xlsx$/.test(await liga.getAttribute('href')), 'la liga apunta a la ruta de la API');
@@ -1673,7 +1730,7 @@ test('1-oct: la pantalla del cliente abre con su estado de cuenta, con PDF, Exce
   await estado.waitFor({ timeout: 30000 });
   await pag.waitForFunction((n) => document.querySelector('[data-seccion="estado"]')?.innerText.includes(n), cliente.nombre, { timeout: 30000 });
   assert.equal(await pag.locator('[data-seccion="editar"]').count(), 0, 'el formulario NO está a la vista al entrar');
-  assert.equal(await pag.getByRole('button', { name: 'Guardar como PDF' }).count(), 1, 'el PDF del general');
+  assert.equal(await pag.locator(`[data-pdf-cliente][href="/imprimir/cliente/${cliente.id}"]`).count(), 1, 'el PDF del general: el documento formal');
   const excel = pag.locator('[data-excel-cliente]');
   assert.ok((await excel.getAttribute('href')).endsWith(`/clientes/${cliente.id}/estado.xlsx`), 'el Excel del general lo arma la API');
   const estadoApi = await api(pag, `/orgs/${ORG}/clientes/${cliente.id}/estado-de-cuenta`);

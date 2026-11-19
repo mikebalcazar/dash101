@@ -134,13 +134,15 @@ export default function ClienteDetallePage() {
           Volver a clientes
         </Link>
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => window.print()}
+          {/* 19-nov-2026 · El estado de cuenta formal, con la imagen de
+              taller101: portada con el saldo de cada proyecto abierto y una
+              hoja por proyecto. */}
+          <Link
+            href={`/imprimir/cliente/${id}`} data-pdf-cliente
             className="bg-ink text-cream rounded-xl px-3 py-2 text-sm font-medium inline-flex items-center gap-1.5"
           >
-            <IconPrinter size={15} /> Guardar como PDF
-          </button>
+            <IconPrinter size={15} /> PDF para mandar
+          </Link>
           <a
             href={ligaDelExcelDelCliente(id)}
             data-excel-cliente

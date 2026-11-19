@@ -1,0 +1,189 @@
+/* El estado de cuenta para mandar · Mike, 19-nov-2026: «que sea un documento
+ * formal con un excelente diseño, como si fuera casi de editorial de revista,
+ * con la imagen de taller101».
+ *
+ * La imagen sale del manual de taller101 (descargas/venta/taller101): el azul
+ * #0080C1, el azul de texto #0074AD, la tinta #122733, el gris #5B6B76, la
+ * nube #F4F7F9 y la línea #DFE6EA; Sansation para lo que es marca y título,
+ * Raleway para el texto y Fira para toda cifra (las tres ya viven en
+ * globals.css). El papel es A4: la portada va a sangre y lo demás corre con
+ * márgenes; cada proyecto empieza en hoja nueva.
+ */
+
+.doc {
+  --azul: #0080c1;
+  --azul-txt: #0074ad;
+  --claro: #3aa3dc;
+  --tinta: #122733;
+  --gris: #5b6b76;
+  --nube: #f4f7f9;
+  --linea: #dfe6ea;
+  --papel: #ffffff;
+  color: var(--tinta);
+  font-family: "Cifras", "Raleway", system-ui, sans-serif;
+  font-size: 9.5pt;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.doc * { box-sizing: border-box; }
+
+/* ── en pantalla: hojas sobre una mesa gris ─────────────────────────────── */
+.doc-mesa { background: #e7ecef; min-height: 100vh; padding: 24px 12px 64px; }
+.doc-hoja {
+  background: var(--papel);
+  width: 210mm;
+  max-width: 100%;
+  margin: 0 auto 24px;
+  box-shadow: 0 1px 2px rgba(18, 39, 51, 0.08), 0 12px 32px rgba(18, 39, 51, 0.10);
+}
+.doc-portada { height: 297mm; position: relative; overflow: hidden; display: flex; flex-direction: column; }
+.doc-cuerpo { padding: 18mm 16mm 20mm; }
+
+/* La barra de arriba sólo existe en pantalla. */
+.doc-mandos {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
+  max-width: 210mm; margin: 0 auto 16px; padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.92); backdrop-filter: blur(6px);
+  border: 1px solid var(--linea); border-radius: 14px;
+  font-family: "Raleway", system-ui, sans-serif; font-size: 13px; color: var(--tinta);
+}
+.doc-mandos a { color: var(--gris); text-decoration: none; }
+.doc-mandos label { display: inline-flex; align-items: center; gap: 6px; color: var(--gris); cursor: pointer; }
+.doc-boton {
+  background: var(--tinta); color: #fff; border: 0; border-radius: 10px;
+  padding: 8px 14px; font: 600 13px "Raleway", sans-serif; cursor: pointer;
+}
+
+/* ── tipografía ─────────────────────────────────────────────────────────── */
+.doc-ceja {
+  font: 700 7.5pt "Raleway", sans-serif; letter-spacing: 0.22em; text-transform: uppercase;
+}
+.doc-titulo { font-family: "Sansation", "Raleway", sans-serif; font-weight: 700; letter-spacing: -0.02em; line-height: 1.02; margin: 0; }
+.doc-cifra { font-family: "Cifras", "Raleway", sans-serif; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
+.doc-cifra small { font-size: 0.5em; font-weight: 500; letter-spacing: 0; margin-left: 0.08em; vertical-align: 0.62em; }
+.doc-gris { color: var(--gris); }
+
+/* ── portada ────────────────────────────────────────────────────────────── */
+.doc-banda {
+  background: var(--azul); color: #fff; position: relative; overflow: hidden;
+  padding: 16mm 16mm 12mm; height: 112mm; flex-shrink: 0; display: flex; flex-direction: column;
+}
+.doc-banda .doc-aro {
+  position: absolute; right: -46mm; top: -30mm; width: 150mm; height: 150mm;
+  border: 2.2mm solid rgba(255, 255, 255, 0.13); border-radius: 50%;
+}
+.doc-banda .doc-aro::after {
+  content: ""; position: absolute; inset: 19mm; border: 0.5mm solid rgba(255, 255, 255, 0.16); border-radius: 50%;
+}
+.doc-banda-arriba { display: flex; justify-content: space-between; align-items: flex-start; position: relative; }
+.doc-banda-arriba img { height: 15mm; width: auto; display: block; }
+.doc-fecha { text-align: right; }
+.doc-fecha .doc-ceja { opacity: 0.82; }
+.doc-fecha div:last-child { font: 600 10pt "Raleway", sans-serif; margin-top: 1.5mm; }
+.doc-para { margin-top: auto; position: relative; }
+.doc-para .doc-ceja { opacity: 0.8; }
+.doc-para .doc-titulo { font-size: 38pt; margin-top: 3mm; max-width: 165mm; }
+.doc-para p { margin: 3mm 0 0; font: 500 10pt "Raleway", sans-serif; opacity: 0.88; }
+.doc-banda-pie { margin-top: 7mm; padding-top: 3.2mm; border-top: 0.3mm solid rgba(255, 255, 255, 0.35); display: flex; justify-content: space-between; font: 600 7.5pt "Raleway", sans-serif; letter-spacing: 0.16em; text-transform: uppercase; position: relative; }
+
+.doc-portada-cuerpo { padding: 11mm 16mm 0; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.doc-sigue { margin-top: 3mm; font-size: 7.5pt; color: var(--gris); text-align: right; letter-spacing: 0.06em; }
+.doc-gran-saldo { display: grid; grid-template-columns: 1.15fr 1fr; gap: 10mm; align-items: end; padding-bottom: 8mm; border-bottom: 0.35mm solid var(--tinta); }
+.doc-gran-saldo .doc-ceja { color: var(--azul-txt); }
+.doc-gran-saldo .doc-cifra { font-size: 38pt; display: block; margin-top: 2mm; line-height: 1; }
+.doc-gran-saldo p { margin: 2.5mm 0 0; color: var(--gris); font-size: 8.5pt; }
+.doc-tres { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; }
+.doc-tres > div { padding-left: 4mm; border-left: 0.3mm solid var(--linea); }
+.doc-tres .doc-ceja { color: var(--gris); font-size: 6.5pt; }
+.doc-tres .doc-cifra { font-size: 11.5pt; display: block; margin-top: 1.5mm; }
+
+.doc-resumen { margin-top: 7mm; }
+.doc-resumen h2 { margin: 0 0 3mm; font: 700 7.5pt "Raleway", sans-serif; letter-spacing: 0.22em; text-transform: uppercase; color: var(--azul-txt); }
+.doc-resumen table { width: 100%; border-collapse: collapse; }
+.doc-resumen th { font: 700 6.5pt "Raleway", sans-serif; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gris); text-align: right; padding: 0 0 2mm; border-bottom: 0.3mm solid var(--linea); }
+.doc-resumen th:nth-child(1), .doc-resumen th:nth-child(2) { text-align: left; }
+.doc-resumen td { padding: 3mm 0 2.2mm; border-bottom: 0.3mm solid var(--linea); text-align: right; vertical-align: top; }
+.doc-resumen td.doc-num { width: 11mm; text-align: left; font: 700 13pt "Sansation", sans-serif; color: var(--azul); line-height: 1; }
+.doc-resumen td.doc-nombre { text-align: left; }
+.doc-resumen td.doc-nombre strong { font: 700 10.5pt "Raleway", sans-serif; display: block; }
+.doc-avance { height: 1.2mm; background: var(--nube); margin-top: 1.8mm; width: 62mm; border-radius: 1mm; overflow: hidden; }
+.doc-avance i { display: block; height: 100%; background: var(--claro); }
+.doc-avance-txt { font-size: 7pt; color: var(--gris); margin-top: 1mm; }
+.doc-resumen tr.doc-total td { border-bottom: 0; border-top: 0.45mm solid var(--tinta); padding-top: 3.2mm; font-weight: 700; }
+.doc-resumen tr.doc-resta td { color: var(--gris); padding: 2mm 0; font-size: 8.5pt; }
+.doc-resumen tr.doc-neto td { border-top: 0.3mm solid var(--linea); font-weight: 700; font-size: 11pt; color: var(--azul-txt); }
+
+.doc-portada-pie {
+  margin-top: auto; padding: 7mm 16mm 10mm; display: flex; justify-content: space-between; align-items: flex-end; gap: 8mm;
+  font-size: 7.5pt; color: var(--gris); border-top: 0.3mm solid var(--linea);
+}
+.doc-portada-pie strong { color: var(--tinta); font-weight: 700; }
+.doc-portada-pie img { height: 7mm; width: auto; }
+
+/* ── un proyecto ────────────────────────────────────────────────────────── */
+.doc-proyecto + .doc-proyecto { margin-top: 0; }
+.doc-cabeza { display: grid; grid-template-columns: auto 1fr; gap: 6mm; align-items: end; padding-bottom: 5mm; border-bottom: 0.45mm solid var(--tinta); }
+.doc-cabeza .doc-numero { font: 700 56pt/0.8 "Sansation", sans-serif; color: var(--azul); letter-spacing: -0.04em; }
+.doc-cabeza .doc-ceja { color: var(--azul-txt); }
+.doc-cabeza .doc-titulo { font-size: 24pt; margin-top: 1.5mm; }
+.doc-cabeza p { margin: 1.8mm 0 0; color: var(--gris); font-size: 8.5pt; }
+
+.doc-indicadores { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 5mm; }
+.doc-indicadores > div { padding: 0 4mm; border-left: 0.3mm solid var(--linea); }
+.doc-indicadores > div:first-child { padding-left: 0; border-left: 0; }
+.doc-indicadores .doc-ceja { color: var(--gris); font-size: 6.5pt; }
+.doc-indicadores .doc-cifra { display: block; font-size: 15pt; margin-top: 1.5mm; }
+.doc-indicadores .doc-saldo .doc-cifra { color: var(--azul-txt); }
+.doc-indicadores .doc-avance { width: 100%; margin-top: 2.5mm; }
+
+.doc-aviso {
+  margin-top: 5mm; padding: 3.5mm 4mm; background: var(--nube); border-left: 1.2mm solid var(--azul);
+  font-size: 8.5pt; break-inside: avoid;
+}
+.doc-aviso strong { font-weight: 700; }
+
+.doc-apartado { margin-top: 8mm; }
+.doc-apartado > header { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 0.3mm solid var(--tinta); padding-bottom: 1.6mm; margin-bottom: 1mm; break-after: avoid; }
+.doc-apartado > header h3 { margin: 0; font: 700 12pt "Sansation", sans-serif; letter-spacing: -0.01em; }
+.doc-apartado > header span { font-size: 7.5pt; color: var(--gris); letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; }
+
+.doc-tabla { width: 100%; border-collapse: collapse; font-size: 8.3pt; }
+.doc-tabla th { font: 700 6.3pt "Raleway", sans-serif; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gris); text-align: left; padding: 2mm 1.5mm 1.6mm; border-bottom: 0.3mm solid var(--linea); }
+.doc-tabla td { padding: 1.7mm 1.5mm; border-bottom: 0.25mm solid var(--linea); vertical-align: top; }
+.doc-tabla .der { text-align: right; white-space: nowrap; }
+.doc-tabla td.doc-producto { font-weight: 600; width: 30%; }
+.doc-tabla td.doc-desc { color: #33454f; }
+.doc-tabla tr.doc-grupo td { background: var(--nube); font: 700 7.5pt "Raleway", sans-serif; letter-spacing: 0.06em; text-transform: uppercase; color: var(--azul-txt); padding-top: 2.4mm; border-bottom: 0; }
+.doc-tabla tr.doc-seccion td { font: 700 7.8pt "Raleway", sans-serif; color: var(--tinta); padding-top: 2.6mm; border-bottom: 0.25mm solid var(--tinta); }
+.doc-tabla tr.doc-subtotal td { font-weight: 700; border-bottom: 0.3mm solid var(--linea); }
+.doc-tabla tr.doc-suma td { border-top: 0.45mm solid var(--tinta); border-bottom: 0; font-weight: 700; padding-top: 2.4mm; font-size: 9pt; }
+.doc-tabla .doc-folio { font-weight: 600; color: var(--azul-txt); }
+.doc-tabla .doc-sin { color: #a0472c; font-weight: 600; }
+
+.doc-cierre { margin-top: 8mm; display: flex; justify-content: flex-end; break-inside: avoid; }
+.doc-cierre > div { min-width: 82mm; border-top: 0.45mm solid var(--tinta); padding-top: 2.6mm; }
+.doc-cierre dl { margin: 0; display: grid; grid-template-columns: 1fr auto; row-gap: 1.4mm; column-gap: 8mm; font-size: 9pt; }
+.doc-cierre dt { color: var(--gris); }
+.doc-cierre dd { margin: 0; text-align: right; }
+.doc-cierre .doc-final dt, .doc-cierre .doc-final dd { font-weight: 700; font-size: 12pt; color: var(--azul-txt); padding-top: 2mm; border-top: 0.3mm solid var(--linea); }
+.doc-nota { margin-top: 6mm; font-size: 7.5pt; color: var(--gris); max-width: 120mm; }
+
+/* ── papel ──────────────────────────────────────────────────────────────── */
+@page { size: A4; margin: 16mm 15mm 18mm; }
+@page portada { margin: 0; }
+
+@media print {
+  html, body { background: #fff !important; }
+  .doc-mesa { background: #fff; padding: 0; min-height: 0; }
+  .doc-mandos { display: none !important; }
+  .doc-hoja { width: auto; margin: 0; box-shadow: none; }
+  .doc-portada { page: portada; width: 210mm; height: 297mm; break-after: page; }
+  .doc-cuerpo { padding: 0; }
+  /* Cada proyecto empieza en hoja nueva (Mike, 19-nov-2026). */
+  .doc-hoja + .doc-hoja { break-before: page; }
+  .doc-tabla tr, .doc-resumen tr { break-inside: avoid; }
+  .doc-tabla thead { display: table-header-group; }
+}
