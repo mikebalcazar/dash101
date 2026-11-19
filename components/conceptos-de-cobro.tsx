@@ -43,7 +43,7 @@ const renglones = (n: number) => `${n} ${n === 1 ? "renglón" : "renglones"}`;
 const pesos = (v: number) => v.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const desdeConcepto = (c: Concepto): FilaDeHoja => ({
-  clave: c.id, id: c.id, descripcion: c.descripcion, cantidad: String(c.cantidad), precio: pesos(c.precio_unitario),
+  clave: c.id, id: c.id, nombre: c.nombre, descripcion: c.descripcion, cantidad: String(c.cantidad), precio: pesos(c.precio_unitario),
   cotizacion_id: c.cotizacion_id, cotizacion_nombre: c.cotizacion_nombre, cotizacion_folio: c.cotizacion_folio,
 });
 
@@ -138,7 +138,7 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
     const d = irA.current;
     if (!d) return;
     irA.current = null;
-    caja.current?.querySelector<HTMLInputElement>(`[data-fila="${d.fila}"][data-col="${d.columna}"]`)?.focus();
+    caja.current?.querySelector<HTMLElement>(`[data-fila="${d.fila}"][data-col="${d.columna}"]`)?.focus();
   });
 
   const suma = useMemo(() => Math.round(filas.reduce((t, f) => t + (importeDe(f.cantidad, f.precio) ?? 0) * 100, 0)) / 100, [filas]);
@@ -170,16 +170,16 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
       setFilas((prev) => [...prev, filaVacia()]);
     }
     irA.current = { fila: destino, columna };
-    if (destino < filas.length) caja.current?.querySelector<HTMLInputElement>(`[data-fila="${destino}"][data-col="${columna}"]`)?.focus();
+    if (destino < filas.length) caja.current?.querySelector<HTMLElement>(`[data-fila="${destino}"][data-col="${columna}"]`)?.focus();
   };
 
-  const tecla = (e: React.KeyboardEvent<HTMLInputElement>, i: number, columna: Columna) => {
+  const tecla = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>, i: number, columna: Columna) => {
     if (e.key === "Enter") { e.preventDefault(); mover(i, columna, e.shiftKey ? -1 : 1); }
     else if (e.key === "ArrowDown") { e.preventDefault(); mover(i, columna, 1); }
     else if (e.key === "ArrowUp") { e.preventDefault(); mover(i, columna, -1); }
   };
 
-  const pegar = (e: React.ClipboardEvent<HTMLInputElement>, i: number, columna: Columna) => {
+  const pegar = (e: React.ClipboardEvent<HTMLInputElement | HTMLTextAreaElement>, i: number, columna: Columna) => {
     const texto = e.clipboardData.getData("text/plain");
     if (!esRango(texto)) return;
     e.preventDefault();
@@ -275,7 +275,7 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
   const usar = (p: Plantilla) => {
     setFilas((prev) => conColita([
       ...prev.filter((f) => !(vacia(f) && !f.id)),
-      ...p.renglones.map((r) => ({ ...filaVacia(), clave: claveNueva(), descripcion: r.descripcion, cantidad: String(r.cantidad), precio: pesos(r.precio_unitario) })),
+      ...p.renglones.map((r) => ({ ...filaVacia(), clave: claveNueva(), nombre: r.nombre, descripcion: r.descripcion, cantidad: String(r.cantidad), precio: pesos(r.precio_unitario) })),
     ]));
     setPlantillas(null);
     avisar(`«${p.nombre}» está en la hoja. Revisa y guarda.`);
@@ -288,7 +288,7 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
     if (!r.ok) { setMarcada({ fila: r.fila - 1, columna: r.columna }); setError(`Renglón ${r.fila}: ${r.motivo}.`); return; }
     if (!r.renglones.length) { setError("La hoja está vacía: no hay qué guardar como plantilla."); return; }
     try {
-      const p = await crearPlantilla(nombrePlantilla, r.renglones.map(({ descripcion, cantidad, precio_unitario }) => ({ descripcion, cantidad, precio_unitario })));
+      const p = await crearPlantilla(nombrePlantilla, r.renglones.map(({ nombre, descripcion, cantidad, precio_unitario }) => ({ nombre, descripcion, cantidad, precio_unitario })));
       setNombrePlantilla("");
       setPlantillas(await listarPlantillas());
       avisar(`Plantilla «${p.nombre}» guardada con ${renglones(p.renglones.length)}`);
@@ -306,6 +306,8 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
   const iva = "sin IVA";
   /* Sin `focus:bg-white`: el tema es vidrio oscuro y esa variante no la
    * cubre globals.css, así que la celda se ponía blanca con letra clara. */
+  /** La raya de cada celda: separa las columnas, como en Sheets. */
+  const raya = "border border-black/10";
   const celda = "w-full bg-transparent px-2 py-1.5 text-sm text-ink focus:outline-none focus:bg-white/10 focus:ring-2 focus:ring-marca/60 rounded-md";
 
   return (
@@ -422,14 +424,18 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
       )}
 
       <div ref={caja} className="overflow-x-auto -mx-1">
-        <table className="w-full min-w-[34rem] text-sm border-collapse" data-hoja-tabla>
+        {/* 0.108.0 · Las columnas del PDF, con el producto aparte de la
+            descripción, y cada celda con su raya (Mike, 18-nov-2026: «quiero
+            celdas que separen las columnas»). */}
+        <table className="w-full min-w-[40rem] text-sm border-collapse" data-hoja-tabla>
           <thead>
-            <tr className="text-[11px] text-ink-muted uppercase tracking-wide border-b border-black/10">
+            <tr className="text-[11px] text-ink-muted uppercase tracking-wide">
               <th className="w-8 py-1.5 font-medium text-right pr-2">#</th>
-              <th className="text-left py-1.5 px-2 font-medium">Concepto</th>
-              <th className="text-right py-1.5 px-2 font-medium w-24">Cantidad</th>
-              <th className="text-right py-1.5 px-2 font-medium w-36">Precio unitario</th>
-              <th className="text-right py-1.5 px-2 font-medium w-36">Importe</th>
+              <th className={`${raya} text-left py-1.5 px-2 font-medium w-[22%]`}>Producto</th>
+              <th className={`${raya} text-left py-1.5 px-2 font-medium`}>Descripción</th>
+              <th className={`${raya} text-right py-1.5 px-2 font-medium w-16`}>Cant.</th>
+              <th className={`${raya} text-right py-1.5 px-2 font-medium w-28`}>P. unitario</th>
+              <th className={`${raya} text-right py-1.5 px-2 font-medium w-28`}>Importe</th>
               <th className="w-8" />
             </tr>
           </thead>
@@ -439,13 +445,21 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
               const blanca = vacia(f) && !f.id && i === filas.length - 1;
               const mal = (c: Columna) => marcada?.fila === i && marcada.columna === c ? " ring-2 ring-mauve-900/50 bg-mauve-50" : "";
               return (
-                <tr key={f.clave} data-hoja-fila={i} data-concepto={f.id ?? undefined} className="border-b border-black/5 align-top">
+                <tr key={f.clave} data-hoja-fila={i} data-concepto={f.id ?? undefined} className="align-top">
                   <td className="py-1.5 pr-2 text-[11px] text-ink-muted text-right tabular-nums">{blanca ? "" : i + 1}</td>
-                  <td className="py-0.5">
-                    <input data-fila={i} data-col="descripcion" type="text" maxLength={300} value={f.descripcion}
-                      placeholder={blanca ? "Escribe o pega aquí…" : ""} aria-label={`Concepto del renglón ${i + 1}`}
+                  <td className={`${raya} py-0.5`}>
+                    <textarea data-fila={i} data-col="nombre" rows={1} maxLength={200} value={f.nombre}
+                      placeholder={blanca ? "Escribe o pega aquí…" : ""} aria-label={`Producto del renglón ${i + 1}`}
+                      onChange={(e) => cambiar(i, "nombre", e.target.value)} onKeyDown={(e) => tecla(e, i, "nombre")}
+                      onPaste={(e) => pegar(e, i, "nombre")} className={`${celda} font-medium resize-none [field-sizing:content] block${mal("nombre")}`} />
+                  </td>
+                  <td className={`${raya} py-0.5`}>
+                    {/* La descripción puede ser larga: crece con su texto. Enter
+                        sigue bajando de renglón, como en Sheets. */}
+                    <textarea data-fila={i} data-col="descripcion" rows={1} maxLength={2000} value={f.descripcion}
+                      aria-label={`Descripción del renglón ${i + 1}`}
                       onChange={(e) => cambiar(i, "descripcion", e.target.value)} onKeyDown={(e) => tecla(e, i, "descripcion")}
-                      onPaste={(e) => pegar(e, i, "descripcion")} className={celda + mal("descripcion")} />
+                      onPaste={(e) => pegar(e, i, "descripcion")} className={`${celda} resize-none [field-sizing:content] block${mal("descripcion")}`} />
                     {f.cotizacion_id && (
                       <span className="block px-2 -mt-0.5 mb-1 text-[10px] text-sky-900" data-de-cotizacion>
                         Cotización {numeroDeCot.get(f.cotizacion_id) ?? ""}{f.cotizacion_folio ? ` · ${f.cotizacion_folio}` : ""}{f.cotizacion_nombre ? ` · ${f.cotizacion_nombre}` : ""}
@@ -453,7 +467,7 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
                     )}
                   </td>
                   {(["cantidad", "precio"] as const).map((c) => (
-                    <td key={c} className="py-0.5">
+                    <td key={c} className={`${raya} py-0.5`}>
                       <input data-fila={i} data-col={c} type="text" inputMode="decimal" value={f[c]}
                         aria-label={`${c === "cantidad" ? "Cantidad" : "Precio unitario"} del renglón ${i + 1}`}
                         onChange={(e) => cambiar(i, c, e.target.value)} onKeyDown={(e) => tecla(e, i, c)}
@@ -461,7 +475,7 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
                         className={`${celda} text-right tabular-nums${mal(c)}`} />
                     </td>
                   ))}
-                  <td className="py-1.5 px-2 text-right tabular-nums text-ink-dim whitespace-nowrap" data-hoja-importe>
+                  <td className={`${raya} py-1.5 px-2 text-right tabular-nums text-ink-dim whitespace-nowrap`} data-hoja-importe>
                     {blanca ? "" : imp === null ? <span className="text-ink-muted">—</span> : formatMonto(imp, "MXN")}
                   </td>
                   <td className="py-1 text-right">
@@ -483,7 +497,7 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
                   <IconPlus size={12} /> Renglón
                 </button>
               </td>
-              <td colSpan={2} className="pt-2 px-2 text-right text-xs text-ink-muted">
+              <td colSpan={3} className="pt-2 px-2 text-right text-xs text-ink-muted">
                 {conteo} concepto{conteo === 1 ? "" : "s"} · precio sin IVA
               </td>
               <td className="pt-2 px-2 text-right font-medium text-ink-dim tabular-nums whitespace-nowrap" data-hoja-total>{formatMonto(suma, "MXN")}</td>
@@ -491,7 +505,7 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
             </tr>
             <tr className="text-[11px] text-ink-muted">
               <td />
-              <td colSpan={4} className="px-2 pt-0.5 text-right" data-hoja-desglose>
+              <td colSpan={5} className="px-2 pt-0.5 text-right" data-hoja-desglose>
                 Sin IVA. El IVA no se le suma al precio: el que se cobra se ve aparte, en el estado de cuenta.
               </td>
               <td />
@@ -501,7 +515,7 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
       </div>
 
       <p className="text-[11px] text-ink-muted mt-2">
-        Tab y Enter para moverte; pega un rango de Sheets o Excel (concepto, cantidad, precio) en cualquier celda.
+        Tab y Enter para moverte; pega un rango de Sheets o Excel (producto, descripción, cantidad, precio) en cualquier celda.
       </p>
 
       {cambiada && (

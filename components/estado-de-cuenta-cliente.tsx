@@ -130,25 +130,38 @@ export function DocumentoEstadoDeCuenta({ d }: { d: EstadoDeCuenta }) {
                 {conPrecio.map((p) => (
                   <div key={p.id} data-cotizado={p.id} className="mb-5 hoja-bloque">
                     <p className="text-xs font-medium text-ink-dim mb-1">{p.nombre}</p>
-                    <table className="w-full text-sm">
+                    {/* 0.108.0 · Producto y descripción en su columna, cada
+                        celda con su raya (Mike, 18-nov-2026). */}
+                    <div className="overflow-x-auto">
+                    <table className="w-full min-w-[36rem] text-sm border-collapse">
+                      <thead className="text-[11px] text-ink-muted uppercase tracking-wide">
+                        <tr>
+                          <th className="border border-black/10 text-left py-1 px-2 font-medium w-36">Producto</th>
+                          <th className="border border-black/10 text-left py-1 px-2 font-medium">Descripción</th>
+                          <th className="border border-black/10 text-right py-1 px-2 font-medium">Cant. × P. unitario</th>
+                          <th className="border border-black/10 text-right py-1 px-2 font-medium">Importe</th>
+                        </tr>
+                      </thead>
                       {p.grupos.map((g) => (
                         <tbody key={g.cotizacion_id ?? "a-mano"}>
                           {(p.grupos.length > 1 || g.cotizacion_id) && (
-                            <tr><td colSpan={4} className="pt-2 pb-0.5 text-[11px] text-ink-muted">{tituloDelGrupo(g)}</td></tr>
+                            <tr><td colSpan={4} className="pt-2 pb-0.5 px-2 text-[11px] text-ink-muted">{tituloDelGrupo(g)}</td></tr>
                           )}
                           {g.conceptos.map((c) => (
-                            <tr key={c.id} className="border-b border-black/5">
-                              <td className="py-1 text-ink-dim">{c.descripcion}</td>
-                              <td className="py-1 text-right tabular text-xs text-ink-muted whitespace-nowrap">{c.cantidad} × {formatMonto(c.precio_unitario, "MXN")}</td>
-                              <td className="py-1 text-right tabular w-32">{formatMonto(c.importe, "MXN")}</td>
+                            <tr key={c.id} className="align-top">
+                              <td className="border border-black/10 py-1 px-2 text-ink font-medium">{c.nombre}</td>
+                              <td className="border border-black/10 py-1 px-2 text-ink-dim">{c.descripcion}</td>
+                              <td className="border border-black/10 py-1 px-2 text-right tabular text-xs text-ink-muted whitespace-nowrap">{c.cantidad} × {formatMonto(c.precio_unitario, "MXN")}</td>
+                              <td className="border border-black/10 py-1 px-2 text-right tabular w-32">{formatMonto(c.importe, "MXN")}</td>
                             </tr>
                           ))}
                         </tbody>
                       ))}
                       <tfoot className="text-xs">
-                        <tr className="font-medium"><td /><td className="py-0.5 text-right">Precio, sin IVA</td><td className="py-0.5 text-right tabular">{formatMonto(p.total, "MXN")}</td></tr>
+                        <tr className="font-medium"><td colSpan={2} /><td className="py-0.5 px-2 text-right">Precio, sin IVA</td><td className="py-0.5 px-2 text-right tabular">{formatMonto(p.total, "MXN")}</td></tr>
                       </tfoot>
                     </table>
+                    </div>
                   </div>
                 ))}
               </>

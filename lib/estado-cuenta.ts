@@ -74,7 +74,7 @@ const grupo = (g: Record<string, any>): GrupoDelEstado => ({
   cotizacion_id: g.cotizacion_id ?? null, folio: g.folio ?? null, nombre: String(g.nombre ?? ''),
   numero: g.numero ?? null, importe: aPesos(g.importe),
   conceptos: ((g.conceptos ?? []) as Array<Record<string, any>>).map((c) => ({
-    id: String(c.id), descripcion: String(c.descripcion ?? ''), cantidad: Number(c.cantidad ?? 1),
+    id: String(c.id), nombre: String(c.nombre ?? ''), descripcion: String(c.descripcion ?? ''), cantidad: Number(c.cantidad ?? 1),
     precio_unitario: aPesos(c.precio_unitario), importe: aPesos(c.monto),
   })),
 });

@@ -72,18 +72,36 @@ describe('lo que se pega de Sheets o Excel', () => {
   });
 });
 
+/* 0.108.0 · Mike, 18-nov-2026: «Separar el producto de la descripción». */
+describe('el producto, aparte de la descripción', () => {
+  it('pegar desde la columna del producto llena producto, descripción, cantidad y precio', () => {
+    const r = pegarRango([filaVacia()], 0, 'nombre', leerPegado('CAR-02\tGradas con estructura PTR\t1\t$161,250.00\t$161,250.00\nAuditorio\t\t1\t52200\n'));
+    expect(r.map((f) => [f.nombre, f.descripcion, f.cantidad, f.precio])).toEqual([
+      ['CAR-02', 'Gradas con estructura PTR', '1', '161250'], ['Auditorio', '', '1', '52200'],
+    ]);
+  });
+  it('con el producto o con la descripción basta; se mandan los dos', () => {
+    const conProducto = { ...filaVacia(), nombre: 'Lactancia', cantidad: '1', precio: '51400' };
+    expect(revisar([conProducto])).toEqual({ ok: true, renglones: [{ id: null, nombre: 'Lactancia', descripcion: '', cantidad: 1, precio_unitario: 51400 }] });
+  });
+  it('cambiar sólo el producto cambia la huella', () => {
+    const a = { ...fila('Gradas', '1', '100', 'c1'), nombre: 'CAR-02' };
+    expect(huella([a])).not.toBe(huella([{ ...a, nombre: 'CAR-03' }]));
+  });
+});
+
 describe('lo que se manda a guardar', () => {
   it('el renglón en blanco del final no se guarda; los demás sí, en pesos', () => {
     expect(revisar([fila('Cocina', '1', '180,000.00', 'c1'), fila('Puertas', '6', '7500'), filaVacia()])).toEqual({
       ok: true,
       renglones: [
-        { id: 'c1', descripcion: 'Cocina', cantidad: 1, precio_unitario: 180000 },
-        { id: null, descripcion: 'Puertas', cantidad: 6, precio_unitario: 7500 },
+        { id: 'c1', nombre: '', descripcion: 'Cocina', cantidad: 1, precio_unitario: 180000 },
+        { id: null, nombre: '', descripcion: 'Puertas', cantidad: 6, precio_unitario: 7500 },
       ],
     });
   });
   it('el primero que no cuadra, con su número contando desde 1', () => {
-    expect(revisar([fila('Bien', '1', '1'), fila('', '1', '100')])).toMatchObject({ ok: false, fila: 2, columna: 'descripcion' });
+    expect(revisar([fila('Bien', '1', '1'), fila('', '1', '100')])).toMatchObject({ ok: false, fila: 2, columna: 'nombre' });
     expect(revisar([fila('Cero', '0', '100')])).toMatchObject({ ok: false, fila: 1, columna: 'cantidad' });
     expect(revisar([fila('Sin precio', '1', '')])).toMatchObject({ ok: false, fila: 1, columna: 'precio' });
   });
