@@ -2,12 +2,13 @@
 
 /* El estado de cuenta del cliente para mandar: portada con el saldo de cada
  * proyecto y el total, y una hoja por proyecto con su desglose y sus pagos
- * (Mike, 19-nov-2026). Las obras cerradas —saldo cero o en «cerrado»— no van,
- * salvo que se pidan. El PDF lo hace el navegador: «Guardar como PDF». */
+ * (Mike, 19-nov-2026). Sólo obras en proceso con saldo por cobrar («solo debe
+ * incluir obras en proceso donde haya aún saldo por cobrar»); las demás, sólo
+ * si se pide «Incluir obras cerradas». El PDF lo hace el navegador: «Guardar como PDF». */
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { abierta, estadoDeCuenta, type EstadoDeCuenta } from "@/lib/estado-cuenta";
+import { estadoDeCuenta, porCobrar, type EstadoDeCuenta } from "@/lib/estado-cuenta";
 import { estadoDelProyecto, type EstadoDelProyecto } from "@/lib/estado-proyecto";
 import { HojaDeProyecto, Portada, ResumenContinuacion, renglonDe } from "@/components/documento/estado-editorial";
 
@@ -27,7 +28,7 @@ export default function ImprimirCliente() {
         const d = await estadoDeCuenta(id);
         if (!vivo) return;
         setC(d);
-        const ids = d.proyectos.filter((p) => cerradas || abierta(p)).map((p) => p.id);
+        const ids = d.proyectos.filter((p) => cerradas || porCobrar(p)).map((p) => p.id);
         const es = await Promise.all(ids.map((pid) => estadoDelProyecto(pid)));
         if (vivo) setHojas(es);
       } catch (e) {

@@ -137,3 +137,9 @@ export async function estadoDeCuenta(cliente_id: string): Promise<EstadoDeCuenta
  *  cerradas (saldo 0 pendiente) hay que ocultarlas ya»). */
 export const abierta = (p: { precio_por_cargar: boolean; estado: string; saldo: number | null }) =>
   !p.precio_por_cargar && p.estado !== "cerrado" && Math.abs(p.saldo ?? 0) >= 0.5;
+
+/** 19-nov-2026 · Lo que va en el estado de cuenta general para mandar: obras
+ *  en proceso con saldo por cobrar (Mike: «solo debe incluir obras en proceso
+ *  donde haya aún saldo por cobrar»). Una obra pagada de más tampoco va. */
+export const porCobrar = (p: { precio_por_cargar: boolean; estado: string; saldo: number | null }) =>
+  !p.precio_por_cargar && p.estado !== "cerrado" && (p.saldo ?? 0) >= 0.5;
