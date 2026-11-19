@@ -178,6 +178,9 @@ test('se pide un reembolso desde el mismo formulario, y sale con folio RE-', asy
   await pag.goto(`${URL}/#/`, { waitUntil: 'load' });
   await pag.getByRole('button', { name: 'Pedir un reembolso' }).click();
   await pag.waitForFunction(() => location.hash === '#/reembolso');
+  // verPedir espera los permisos antes de marcar el tipo: el hash cambia
+  // primero. Se espera la marca (19-nov: a los 58 ms todavía no estaba).
+  await pag.locator('#tipo .opcion[data-tipo="reembolso"][aria-checked="true"]').waitFor({ timeout: 15000 });
   assert.equal(await pag.locator('#tipo .opcion[data-tipo="reembolso"]').getAttribute('aria-checked'), 'true', 'la opción reembolso queda marcada');
   assert.match(await pag.locator('#pedir-t').innerText(), /Pedir un reembolso/);
 
