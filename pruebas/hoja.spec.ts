@@ -82,7 +82,7 @@ describe('el producto, aparte de la descripción', () => {
   });
   it('con el producto o con la descripción basta; se mandan los dos', () => {
     const conProducto = { ...filaVacia(), nombre: 'Lactancia', cantidad: '1', precio: '51400' };
-    expect(revisar([conProducto])).toEqual({ ok: true, renglones: [{ id: null, nombre: 'Lactancia', seccion: '', descripcion: '', cantidad: 1, precio_unitario: 51400 }] });
+    expect(revisar([conProducto])).toEqual({ ok: true, renglones: [{ id: null, nombre: 'Lactancia', seccion: '', cotizacion_id: null, descripcion: '', cantidad: 1, precio_unitario: 51400 }] });
   });
   it('cambiar sólo el producto cambia la huella', () => {
     const a = { ...fila('Gradas', '1', '100', 'c1'), nombre: 'CAR-02' };
@@ -117,8 +117,8 @@ describe('lo que se manda a guardar', () => {
     expect(revisar([fila('Cocina', '1', '180,000.00', 'c1'), fila('Puertas', '6', '7500'), filaVacia()])).toEqual({
       ok: true,
       renglones: [
-        { id: 'c1', nombre: '', seccion: '', descripcion: 'Cocina', cantidad: 1, precio_unitario: 180000 },
-        { id: null, nombre: '', seccion: '', descripcion: 'Puertas', cantidad: 6, precio_unitario: 7500 },
+        { id: 'c1', nombre: '', seccion: '', cotizacion_id: null, descripcion: 'Cocina', cantidad: 1, precio_unitario: 180000 },
+        { id: null, nombre: '', seccion: '', cotizacion_id: null, descripcion: 'Puertas', cantidad: 6, precio_unitario: 7500 },
       ],
     });
   });
@@ -166,3 +166,27 @@ describe('los grupos de la hoja', () => {
   });
 });
 
+
+/* 0.110.0 · Mike, 19-nov-2026: «poder agrupar conceptos nuevos que agregue». */
+describe('agrupar los renglones nuevos', () => {
+  const de = (cot: string | null, seccion: string, descripcion: string): FilaDeHoja =>
+    ({ ...filaVacia(), id: descripcion, cotizacion_id: cot, seccion, descripcion, cantidad: '1', precio: '100' });
+  it('un renglón en blanco metido a una sección ya es de ella, pero no cuenta hasta llenarse', () => {
+    const filas = [de(null, 'N11', 'Barra'), { ...filaVacia(), seccion: 'N11' }, filaVacia()];
+    const g = gruposDeHoja(filas);
+    expect(g.claves[1]).toEqual(['s:mano:N11']);
+    expect(g.antes.get(0)?.[0]).toMatchObject({ seccion: 'N11', conceptos: 1, importe: 100 });
+  });
+  it('una sección nueva, todavía en blanco, ya tiene su encabezado', () => {
+    const g = gruposDeHoja([de(null, '', 'Flete'), { ...filaVacia(), seccion: 'Cocina' }, filaVacia()]);
+    expect(g.antes.get(1)?.map((e) => [e.tipo, e.seccion, e.conceptos])).toEqual([['seccion', 'Cocina', 0]]);
+  });
+  it('un renglón en blanco sin grupo no parte los grupos', () => {
+    const g = gruposDeHoja([de('c1', 'N01', 'A'), filaVacia(), de('c1', 'N01', 'B'), filaVacia()]);
+    expect(g.antes.size).toBe(1);
+  });
+  it('lo que se guarda lleva su cotización y su sección', () => {
+    const r = revisar([{ ...de('c1', 'N11', 'Barra'), id: null }]);
+    expect(r).toMatchObject({ ok: true, renglones: [{ cotizacion_id: 'c1', seccion: 'N11' }] });
+  });
+});

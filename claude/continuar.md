@@ -316,6 +316,8 @@ problema (navegador con internet) y misma solución (un flujo). Pendiente.
 
 > **19-nov-2026 · la hoja agrupa y se acomoda a lo ancho (API 0.109.0).** Mike: ancho de columnas ajustable y grupos que se colapsan. La hoja pinta un encabezado por cotización y otro por sección (`conceptos.seccion`), con conceptos y suma, que se abren y cierran (`gruposDeHoja` en lib/hoja.ts, medido); ya no repite «Cotización N» en cada renglón. Las columnas Producto, Cant., P. unitario e Importe se ensanchan arrastrando el borde del encabezado (localStorage `dash101.hoja.anchos`); la descripción se queda con lo que sobra. El estado de cuenta pone el subtítulo de cada sección con su suma.
 
+> **19-nov-2026 · agrupar conceptos nuevos (API 0.110.0).** Mike: «quiero ya de ahora en adelante poder agrupar conceptos nuevos que agregue». En la hoja: «+ Renglón» en cada encabezado (entra al grupo), «Nueva sección» arriba (en otros conceptos) y «Sección» en cada cotización, clic en el nombre de una sección para renombrarla, y mover un renglón (↑ ↓ o arrastrar) lo mete al grupo del que estaba en su lugar. Se guarda con `cotizacion_id` y `seccion` por renglón.
+
 ## §0 del arranque
 
 | Paso | Resultado |

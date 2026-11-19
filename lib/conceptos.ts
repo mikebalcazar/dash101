@@ -92,6 +92,8 @@ export interface RenglonDeHoja {
   nombre: string;
   /** 0.109.0 · La sección; sin ella, la API conserva la que tenía. */
   seccion?: string;
+  /** 0.110.0 · El grupo de cotización (una que ya esté en la hoja) o null. */
+  cotizacion_id?: string | null;
   descripcion: string;
   cantidad: number;
   /** En PESOS. */
@@ -103,7 +105,7 @@ export async function guardarHoja(proyecto_id: string, renglones: RenglonDeHoja[
     `/orgs/${org()}/proyectos/${encodeURIComponent(proyecto_id)}/conceptos`,
     {
       method: 'PUT',
-      body: { renglones: renglones.map((x) => ({ id: x.id ?? null, nombre: x.nombre.trim(), ...(x.seccion !== undefined ? { seccion: x.seccion.trim() } : {}), descripcion: x.descripcion.trim(), cantidad: x.cantidad, precio_unitario: aCentavos(x.precio_unitario) })) },
+      body: { renglones: renglones.map((x) => ({ id: x.id ?? null, nombre: x.nombre.trim(), ...(x.seccion !== undefined ? { seccion: x.seccion.trim() } : {}), ...(x.cotizacion_id !== undefined ? { cotizacion_id: x.cotizacion_id } : {}), descripcion: x.descripcion.trim(), cantidad: x.cantidad, precio_unitario: aCentavos(x.precio_unitario) })) },
     },
   );
   return { conceptos: r.conceptos.map(concepto), creados: r.creados, cambiados: r.cambiados, quitados: r.quitados };
