@@ -106,12 +106,13 @@ export default function EstadoDelProyectoPage() {
           >
             <IconTableExport size={15} /> Bajar Excel
           </a>
-          <button
-            type="button" onClick={() => window.print()}
+          {/* 19-nov-2026 · El documento formal, con la imagen de taller101. */}
+          <Link
+            href={`/imprimir/proyecto/${id}`} data-pdf-proyecto
             className="bg-ink text-cream rounded-xl px-3 py-2 text-sm font-medium inline-flex items-center gap-1.5"
           >
-            <IconPrinter size={15} /> Guardar como PDF
-          </button>
+            <IconPrinter size={15} /> PDF para mandar
+          </Link>
         </span>
       </div>
 

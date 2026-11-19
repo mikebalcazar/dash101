@@ -25,6 +25,9 @@ export interface CobroDelCliente {
   fecha: string;
   /** En PESOS. */
   monto: number;
+  /** 0.107.0 · En PESOS: lo que cuenta en el estado de cuenta, sin IVA. */
+  sin_iva: number;
+  iva: number;
   proyecto_id: string | null;
   descripcion: string | null;
   facturado: boolean;
@@ -83,6 +86,8 @@ const cobro = (c: Record<string, unknown>): CobroDelCliente => ({
   id: String(c.id),
   fecha: String(c.fecha ?? ''),
   monto: aPesos(c.monto as number),
+  sin_iva: aPesos((c.sin_iva ?? c.monto) as number),
+  iva: aPesos((c.iva ?? 0) as number),
   proyecto_id: (c.proyecto_id as string) ?? null,
   descripcion: (c.descripcion as string) ?? null,
   facturado: Boolean(c.facturado),
@@ -125,3 +130,10 @@ export async function estadoDeCuenta(cliente_id: string): Promise<EstadoDeCuenta
     },
   };
 }
+
+/** 19-nov-2026 · Una obra está abierta si tiene precio, no está cerrada y le
+ *  falta cobrar. Las demás —cerradas o con saldo cero— no salen en la lista
+ *  de proyectos ni en el estado de cuenta para mandar (Mike: «todas las obras
+ *  cerradas (saldo 0 pendiente) hay que ocultarlas ya»). */
+export const abierta = (p: { precio_por_cargar: boolean; estado: string; saldo: number | null }) =>
+  !p.precio_por_cargar && p.estado !== "cerrado" && Math.abs(p.saldo ?? 0) >= 0.5;

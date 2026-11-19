@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useEmpresa } from "@/lib/empresa-context";
 import { listProyectos } from "@/lib/proyectos";
+import { abierta } from "@/lib/estado-cuenta";
 import type { Proyecto } from "@/types/schema";
 import { ESTADO_PROYECTO_LABELS } from "@/types/schema";
 import { formatMonto } from "@/lib/format";
@@ -50,9 +51,15 @@ export default function ProyectosPage() {
   /* Mike, 19-nov-2026: «oculta de la pantalla de proyectos en dash todos los
    * proyectos que aún no tienen conceptos de cobro». Siguen en la base: se
    * llega a ellos desde «Crear proyecto → Ya existe». */
+  /* Y las obras cerradas, en «cerrado» o con saldo cero (Mike, 19-nov-2026:
+   * «todas las obras cerradas (saldo 0 pendiente) hay que ocultarlas ya»). */
   const todos = proyectos;
-  const ocultos = todos.filter((p) => p.precio_por_cargar).length;
-  const visibles = todos.filter((p) => !p.precio_por_cargar);
+  const visible = (p: Proyecto) => abierta({
+    precio_por_cargar: Boolean(p.precio_por_cargar), estado: p.estado,
+    saldo: (p.precio_venta ?? 0) - (p.cobrado_sin_iva ?? p.cobrado ?? 0),
+  });
+  const visibles = todos.filter(visible);
+  const ocultos = todos.length - visibles.length;
   const totalDisp = visibles.reduce((s, p) => s + (p.disponible ?? 0), 0);
   const totalVenta = visibles.reduce((s, p) => s + (p.precio_venta ?? 0), 0);
 
@@ -64,12 +71,12 @@ export default function ProyectosPage() {
           <p className="text-xs text-ink-muted mt-0.5">
             {empresa.nombre} ·{" "}
             {visibles.length === 0
-              ? "Sin proyectos con conceptos de cobro"
+              ? "Sin proyectos abiertos"
               : `${visibles.length} · Vendido ${formatMonto(totalVenta, empresa.moneda)} · Disponible ${formatMonto(totalDisp, empresa.moneda)}`}
           </p>
           {ocultos > 0 && (
             <p className="text-[11px] text-ink-muted mt-0.5" data-proyectos-ocultos={ocultos}>
-              {ocultos} {ocultos === 1 ? "proyecto sin conceptos de cobro no se muestra" : "proyectos sin conceptos de cobro no se muestran"}: búscalos en «Crear proyecto → Ya existe».
+              {ocultos} {ocultos === 1 ? "proyecto cerrado o sin conceptos de cobro no se muestra" : "proyectos cerrados o sin conceptos de cobro no se muestran"}: los que no tienen conceptos están en «Crear proyecto → Ya existe».
             </p>
           )}
         </div>
