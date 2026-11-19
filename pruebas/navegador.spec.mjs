@@ -973,6 +973,22 @@ test('18-nov: la hoja del presupuesto: se escribe, se pega un rango de Sheets, s
   await pag.getByText(/Hoja guardada · 3 conceptos/).waitFor({ timeout: 20000 });
   assert.equal((await api(pag, `/orgs/${ORG}/proyectos/${proyecto.id}`)).precio_venta, 79_500_00, 'sin el descuento');
 
+  /* 19-nov · Mike: «quiero poder acomodar el orden de los conceptos». La
+   * Cubierta sube con su botón y luego con Alt+↑, y se guarda primera. */
+  await hoja.locator('[data-hoja-subir="2"]').click();
+  assert.equal(await celda(1, 'nombre').inputValue(), 'Cubierta', '↑ la sube un lugar');
+  await celda(1, 'nombre').focus();
+  await celda(1, 'nombre').press('Alt+ArrowUp');
+  assert.equal(await celda(0, 'nombre').inputValue(), 'Cubierta', 'Alt+↑ la sube otro');
+  assert.equal(await pag.evaluate(() => document.activeElement?.getAttribute('data-fila')), '0', 'el foco se va con el renglón');
+  await hoja.locator('[data-hoja-cambios]').waitFor({ timeout: 5000 });
+  await hoja.locator('[data-hoja-guardar]').click();
+  // El aviso del guardado anterior puede seguir puesto: se espera a que la
+  // hoja ya no tenga cambios sin guardar.
+  await hoja.locator('[data-hoja-cambios]').waitFor({ state: 'detached', timeout: 20000 });
+  const enOrden = filas(await api(pag, `/orgs/${ORG}/conceptos?proyecto_id=${proyecto.id}`)).sort((a, b) => a.orden - b.orden);
+  assert.deepEqual(enOrden.map((c) => c.nombre), ['Cubierta', 'CAR-01', 'Puertas'], 'se guarda en el orden nuevo');
+
   // Guardarla como plantilla, y que la plantilla traiga sus renglones en centavos.
   const nombre = `Navegador ${Date.now().toString(36).slice(-5)}`;
   await hoja.locator('[data-plantillas]').click();
@@ -981,7 +997,7 @@ test('18-nov: la hoja del presupuesto: se escribe, se pega un rango de Sheets, s
   await pag.getByText(`Plantilla «${nombre}» guardada con 3 renglones`).waitFor({ timeout: 20000 });
   const pl = filas(await api(pag, `/orgs/${ORG}/plantillas_presupuesto`)).find((x) => x.nombre === nombre);
   assert.ok(pl, 'la plantilla quedó en la API');
-  assert.deepEqual(pl.renglones.map((r) => r.precio_unitario), [1_500_00, 7_500_00, 9_000_00]);
+  assert.deepEqual(pl.renglones.map((r) => r.precio_unitario), [9_000_00, 1_500_00, 7_500_00]);
   await api(pag, `/orgs/${ORG}/plantillas_presupuesto/${pl.id}`, { method: 'DELETE' });
 
   console.log(`    hoja: 4 renglones (uno escrito, tres pegados) = ${pesos2(p.precio_venta)}; plantilla de 3`);

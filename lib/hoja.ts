@@ -128,6 +128,23 @@ export function pegarRango(filas: FilaDeHoja[], desde: number, columna: Columna,
  *  que siempre queda al final para seguir escribiendo. */
 export const vacia = (f: FilaDeHoja) => !f.nombre.trim() && !f.descripcion.trim() && !f.precio.trim() && (f.cantidad.trim() === '' || f.cantidad.trim() === '1');
 
+/** Mueve el renglón `de` al lugar `a` (contando desde 0), como arrastrar
+ *  un renglón en Sheets (Mike, 19-nov-2026: «quiero poder acomodar el orden
+ *  de los conceptos»). El renglón en blanco del final no se mueve ni se
+ *  rebasa: siempre queda al último para seguir escribiendo. */
+export function moverFila(filas: FilaDeHoja[], de: number, a: number): FilaDeHoja[] {
+  const ultimo = filas.length - 1;
+  const conCola = ultimo >= 0 && vacia(filas[ultimo]) && !filas[ultimo].id;
+  const tope = conCola ? ultimo - 1 : ultimo;
+  if (de < 0 || de > tope) return filas;
+  const destino = Math.max(0, Math.min(tope, a));
+  if (destino === de) return filas;
+  const salida = [...filas];
+  const [f] = salida.splice(de, 1);
+  salida.splice(destino, 0, f);
+  return salida;
+}
+
 export type Revision =
   | { ok: true; renglones: Array<{ id: string | null; nombre: string; descripcion: string; cantidad: number; precio_unitario: number }> }
   | { ok: false; fila: number; columna: Columna; motivo: string };
