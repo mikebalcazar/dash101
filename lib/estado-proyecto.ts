@@ -50,6 +50,14 @@ export interface FacturaDelPago {
   monto_aplicado: number;
 }
 
+/** 0.111.0 · Una factura ligada a la que le falta pago. En PESOS. */
+export interface FacturaPorCompletar {
+  id: string; uuid: string; serie: string | null; folio: string | null; fecha: string;
+  subtotal: number; total: number; ligado: number;
+  /** Lo que falta, con IVA y sin IVA (la cuenta del proyecto va sin IVA). */
+  falta: number; falta_sin_iva: number;
+}
+
 export interface PagoDelEstado {
   id: string;
   fecha: string;
@@ -111,6 +119,10 @@ export interface EstadoDelProyecto {
   /** 0.105.0 · los conceptos de cobro, agrupados por cotización. */
   grupos: GrupoDelEstado[];
   movimientos: PagoDelEstado[];
+  /** 0.111.0 · Las facturas de sus pagos a las que todavía les falta pago
+   *  (Mike, 19-nov-2026: «necesito una nota grande que faltan 100k de pago
+   *  para acompletar factura»). En PESOS. */
+  facturas_por_completar: FacturaPorCompletar[];
   /** Todo en PESOS, menos `tasa_iva`, que va en PUNTOS BASE (1600 = 16 %).
    *  0.107.0 · SIN IVA: subtotal = total = precio (los conceptos); `cobrado`
    *  es la suma de subtotales; `saldo`, la resta; `iva_cobrado` va aparte
@@ -174,6 +186,10 @@ export async function estadoDelProyecto(proyecto_id: string): Promise<EstadoDelP
       partida: i.partida ?? null, fecha_entrega: i.fecha_entrega ?? null,
     })),
     grupos: ((r.grupos ?? []) as Array<Record<string, any>>).map(grupo),
+    facturas_por_completar: ((r.facturas_por_completar ?? []) as Array<Record<string, any>>).map((f) => ({
+      id: String(f.id), uuid: String(f.uuid ?? ''), serie: f.serie ?? null, folio: f.folio ?? null, fecha: String(f.fecha ?? ''),
+      subtotal: aPesos(f.subtotal), total: aPesos(f.total), ligado: aPesos(f.ligado), falta: aPesos(f.falta), falta_sin_iva: aPesos(f.falta_sin_iva),
+    })),
     movimientos: (r.movimientos ?? []).map((m: Record<string, any>) => ({
       id: String(m.id), fecha: String(m.fecha ?? ''), monto: aPesos(m.monto),
       sin_iva: aPesos(m.sin_iva ?? m.monto), iva: aPesos(m.iva),

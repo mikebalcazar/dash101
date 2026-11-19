@@ -139,6 +139,27 @@ export default function EstadoDelProyectoPage() {
           </div>
         </header>
 
+        {/* 0.111.0 · La factura a la que le falta pago, grande y arriba (Mike,
+            19-nov-2026: «necesito una nota grande que faltan 100k de pago
+            para acompletar factura»). Va también en el papel: es la misma
+            factura que tiene el cliente. */}
+        {d.facturas_por_completar.length > 0 && (
+          <div className="mt-5 space-y-2 no-partir" data-facturas-por-completar>
+            {d.facturas_por_completar.map((f) => (
+              <div key={f.id} data-factura-por-completar={nombreDeFactura(f)}
+                className="border-2 border-amber-500 bg-amber-50 rounded-xl px-4 py-3 print:bg-transparent">
+                <p className="text-base font-semibold text-ink">
+                  Faltan {formatMontoExact(f.falta_sin_iva, "MXN")} de pago para completar la factura {nombreDeFactura(f)}
+                </p>
+                <p className="text-xs text-ink-dim mt-1">
+                  {formatMontoExact(f.falta, "MXN")} con IVA. La factura es de {formatMontoExact(f.subtotal, "MXN")} sin IVA
+                  ({formatMontoExact(f.total, "MXN")} con IVA) y sus pagos cubren {formatMontoExact(f.ligado, "MXN")}.
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* El saldo general. Es lo primero que se busca al abrir el papel. */}
         <div className="grid grid-cols-3 gap-3 my-5 no-partir">
           {[
