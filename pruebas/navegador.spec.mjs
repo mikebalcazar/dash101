@@ -736,6 +736,9 @@ test('se da de alta un cliente desde «nuevo proyecto», y avisa del parecido', 
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
 
   await pag.goto(`${URL}/proyectos/nuevo`, { waitUntil: 'load' });
+  // 19-nov-2026: primero pregunta si es nuevo o ya existe.
+  await pag.locator('[data-es-nuevo-o-existe]').waitFor({ timeout: 20000 });
+  await pag.getByRole('button', { name: /Es un proyecto nuevo/ }).click();
   await pag.getByLabel('Cliente').waitFor({ timeout: 20000 });
   await pag.waitForTimeout(1000);
 
@@ -768,6 +771,40 @@ test('se da de alta un cliente desde «nuevo proyecto», y avisa del parecido', 
   await ctx.close();
 });
 
+/* Mike, 19-nov-2026: «oculta de la pantalla de proyectos en dash todos los
+ * proyectos que aún no tienen conceptos de cobro. Cuando ponga en crear nuevo
+ * proyecto, pregunta si es nuevo o es alguno de los que ya están en la base».
+ * Un proyecto sin conceptos no sale en la lista y sí sale en «Ya existe», con
+ * liga a su página. */
+test('19-nov: la lista esconde los proyectos sin conceptos y «Crear proyecto → Ya existe» los enseña', async () => {
+  const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes`)).find((c) => c.nombre === CLIENTE_PRUEBAS);
+  if (!cliente) cliente = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS } });
+  const nombre = `Sin conceptos ${Date.now().toString(36).slice(-5)}`;
+  const proyecto = await api(pag, `/orgs/${ORG}/proyectos`, { method: 'POST', body: { nombre, cliente_id: cliente.id, estado: 'activo' } });
+  try {
+    await pag.goto(`${URL}/proyectos`, { waitUntil: 'load' });
+    await pag.getByRole('heading', { name: 'Proyectos' }).waitFor({ timeout: 20000 });
+    await pag.waitForTimeout(1500);
+    assert.equal(await pag.getByText(nombre).count(), 0, 'el proyecto sin conceptos no sale en la lista');
+    assert.ok(await pag.locator('[data-proyectos-ocultos]').count() > 0, 'y la lista dice cuántos no enseña');
+
+    await pag.goto(`${URL}/proyectos/nuevo`, { waitUntil: 'load' });
+    await pag.locator('[data-es-nuevo-o-existe]').waitFor({ timeout: 20000 });
+    await pag.getByRole('button', { name: /Ya existe/ }).click();
+    await pag.getByLabel('Buscar proyecto').fill(nombre.toLowerCase());
+    const liga = pag.locator(`[data-proyecto-existente="${proyecto.id}"]`);
+    await liga.waitFor({ timeout: 10000 });
+    assert.match(await liga.getAttribute('href'), new RegExp(`/proyectos/${proyecto.id}$`), 'la liga lleva a su página');
+    console.log(`    «${nombre}» escondido de la lista y encontrado en «Ya existe»`);
+  } finally {
+    try { await api(pag, `/orgs/${ORG}/proyectos/${proyecto.id}/borrar`, { method: 'POST', body: { modo: 'borrar' } }); } catch { /* se queda en la demo; no estorba */ }
+  }
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
 /* Mike, 4-oct-2026: «en caso de querer generar un nuevo cliente con el email
  * de otro que ya existe, avisar que ya existe un cliente, presentar su info y
  * preguntar si es ese cliente el que estás buscando y ya usarlo». Aquí, con
@@ -781,6 +818,9 @@ test('un cliente nuevo con el correo de otro que ya existe: avisa, enseña quié
   const dueno = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: 'Dueño del correo', correo, telefono: '5512345678' } });
 
   await pag.goto(`${URL}/proyectos/nuevo`, { waitUntil: 'load' });
+  // 19-nov-2026: primero pregunta si es nuevo o ya existe.
+  await pag.locator('[data-es-nuevo-o-existe]').waitFor({ timeout: 20000 });
+  await pag.getByRole('button', { name: /Es un proyecto nuevo/ }).click();
   await pag.getByLabel('Cliente').waitFor({ timeout: 20000 });
   await pag.waitForTimeout(1000);
   await pag.getByLabel('Cliente').selectOption('__nuevo__');

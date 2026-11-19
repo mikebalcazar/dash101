@@ -47,11 +47,14 @@ export default function ProyectosPage() {
     );
   }
 
-  const totalDisp = proyectos.reduce((s, p) => s + (p.disponible ?? 0), 0);
-  const totalVenta = proyectos.reduce((s, p) => s + (p.precio_venta ?? 0), 0);
-  /* 0.105.0 · los que todavía no tienen conceptos de cobro (Mike, 18-nov:
-   * «Todos a cero de una vez»): se cuentan aparte, no como $0 vendidos. */
-  const porCargar = proyectos.filter((p) => p.precio_por_cargar).length;
+  /* Mike, 19-nov-2026: «oculta de la pantalla de proyectos en dash todos los
+   * proyectos que aún no tienen conceptos de cobro». Siguen en la base: se
+   * llega a ellos desde «Crear proyecto → Ya existe». */
+  const todos = proyectos;
+  const ocultos = todos.filter((p) => p.precio_por_cargar).length;
+  const visibles = todos.filter((p) => !p.precio_por_cargar);
+  const totalDisp = visibles.reduce((s, p) => s + (p.disponible ?? 0), 0);
+  const totalVenta = visibles.reduce((s, p) => s + (p.precio_venta ?? 0), 0);
 
   return (
     <div>
@@ -60,10 +63,15 @@ export default function ProyectosPage() {
           <h2 className="text-lg font-medium text-ink-dim">Proyectos</h2>
           <p className="text-xs text-ink-muted mt-0.5">
             {empresa.nombre} ·{" "}
-            {proyectos.length === 0
-              ? "Sin proyectos"
-              : `${proyectos.length} · Vendido ${formatMonto(totalVenta, empresa.moneda)}${porCargar ? ` · ${porCargar} con precio por cargar` : ""} · Disponible ${formatMonto(totalDisp, empresa.moneda)}`}
+            {visibles.length === 0
+              ? "Sin proyectos con conceptos de cobro"
+              : `${visibles.length} · Vendido ${formatMonto(totalVenta, empresa.moneda)} · Disponible ${formatMonto(totalDisp, empresa.moneda)}`}
           </p>
+          {ocultos > 0 && (
+            <p className="text-[11px] text-ink-muted mt-0.5" data-proyectos-ocultos={ocultos}>
+              {ocultos} {ocultos === 1 ? "proyecto sin conceptos de cobro no se muestra" : "proyectos sin conceptos de cobro no se muestran"}: búscalos en «Crear proyecto → Ya existe».
+            </p>
+          )}
         </div>
         <Link
           href="/proyectos/nuevo"
@@ -78,7 +86,7 @@ export default function ProyectosPage() {
         <div className="bg-mauve-50 text-mauve-900 text-xs px-3 py-2 rounded-xl mb-4">{error}</div>
       )}
 
-      {proyectos.length === 0 ? (
+      {visibles.length === 0 ? (
         <div className="bg-white border border-black/5 rounded-2xl p-10 text-center">
           <div className="w-14 h-14 mx-auto rounded-full bg-cream flex items-center justify-center mb-3">
             <IconFolder size={22} className="text-ink-muted" />
@@ -97,7 +105,7 @@ export default function ProyectosPage() {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3">
-          {proyectos.map((p) => {
+          {visibles.map((p) => {
             // 0.107.0 · sin IVA, contra el precio que también va sin IVA.
             const cobradoSinIva = p.cobrado_sin_iva ?? p.cobrado;
             const pctCobrado = p.precio_venta > 0 ? (cobradoSinIva / p.precio_venta) * 100 : 0;

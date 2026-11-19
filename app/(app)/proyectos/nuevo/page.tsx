@@ -7,10 +7,10 @@ import { useAuth } from "@/lib/auth-context";
 import { useEmpresa } from "@/lib/empresa-context";
 import { clienteDelChoque, clientePorCorreo, clientesParecidos, createCliente, listClientes } from "@/lib/clientes";
 import { listProveedores } from "@/lib/proveedores";
-import { createProyecto } from "@/lib/proyectos";
+import { createProyecto, listProyectos } from "@/lib/proyectos";
 import { listObras, ligarObra, type Obra } from "@/lib/obras";
 import { normalizarNombre } from "@/lib/clientes";
-import type { Cliente, Proveedor, EstadoProyecto } from "@/types/schema";
+import type { Cliente, Proveedor, EstadoProyecto, Proyecto } from "@/types/schema";
 import { ESTADO_PROYECTO_LABELS } from "@/types/schema";
 import { formatMonto } from "@/lib/format";
 import { IconArrowLeft, IconPlus, IconTrash } from "@tabler/icons-react";
@@ -59,6 +59,15 @@ export default function NuevoProyectoPage() {
   const [obras, setObras] = useState<Obra[]>([]);
   const [obraId, setObraId] = useState("");
 
+  /* Mike, 19-nov-2026: «Cuando ponga en crear nuevo proyecto, pregunta si es
+   * nuevo o es alguno de los que ya están en la base de datos (que ya hayan
+   * sido creados en quell o en quote)». Primero se pregunta; «Ya existe»
+   * enseña los proyectos sin conceptos de cobro —los que la lista de
+   * proyectos ya no enseña— y las obras de quell101 sin proyecto. */
+  const [cual, setCual] = useState<"nuevo" | "existe" | null>(null);
+  const [existentes, setExistentes] = useState<Proyecto[]>([]);
+  const [buscar, setBuscar] = useState("");
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -69,11 +78,12 @@ export default function NuevoProyectoPage() {
     }
     /* Las obras se piden con `catch`: una empresa que no usa quell101 no
      * tiene por qué ver un error aquí, nada más no ve el bloque. */
-    Promise.all([listClientes(), listProveedores(), listObras(true).catch(() => [] as Obra[])])
-      .then(([cs, ps, os]) => {
+    Promise.all([listClientes(), listProveedores(), listObras(true).catch(() => [] as Obra[]), listProyectos().catch(() => [] as Proyecto[])])
+      .then(([cs, ps, os, prs]) => {
         setClientes(cs);
         setProveedores(ps);
         setObras(os);
+        setExistentes(prs.filter((p) => p.precio_por_cargar));
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Error cargando catálogo"))
       .finally(() => setLoadingCatalog(false));
@@ -249,6 +259,81 @@ export default function NuevoProyectoPage() {
       <p className="text-xs text-ink-muted mt-0.5 mb-6">
         Se agregará a la empresa
       </p>
+
+      {cual === null && (
+        <div data-es-nuevo-o-existe className="space-y-3">
+          <p className="text-sm font-medium text-ink-dim">¿Es un proyecto nuevo o uno que ya está en la base?</p>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <button type="button" onClick={() => setCual("nuevo")}
+              className="text-left bg-white border border-black/10 hover:border-ink/40 rounded-2xl p-4 transition">
+              <p className="text-sm font-medium text-ink">Es un proyecto nuevo</p>
+              <p className="text-xs text-ink-muted mt-1">Se da de alta desde cero, con su cliente.</p>
+            </button>
+            <button type="button" onClick={() => setCual("existe")}
+              className="text-left bg-white border border-black/10 hover:border-ink/40 rounded-2xl p-4 transition">
+              <p className="text-sm font-medium text-ink">Ya existe</p>
+              <p className="text-xs text-ink-muted mt-1">
+                Ya se creó en quell101 o en quote101 y todavía no tiene conceptos de cobro
+                ({existentes.length + obras.length}).
+              </p>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {cual === "existe" && (() => {
+        const q = normalizarNombre(buscar);
+        const pr = existentes.filter((p) => !q || normalizarNombre(`${p.nombre} ${p.cliente_nombre ?? ""}`).includes(q));
+        const ob = obras.filter((o) => !q || normalizarNombre(`${o.nombre} ${o.cliente}`).includes(q));
+        return (
+          <div data-ya-existe className="space-y-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-sm font-medium text-ink-dim">¿Cuál es?</p>
+              <button type="button" onClick={() => setCual(null)} className="text-xs text-ink-muted hover:text-ink-dim">← Volver a preguntar</button>
+            </div>
+            <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="Busca por nombre o cliente" aria-label="Buscar proyecto"
+              className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition" />
+            {pr.length > 0 && (
+              <div className="bg-white border border-black/5 rounded-2xl divide-y divide-black/5">
+                <p className="px-4 py-2 text-[11px] text-ink-muted uppercase tracking-wide">Proyectos sin conceptos de cobro</p>
+                {pr.map((p) => (
+                  <Link key={p.id} href={`/proyectos/${p.id}`} data-proyecto-existente={p.id}
+                    className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-cream/60 transition">
+                    <span className="min-w-0">
+                      <span className="block text-sm text-ink-dim truncate">{p.nombre}</span>
+                      <span className="block text-[11px] text-ink-muted truncate">{p.cliente_nombre || "Sin cliente"}</span>
+                    </span>
+                    <span className="text-xs text-ink-muted whitespace-nowrap">Abrir y cargar conceptos →</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+            {ob.length > 0 && (
+              <div className="bg-white border border-black/5 rounded-2xl divide-y divide-black/5">
+                <p className="px-4 py-2 text-[11px] text-ink-muted uppercase tracking-wide">Obras de quell101 sin proyecto</p>
+                {ob.map((o) => (
+                  <button key={o.id} type="button" data-obra-existente={o.id} onClick={() => { escogerObra(o.id); setCual("nuevo"); }}
+                    className="w-full text-left flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-cream/60 transition">
+                    <span className="min-w-0">
+                      <span className="block text-sm text-ink-dim truncate">{o.nombre}</span>
+                      <span className="block text-[11px] text-ink-muted truncate">{o.cliente || "Sin cliente"}</span>
+                    </span>
+                    <span className="text-xs text-ink-muted whitespace-nowrap">Darle proyecto →</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {pr.length === 0 && ob.length === 0 && (
+              <p className="text-sm text-ink-muted">{buscar ? "Ninguno se llama así." : "No hay proyectos ni obras pendientes."}</p>
+            )}
+            <button type="button" onClick={() => setCual("nuevo")} className="text-xs text-ink-muted hover:text-ink-dim underline">
+              No está: es un proyecto nuevo
+            </button>
+          </div>
+        );
+      })()}
+
+      {cual === "nuevo" && (<>
 
       {clientes.length === 0 && !nuevoCliente && (
         <div className="bg-sky-50 text-sky-900 text-xs px-3 py-2 rounded-xl mb-4">
@@ -607,6 +692,7 @@ export default function NuevoProyectoPage() {
           </button>
         </div>
       </form>
+      </>)}
     </div>
   );
 }
