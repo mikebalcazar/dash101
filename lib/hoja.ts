@@ -148,13 +148,13 @@ export function moverFila(filas: FilaDeHoja[], de: number, a: number): FilaDeHoj
 }
 
 export type Revision =
-  | { ok: true; renglones: Array<{ id: string | null; nombre: string; seccion: string; descripcion: string; cantidad: number; precio_unitario: number }> }
+  | { ok: true; renglones: Array<{ id: string | null; nombre: string; seccion: string; cotizacion_id: string | null; descripcion: string; cantidad: number; precio_unitario: number }> }
   | { ok: false; fila: number; columna: Columna; motivo: string };
 
 /** Lo que se manda a guardar, o el primer renglón que no cuadra con su
  *  número (contando desde 1, como lo lee una persona). */
 export function revisar(filas: FilaDeHoja[]): Revision {
-  const renglones: Array<{ id: string | null; nombre: string; seccion: string; descripcion: string; cantidad: number; precio_unitario: number }> = [];
+  const renglones: Array<{ id: string | null; nombre: string; seccion: string; cotizacion_id: string | null; descripcion: string; cantidad: number; precio_unitario: number }> = [];
   for (const [i, f] of filas.entries()) {
     if (vacia(f) && !f.id) continue;
     const fila = i + 1;
@@ -163,14 +163,14 @@ export function revisar(filas: FilaDeHoja[]): Revision {
     if (cantidad === null || cantidad <= 0) return { ok: false, fila, columna: 'cantidad', motivo: 'la cantidad tiene que ser un número mayor que cero' };
     const precio = numeroDeHoja(f.precio);
     if (precio === null) return { ok: false, fila, columna: 'precio', motivo: 'el precio unitario tiene que ser un número, en pesos' };
-    renglones.push({ id: f.id, nombre: f.nombre.trim(), seccion: (f.seccion ?? '').trim(), descripcion: f.descripcion.trim(), cantidad, precio_unitario: precio });
+    renglones.push({ id: f.id, nombre: f.nombre.trim(), seccion: (f.seccion ?? '').trim(), cotizacion_id: f.cotizacion_id ?? null, descripcion: f.descripcion.trim(), cantidad, precio_unitario: precio });
   }
   return { ok: true, renglones };
 }
 
 /** Lo mismo que se guardaría, para saber si la hoja cambió. */
 export const huella = (filas: FilaDeHoja[]) => JSON.stringify(
-  filas.filter((f) => !(vacia(f) && !f.id)).map((f) => [f.id, f.nombre.trim(), (f.seccion ?? '').trim(), f.descripcion.trim(), numeroDeHoja(f.cantidad), numeroDeHoja(f.precio)]),
+  filas.filter((f) => !(vacia(f) && !f.id)).map((f) => [f.id, f.cotizacion_id ?? null, f.nombre.trim(), (f.seccion ?? '').trim(), f.descripcion.trim(), numeroDeHoja(f.cantidad), numeroDeHoja(f.precio)]),
 );
 
 /* ─────────────── los grupos de la hoja (0.109.0) ───────────────
@@ -211,7 +211,12 @@ export function gruposDeHoja(filas: FilaDeHoja[]): GruposDeHoja {
   let enCot: Encabezado | null = null;
   let enSec: Encabezado | null = null;
   for (const [i, f] of filas.entries()) {
-    if (vacia(f) && !f.id) continue;
+    /* 0.110.0 · Un renglón en blanco que se metió a un grupo (con «+» o
+     * «Nueva sección») ya es del grupo; sólo el último, el de seguir
+     * escribiendo, se queda fuera. No cuenta como concepto hasta llenarse. */
+    const enBlanco = vacia(f) && !f.id;
+    if (enBlanco && i === filas.length - 1) continue;
+    if (enBlanco && !f.cotizacion_id && !(f.seccion ?? '').trim()) continue;
     const cot = f.cotizacion_id ?? null;
     const sec = (f.seccion ?? '').trim();
     const nuevos: Encabezado[] = [];
@@ -227,9 +232,17 @@ export function gruposDeHoja(filas: FilaDeHoja[]): GruposDeHoja {
     }
     if (nuevos.length) antes.set(i, nuevos);
     const imp = importeDe(f.cantidad, f.precio) ?? 0;
-    for (const e of [enCot, enSec]) if (e) { e.conceptos++; e.importe = Math.round((e.importe + imp) * 100) / 100; }
+    if (!enBlanco) for (const e of [enCot, enSec]) if (e) { e.conceptos++; e.importe = Math.round((e.importe + imp) * 100) / 100; }
     claves[i] = [enCot?.clave, enSec?.clave].filter((x): x is string => !!x);
     cotPrevia = cot; secPrevia = sec;
   }
   return { antes, claves };
 }
+
+/** 0.110.0 · El grupo de un renglón (cotización y sección), para que otro lo
+ *  tome: un renglón que se mueve junto a otro se va a su grupo. */
+export const grupoDe = (f: FilaDeHoja) => ({
+  cotizacion_id: f.cotizacion_id, cotizacion_nombre: f.cotizacion_nombre, cotizacion_folio: f.cotizacion_folio, seccion: f.seccion ?? '',
+});
+export const mismoGrupo = (a: FilaDeHoja, b: FilaDeHoja) =>
+  (a.cotizacion_id ?? null) === (b.cotizacion_id ?? null) && (a.seccion ?? '').trim() === (b.seccion ?? '').trim();

@@ -22,7 +22,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  IconChevronDown, IconChevronRight, IconChevronUp, IconDeviceFloppy, IconFileImport, IconGripVertical, IconPlus, IconReceipt2, IconTemplate, IconTrash, IconX,
+  IconChevronDown, IconChevronRight, IconChevronUp, IconDeviceFloppy, IconFolderPlus, IconFileImport, IconGripVertical, IconPlus, IconReceipt2, IconTemplate, IconTrash, IconX,
 } from "@tabler/icons-react";
 import type { Proyecto } from "@/types/schema";
 import {
@@ -33,8 +33,8 @@ import { estadoDelProyecto } from "@/lib/estado-proyecto";
 import { ErrorApi } from "@/lib/api/cliente";
 import { formatMonto } from "@/lib/format";
 import {
-  COLUMNAS, claveNueva, esRango, filaVacia, gruposDeHoja, huella, importeDe, leerPegado, moverFila, numeroDeHoja, pegarRango, revisar, vacia,
-  type Columna, type FilaDeHoja,
+  COLUMNAS, claveNueva, esRango, filaVacia, grupoDe, gruposDeHoja, huella, mismoGrupo, importeDe, leerPegado, moverFila, numeroDeHoja, pegarRango, revisar, vacia,
+  type Columna, type Encabezado, type FilaDeHoja,
 } from "@/lib/hoja";
 
 /** «1 renglón», «4 renglones»: el plural pierde el acento. */
@@ -197,11 +197,61 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
   /* Acomodar el orden (Mike, 19-nov-2026). El foco se va con el renglón, así
    * Alt+↑ / Alt+↓ seguidos lo siguen moviendo. Se guarda con la hoja. */
   const reordenar = (de: number, a: number, columna?: Columna) => {
-    const nuevas = moverFila(filas, de, a);
-    if (nuevas === filas) return;
+    const movidas = moverFila(filas, de, a);
+    if (movidas === filas) return;
+    /* 0.110.0 · El renglón se va al grupo del que estaba en su lugar: subir
+       el primero de N02 lo mete a N01, arrastrarlo a otra cotización lo mete
+       a esa (Mike, 19-nov-2026: «poder agrupar conceptos nuevos»). */
+    const vecino = filas[a];
+    const movido = filas[de];
+    const nuevas = vecino && !mismoGrupo(movido, vecino)
+      ? movidas.map((f) => (f === movido ? { ...f, ...grupoDe(vecino) } : f))
+      : movidas;
     setMarcada(null);
     setFilas(nuevas);
-    if (columna) irA.current = { fila: nuevas.indexOf(filas[de]), columna };
+    if (columna) irA.current = { fila: movidas.indexOf(movido), columna };
+  };
+
+  /* 0.110.0 · Un renglón nuevo dentro de un grupo: «+» en su encabezado. Va
+     al final del grupo, con su cotización y su sección, y el grupo se abre. */
+  const ultimoDe = (clave: string) => {
+    let j = -1;
+    grupos.claves.forEach((ks, i) => { if (ks.includes(clave)) j = i; });
+    return j;
+  };
+  const meter = (en: number, grupo: Pick<FilaDeHoja, "cotizacion_id" | "cotizacion_nombre" | "cotizacion_folio" | "seccion">, abrir: string[]) => {
+    setMarcada(null);
+    setCerrados((c) => { const n = new Set(c); for (const k of abrir) n.delete(k); return n; });
+    setFilas((prev) => conColita([...prev.slice(0, en), { ...filaVacia(), ...grupo }, ...prev.slice(en)]));
+    irA.current = { fila: en, columna: "nombre" };
+  };
+  const agregarEn = (e: Encabezado) => {
+    const j = ultimoDe(e.clave);
+    if (j < 0) return;
+    const modelo = filas[j];
+    meter(j + 1, { ...grupoDe(modelo), seccion: e.tipo === "seccion" ? e.seccion : (modelo.seccion ?? "") }, [e.clave, `c:${e.cotizacion_id ?? "mano"}`]);
+  };
+  /* «Nueva sección»: dentro de una cotización (desde su encabezado) o entre
+     los escritos a mano. Nace con un renglón en blanco para escribir. */
+  const [nueva, setNueva] = useState<{ cot: string | null; texto: string } | null>(null);
+  const crearSeccion = () => {
+    if (!nueva || !nueva.texto.trim()) { setNueva(null); return; }
+    const texto = nueva.texto.trim();
+    const clave = `c:${nueva.cot ?? "mano"}`;
+    const j = nueva.cot ? ultimoDe(clave) : -1;
+    const modelo = j >= 0 ? filas[j] : null;
+    const en = j >= 0 ? j + 1 : (vacia(filas[filas.length - 1]) && !filas[filas.length - 1].id ? filas.length - 1 : filas.length);
+    meter(en, modelo ? { ...grupoDe(modelo), seccion: texto } : { cotizacion_id: null, cotizacion_nombre: null, cotizacion_folio: null, seccion: texto }, [clave]);
+    setNueva(null);
+  };
+  /* Renombrar una sección: todos sus renglones cambian. */
+  const [renombrando, setRenombrando] = useState<{ clave: string; texto: string } | null>(null);
+  const renombrar = () => {
+    if (!renombrando) return;
+    const { clave, texto } = renombrando;
+    setRenombrando(null);
+    if (!texto.trim()) return;
+    setFilas((prev) => prev.map((f, i) => ((grupos.claves[i] ?? []).includes(clave) ? { ...f, seccion: texto.trim() } : f)));
   };
 
   const quitar = (i: number) => {
@@ -477,13 +527,32 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
         </div>
       )}
 
-      {todasLasClaves.length > 0 && (
-        <div className="flex justify-end gap-2 mb-1 text-[11px]">
-          <button type="button" data-grupos-abrir onClick={() => setCerrados(new Set())} className="text-ink-muted hover:text-ink-dim">Abrir todo</button>
-          <span className="text-ink-muted">·</span>
-          <button type="button" data-grupos-cerrar onClick={() => setCerrados(new Set(todasLasClaves.filter((k) => k.startsWith("s:"))))} className="text-ink-muted hover:text-ink-dim">Cerrar las secciones</button>
-        </div>
-      )}
+      <div className="flex justify-end items-center gap-2 mb-1 text-[11px] flex-wrap">
+        {nueva ? (
+          <form data-nueva-seccion onSubmit={(ev) => { ev.preventDefault(); crearSeccion(); }} className="flex items-center gap-1.5">
+            <span className="text-ink-muted">
+              Nueva sección {nueva.cot ? `en la cotización ${numeroDeCot.get(nueva.cot) ?? ""}` : "en otros conceptos"}:
+            </span>
+            <input autoFocus value={nueva.texto} maxLength={60} placeholder="N11, Cocina, Planta alta…" aria-label="Nombre de la sección nueva"
+              onChange={(ev) => setNueva({ ...nueva, texto: ev.target.value })} onKeyDown={(ev) => { if (ev.key === "Escape") setNueva(null); }}
+              className="bg-white border border-black/10 rounded-lg px-2 py-0.5 text-xs text-ink w-44" />
+            <button type="submit" data-nueva-seccion-crear className="border border-black/10 bg-white rounded-lg px-2 py-0.5 text-xs text-ink-dim">Crear</button>
+            <button type="button" onClick={() => setNueva(null)} className="text-ink-muted hover:text-ink-dim">Cancelar</button>
+          </form>
+        ) : (
+          <button type="button" data-seccion-nueva onClick={() => setNueva({ cot: null, texto: "" })} className="text-ink-muted hover:text-ink-dim inline-flex items-center gap-1">
+            <IconFolderPlus size={12} /> Nueva sección
+          </button>
+        )}
+        {todasLasClaves.length > 0 && (
+          <>
+            <span className="text-ink-muted">·</span>
+            <button type="button" data-grupos-abrir onClick={() => setCerrados(new Set())} className="text-ink-muted hover:text-ink-dim">Abrir todo</button>
+            <span className="text-ink-muted">·</span>
+            <button type="button" data-grupos-cerrar onClick={() => setCerrados(new Set(todasLasClaves.filter((k) => k.startsWith("s:"))))} className="text-ink-muted hover:text-ink-dim">Cerrar las secciones</button>
+          </>
+        )}
+      </div>
       <div ref={caja} className="overflow-x-auto -mx-1">
         {/* 0.108.0 · Las columnas del PDF, con el producto aparte de la
             descripción, y cada celda con su raya (Mike, 18-nov-2026: «quiero
@@ -538,12 +607,31 @@ export function ConceptosDeCobro({ proyecto, alCambiar }: { proyecto: Proyecto; 
                       className={e.tipo === "cotizacion" ? "bg-black/[0.04]" : ""}>
                       <td />
                       <td colSpan={4} className={`${raya} py-1 ${e.tipo === "cotizacion" ? "px-2" : "pl-6 pr-2"}`}>
-                        <button type="button" onClick={() => alternar(e.clave)} aria-expanded={!cerrado} data-alternar-grupo={e.clave}
-                          className={`inline-flex items-center gap-1 text-left text-xs ${e.tipo === "cotizacion" ? "font-semibold text-ink" : "font-medium text-ink-dim"}`}>
-                          {cerrado ? <IconChevronRight size={13} /> : <IconChevronDown size={13} />}
-                          {titulo}
-                          <span className="font-normal text-ink-muted">· {e.conceptos} {e.conceptos === 1 ? "concepto" : "conceptos"}</span>
-                        </button>
+                        <span className="flex items-center gap-2 flex-wrap">
+                          <button type="button" onClick={() => alternar(e.clave)} aria-expanded={!cerrado} data-alternar-grupo={e.clave} aria-label={cerrado ? "Abrir" : "Cerrar"}
+                            className="text-ink-muted hover:text-ink-dim"> {cerrado ? <IconChevronRight size={13} /> : <IconChevronDown size={13} />}</button>
+                          {renombrando?.clave === e.clave ? (
+                            <input autoFocus value={renombrando.texto} maxLength={60} aria-label="Nombre de la sección" data-renombrar-seccion
+                              onChange={(ev) => setRenombrando({ clave: e.clave, texto: ev.target.value })}
+                              onKeyDown={(ev) => { if (ev.key === "Enter") { ev.preventDefault(); renombrar(); } else if (ev.key === "Escape") setRenombrando(null); }}
+                              onBlur={renombrar} className="bg-white border border-black/10 rounded-md px-1.5 py-0.5 text-xs text-ink w-40" />
+                          ) : e.tipo === "seccion" && e.seccion ? (
+                            <button type="button" title="Clic para cambiarle el nombre" data-titulo-seccion={e.seccion}
+                              onClick={() => setRenombrando({ clave: e.clave, texto: e.seccion })}
+                              className="text-xs font-medium text-ink-dim hover:underline decoration-dotted">{titulo}</button>
+                          ) : (
+                            <button type="button" onClick={() => alternar(e.clave)} className={`text-xs text-left ${e.tipo === "cotizacion" ? "font-semibold text-ink" : "font-medium text-ink-dim"}`}>{titulo}</button>
+                          )}
+                          <span className="text-xs text-ink-muted">· {e.conceptos} {e.conceptos === 1 ? "concepto" : "conceptos"}</span>
+                          <span className="ml-auto flex items-center gap-2 text-[11px]">
+                            <button type="button" data-agregar-en={e.clave} onClick={() => agregarEn(e)} title="Agregar un renglón en este grupo"
+                              className="text-ink-muted hover:text-ink-dim inline-flex items-center gap-0.5"><IconPlus size={11} /> Renglón</button>
+                            {e.tipo === "cotizacion" && (
+                              <button type="button" data-seccion-en={e.clave} onClick={() => setNueva({ cot: e.cotizacion_id, texto: "" })}
+                                className="text-ink-muted hover:text-ink-dim inline-flex items-center gap-0.5"><IconFolderPlus size={11} /> Sección</button>
+                            )}
+                          </span>
+                        </span>
                       </td>
                       <td className={`${raya} py-1 px-2 text-right tabular-nums text-xs ${e.tipo === "cotizacion" ? "font-semibold text-ink" : "text-ink-dim"}`} data-grupo-importe>
                         {formatMonto(e.importe, "MXN")}
