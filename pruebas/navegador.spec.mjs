@@ -356,7 +356,7 @@ test('conciliar: la que cuadra no deja ajuste, la que no cuadra sí, y el saldo 
 
 test('a 390×844 no hay barrido horizontal ni errores de JavaScript', async () => {
   const { ctx, pag, errores } = await pestana({ width: 390, height: 844 }, true);
-  for (const ruta of ['/dashboard', '/movimientos', '/cuentas', '/conciliacion', '/ordenes', '/ordenes/nueva', '/ordenes/buzon', '/fiscal', '/fiscal/pendientes', '/fiscal/facturas', '/fiscal/ligar', '/fiscal/impuestos', '/fiscal/estado', '/fiscal/nueva', '/fiscal/sat', '/fiscal/ajustes']) {
+  for (const ruta of ['/dashboard', '/movimientos', '/cuentas', '/conciliacion', '/ordenes', '/ordenes/nueva', '/ordenes/buzon', '/fiscal', '/fiscal/pendientes', '/fiscal/facturas', '/fiscal/ligar', '/fiscal/impuestos', '/fiscal/estado', '/fiscal/nueva', '/fiscal/sat', '/fiscal/ajustes', '/inversion', '/inversion/rondas', '/inversion/rondas/nueva', '/inversion/prestamos', '/inversion/prestamos/nuevo', '/inversion/inversionistas', '/inversion/ajustes']) {
     await pag.goto(`${URL}${ruta}`, { waitUntil: 'load' });
     await pag.waitForTimeout(1500);
     const m = await pag.evaluate(() => ({ ancho: document.documentElement.scrollWidth, ventana: window.innerWidth }));
@@ -1881,6 +1881,118 @@ test('8-oct: los préstamos de investor101 salen en el flujo y en «Préstamos»
   await pag.setViewportSize({ width: 390, height: 844 });
   const barrido = await pag.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   assert.ok(barrido <= 1, `a 390 puntos «Préstamos» no barre a lo ancho (${barrido} px)`);
+
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
+test('20-nov: patron101 vive en «Préstamos»: sus fichas abren, una ronda se simula con la cuenta de la API, y lo que se crea se borra', async () => {
+  /* Mike, 20-nov-2026: «hay que meter patron101 a dash también. Igual que
+   * bill101». Lo de quien dirige —rondas, ofertas, préstamos, directorio,
+   * ajustes— se rehízo aquí, bajo «Préstamos».
+   *
+   * EN LA DEMO NO SE DEJA NADA: lo que esta prueba crea (una ronda en
+   * borrador, una persona en el directorio) lo borra ella misma, y se le
+   * pregunta a la API que ya no esté. El camino largo —abrir, avisar,
+   * aceptar una oferta, marcar el depósito, editar la tabla, el pagaré,
+   * cancelar— deja préstamos que no se pueden borrar, y por eso se midió
+   * contra una API local con su propia base (57 comprobaciones, 20-nov), no
+   * aquí.
+   *
+   * Lo que sí se afirma aquí es lo que más importa de patron101: que la
+   * tabla que se ve mientras se teclea NO la calcula la pantalla. Se le
+   * pregunta a la API lo mismo y tiene que decir lo mismo. */
+  const { ctx, pag, errores } = await pestana(undefined, true);
+  const marca = Date.now().toString(36).slice(-5);
+  const crudo = (ruta, method = 'GET') => pag.evaluate(async ([ruta, method]) => {
+    const r = await fetch(`/s101${ruta}`, { method, headers: { 'X-App': 'dash101' }, credentials: 'include' });
+    return r.status;
+  }, [ruta, method]);
+  const lista = () => pag.locator('main [data-lista="1"]').first().waitFor({ timeout: 20000 });
+
+  await pag.goto(`${URL}/inversion`, { waitUntil: 'load' });
+  await pag.locator('[data-total-prestamos]').waitFor({ timeout: 20000 });
+  const fichas = (await pag.locator('[data-fichas-prestamos] a').allInnerTexts()).map((t) => t.replace(/\s*\d+\s*$/, '').trim());
+  assert.deepEqual(fichas, ['Inicio', 'Rondas', 'Préstamos', 'Inversionistas', 'Ajustes'], 'las cinco secciones de patron101 son las fichas de «Préstamos»');
+  assert.equal(await pag.locator('[data-rondas-abiertas]').count(), 1, '«Inicio» trae las rondas abiertas');
+  assert.equal(await pag.locator('a[href*="patron"], a[href*="investor101"]').count(), 0, 'ya nada manda a patron101 a quien dirige');
+
+  /* Una ronda: la tabla en vivo es la de la API. */
+  await pag.goto(`${URL}/inversion/rondas/nueva`, { waitUntil: 'load' });
+  const forma = pag.locator('[data-form-ronda]');
+  await forma.locator('[name=nombre]').waitFor({ timeout: 20000 });
+  await forma.locator('[name=nombre]').fill(`Del navegador ${marca}`);
+  await forma.locator('[name=meta]').fill('90,000');
+  await forma.locator('[name=tasa]').fill('2.5');
+  await pag.locator('[data-tabla-simulada]').waitFor({ timeout: 15000 });
+  const condiciones = {
+    tipo_tasa: 'mensual', tasa_pb: 250, esquema: 'unico', monto: 1_000_000,
+    fecha_inicio: await forma.locator('[name=fecha_inicio]').inputValue(),
+    fecha_vencimiento: await forma.locator('[name=fecha_vencimiento]').inputValue(),
+  };
+  const simulada = await api(pag, `/orgs/${ORG}/inversion/simular`, { method: 'POST', body: condiciones });
+  const pintado = Number((await pag.locator('[data-total-simulado]').innerText()).split('\n')[0].replace(/[^0-9.]/g, ''));
+  assert.equal(pintado, simulada.totales.total / 100, `por cada $10,000, la pantalla dice lo que dice la API: ${pintado} contra ${simulada.totales.total} centavos`);
+  assert.ok(simulada.totales.interes > 0, 'y con tasa hay interés: la tabla no es un eco del monto');
+  /* El contrario: sin tasa escrita no hay con qué simular… con 0 % el total es el monto. */
+  await forma.locator('[name=tasa]').fill('0');
+  await pag.waitForFunction(() => /\$10,000\.00/.test(document.querySelector('[data-total-simulado]')?.textContent ?? ''), null, { timeout: 15000 });
+
+  await forma.locator('[name=tasa]').fill('2.5');
+  await forma.locator('[data-guardar-ronda]').click();
+  await pag.waitForURL(/\/inversion\/rondas\/(?!nueva)[^/]+$/, { timeout: 20000 });
+  await pag.locator('[data-ronda]').waitFor({ timeout: 20000 });
+  const ronda = pag.url().split('/').pop();
+  assert.equal(await pag.locator('[data-ronda]').getAttribute('data-estado'), 'borrador', 'la ronda nace en borrador: nadie de afuera la ve');
+  assert.equal((await api(pag, `/orgs/${ORG}/inversion/rondas/${ronda}`)).tasa_pb, 250, 'y la API la guardó con su tasa en puntos base');
+  pag.once('dialog', (d) => d.accept());
+  await pag.locator('[data-hacer="borrar"]').click();
+  await pag.waitForURL(/\/inversion\/rondas$/, { timeout: 20000 });
+  assert.equal(await crudo(`/orgs/${ORG}/inversion/rondas/${ronda}`), 404, 'el borrador se borró: la demo queda como estaba');
+
+  /* El directorio: alta, ficha, y fuera. */
+  await pag.goto(`${URL}/inversion/inversionistas`, { waitUntil: 'load' });
+  await lista();
+  await pag.locator('[data-ver="uno"]').click();
+  const alta = pag.locator('[data-alta="uno"]');
+  await alta.locator('[name=nombre]').fill(`Del navegador ${marca}`);
+  await alta.locator('[name=clabe]').fill('123');
+  await alta.locator('[data-guardar-persona]').click();
+  await alta.getByRole('alert').waitFor({ timeout: 10000 });
+  assert.match(await alta.getByRole('alert').innerText(), /18 dígitos/, 'una CLABE corta se rechaza con las palabras de la API');
+  await alta.locator('[name=clabe]').fill('');
+  await alta.locator('[data-guardar-persona]').click();
+  const renglon = pag.locator('[data-directorio] a').filter({ hasText: `Del navegador ${marca}` });
+  await renglon.waitFor({ timeout: 15000 });
+  await renglon.click();
+  await pag.locator('[data-inversionista]').waitFor({ timeout: 20000 });
+  const persona = await pag.locator('[data-inversionista]').getAttribute('data-inversionista');
+  assert.match(await pag.locator('[data-inversionista]').innerText(), /Todavía no ha prestado: es prospecto/, 'la ficha de quien no ha prestado lo dice');
+  pag.once('dialog', (d) => d.accept());
+  await pag.locator('[data-borrar]').click();
+  await pag.waitForURL(/\/inversion\/inversionistas$/, { timeout: 20000 });
+  assert.equal(await crudo(`/orgs/${ORG}/inversion/inversionistas/${persona}`), 404, 'la persona se borró: la demo queda como estaba');
+
+  /* Las otras dos secciones abren. */
+  for (const [ruta, dice] of [['/inversion/prestamos', /Préstamo directo/], ['/inversion/ajustes', /Cómo se hace la cuenta/]]) {
+    await pag.goto(`${URL}${ruta}`, { waitUntil: 'load' });
+    await lista();
+    assert.match(await texto(pag), dice, `${ruta} abre`);
+  }
+
+  /* Si la demo tiene algún préstamo, su ficha abre y el pagaré se arma en el
+   * navegador (jsPDF, del propio origen). SÓLO SE LEE. */
+  const prestamos = filas(await api(pag, `/orgs/${ORG}/inversion/prestamos`));
+  if (prestamos.length) {
+    await pag.goto(`${URL}/inversion/prestamos/${prestamos[0].id}`, { waitUntil: 'load' });
+    await pag.locator('[data-prestamo]').waitFor({ timeout: 20000 });
+    assert.ok(await pag.locator('[data-tabla-de-pagos] tbody tr').count() >= 1, 'la ficha del préstamo trae su tabla de pagos');
+    const bajada = pag.waitForEvent('download', { timeout: 30000 });
+    await pag.locator('[data-pagare]').click();
+    const { size } = await stat(await (await bajada).path());
+    assert.ok(size > 3000, `el pagaré se baja en PDF: ${size} bytes`);
+  }
+  console.log(`    Préstamos: 5 fichas; por cada $10,000 al 2.5 % mensual regresan ${pesos2(simulada.totales.total)} (lo dijo la API); ${prestamos.length} préstamo(s) en la demo`);
 
   assert.deepEqual(errores, [], 'cero errores de JavaScript');
   await ctx.close();

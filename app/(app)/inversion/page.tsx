@@ -20,22 +20,30 @@
  *     borran sus dos egresos, vuelve a «por pagar» y queda en la bitácora del
  *     préstamo.
  *
- * Las rondas, las ofertas y las tablas se llevan en investor101; aquí sólo
- * se mueve el dinero. Lo abre quien dirige la empresa: a los demás la API
- * contesta 403 y se dice.
+ * 20-nov-2026 · patron101 entró a dash101 (Mike: «hay que meter patron101 a
+ * dash también. Igual que bill101»). Esta pantalla es el «Inicio» de
+ * Préstamos: arriba, lo que patron101 decía en su inicio —cuánto se debe,
+ * qué le toca revisar a quien dirige, las rondas abiertas—; abajo, lo de
+ * siempre: donde se mueve el dinero. Las rondas, las ofertas, las tablas y
+ * el directorio son las otras fichas (`layout.tsx`). Lo abre quien dirige la
+ * empresa: a los demás la API contesta 403 y se dice.
  */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useEmpresa } from "@/lib/empresa-context";
 import { listCuentas } from "@/lib/cuentas";
 import { clabeLegible } from "@/lib/ordenes";
 import {
   confirmarDeposito, deshacerPagoDePrestamo, getFlujoDeInversion, listPagosDePrestamos, listPagosHechos, pagarPagoDePrestamo, sinInversion,
-  subirComprobanteDePago, urlInvestor, type DepositoPorRecibir, type PagoDePrestamo, type PagoRegistrado,
+  subirComprobanteDePago, type DepositoPorRecibir, type PagoDePrestamo, type PagoRegistrado,
 } from "@/lib/inversion";
+import { Lista, Ren, RenMonto, RenSub, RenTitulo, Tarjeta, Vacio } from "@/components/fiscal/ui";
+import { RenRonda, usePatron } from "@/components/patron/piezas";
+import { inv, pesos, pesosCorto, type Fila } from "@/lib/patron";
 import type { Cuenta } from "@/types/schema";
 import { formatMontoExact } from "@/lib/format";
-import { IconAlertTriangle, IconArrowBackUp, IconBuildingBank, IconExternalLink } from "@tabler/icons-react";
+import { IconAlertTriangle, IconArrowBackUp, IconBuildingBank, IconPlus } from "@tabler/icons-react";
 
 const hoyTexto = () => {
   const d = new Date();
@@ -49,6 +57,8 @@ const fecha = (dia: string) => {
 
 export default function InversionPage() {
   const { empresa, loading: cargandoEmpresa } = useEmpresa();
+  const patron = usePatron();
+  const [rondas, setRondas] = useState<Fila[]>([]);
   const [pagos, setPagos] = useState<PagoDePrestamo[]>([]);
   const [depositos, setDepositos] = useState<DepositoPorRecibir[]>([]);
   const [hechos, setHechos] = useState<PagoRegistrado[]>([]);
@@ -66,6 +76,8 @@ export default function InversionPage() {
       setPagos(p); setDepositos(f.depositos); setCuentas(c); setCerrado(false); setError("");
       // La lista de los ya hechos es aparte: si no llega, lo demás sigue.
       setHechos(await listPagosHechos().catch(() => []));
+      // Igual las rondas: son el resumen de arriba, no lo que mueve dinero.
+      setRondas(await inv<{ filas: Fila[] }>("/rondas").then((r) => r.filas, () => []));
     } catch (e) {
       if (sinInversion(e)) setCerrado(true);
       else setError(e instanceof Error ? e.message : "Error");
@@ -91,7 +103,13 @@ export default function InversionPage() {
 
   const vencidos = pagos.filter((g) => g.vencido);
   const total = pagos.reduce((s, g) => s + g.total, 0);
-  const hecho = (texto: string) => { setAviso(texto); setAbierto(null); void cargar(); };
+  const hecho = (texto: string) => { setAviso(texto); setAbierto(null); void cargar(); patron.otra(); };
+  const r = patron.resumen;
+  /* Lo que patron101 llamaba «Te toca», menos lo que esta pantalla ya trae
+   * en sus propias listas (los depósitos por confirmar y los pagos). */
+  const abiertas = rondas.filter((x) => x.estado === "abierta" || (x.estado === "cerrada" && x.avance?.ofertas_pendientes));
+  const conOfertas = abiertas.filter((x) => x.avance?.ofertas_pendientes);
+  const borradores = rondas.filter((x) => x.estado === "borrador");
 
   return (
     <div>
@@ -100,18 +118,32 @@ export default function InversionPage() {
           <h2 className="text-lg font-medium text-ink-dim">Préstamos</h2>
           <p className="text-xs text-ink-muted mt-0.5">Lo que se le debe a quienes le prestaron a {empresa?.nombre}.</p>
         </div>
-        <a
-          href={urlInvestor()} target="_blank" rel="noopener"
-          className="inline-flex items-center gap-1.5 border border-black/10 text-ink-dim rounded-xl px-3 py-1.5 text-xs font-medium hover:bg-cream"
+        <Link
+          href="/inversion/rondas/nueva" data-nueva-ronda
+          className="inline-flex items-center gap-1.5 bg-ink hover:bg-ink/90 text-cream rounded-xl px-3.5 py-2 text-sm font-medium transition"
         >
-          Rondas y tablas en patron101 <IconExternalLink size={13} />
-        </a>
+          <IconPlus size={14} /> Nueva ronda
+        </Link>
       </div>
 
       {error && <div className="bg-mauve-50 text-mauve-900 text-xs px-3 py-2 rounded-xl mb-4">{error}</div>}
       {aviso && <div className="bg-mint-50 text-mint-900 text-xs px-3 py-2 rounded-xl mb-4" data-aviso>{aviso}</div>}
 
-      <div className="grid grid-cols-2 gap-3 mb-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        {r && (
+          <>
+            <div className="bg-white border border-marca/50 rounded-2xl px-4 py-3" data-capital-vigente>
+              <p className="text-[11px] text-ink-muted">Capital que se debe</p>
+              <p className="text-lg font-medium text-ink-dim tabular-nums">{pesosCorto(r.capital_vigente)}</p>
+              <p className="text-[11px] text-ink-muted">{r.prestamos_activos} préstamo{r.prestamos_activos === 1 ? "" : "s"} activo{r.prestamos_activos === 1 ? "" : "s"}</p>
+            </div>
+            <div className="bg-white border border-black/5 rounded-2xl px-4 py-3">
+              <p className="text-[11px] text-ink-muted">Interés por pagar</p>
+              <p className="text-lg font-medium text-ink-dim tabular-nums">{pesosCorto(r.interes_por_pagar)}</p>
+              <p className="text-[11px] text-ink-muted">de lo activo · en 30 días salen {pesosCorto(r.proximos_30?.monto)}</p>
+            </div>
+          </>
+        )}
         <div className="bg-white border border-black/5 rounded-2xl px-4 py-3">
           <p className="text-[11px] text-ink-muted">Hay por pagar</p>
           <p className="text-lg font-medium text-ink-dim tabular-nums" data-total-prestamos>{formatMontoExact(total)}</p>
@@ -129,6 +161,31 @@ export default function InversionPage() {
           )}
         </div>
       </div>
+
+      {(conOfertas.length > 0 || borradores.length > 0) && (
+        <Tarjeta titulo="Te toca" realce data-te-toca>
+          <Lista>
+            {conOfertas.map((x) => (
+              <Ren
+                key={x.id} href={`/inversion/rondas/${x.id}`}
+                p={<><RenTitulo>{x.avance.ofertas_pendientes} oferta{x.avance.ofertas_pendientes > 1 ? "s" : ""} por revisar</RenTitulo><RenSub>{x.nombre}</RenSub></>}
+                m={<RenMonto>{pesos(x.avance.por_aprobar)}</RenMonto>}
+              />
+            ))}
+            {borradores.map((x) => (
+              <Ren
+                key={x.id} href={`/inversion/rondas/${x.id}`}
+                p={<><RenTitulo>Ronda en borrador{x.origen?.app === "dash101" ? " · vino del flujo" : ""}</RenTitulo><RenSub>{x.nombre}</RenSub></>}
+                m={<RenMonto>{pesos(x.monto_meta)}</RenMonto>}
+              />
+            ))}
+          </Lista>
+        </Tarjeta>
+      )}
+
+      <Tarjeta titulo="Rondas abiertas" der={<Link href="/inversion/rondas" className="text-marca hover:underline">Todas</Link>} data-rondas-abiertas>
+        {abiertas.length ? <Lista>{abiertas.map((x) => <RenRonda key={x.id} x={x} />)}</Lista> : <Vacio>No hay ninguna ronda abierta.</Vacio>}
+      </Tarjeta>
 
       {depositos.length > 0 && (
         <div className="bg-white border border-black/5 rounded-2xl overflow-hidden mb-4" data-depositos>
@@ -206,7 +263,7 @@ export default function InversionPage() {
                           <span className="tabular-nums font-medium">{clabeLegible(g.clabe)}</span> · a nombre de {g.beneficiario || g.inversionista_nombre}
                         </>
                       ) : (
-                        <>Este inversionista no tiene cuenta registrada. Se le agrega en patron101, en su ficha.</>
+                        <>Este inversionista no tiene cuenta registrada. Se le agrega en <Link href="/inversion/inversionistas" className="underline">Inversionistas</Link>, en su ficha.</>
                       )}
                     </div>
                     <FormaDeDinero
@@ -217,7 +274,7 @@ export default function InversionPage() {
                         let papel = "";
                         if (archivo) {
                           try { await subirComprobanteDePago(g.prestamo_id, g.id, archivo); } catch (e) {
-                            papel = ` El comprobante no se pudo subir (${e instanceof Error ? e.message : "error"}): súbelo desde patron101.`;
+                            papel = ` El comprobante no se pudo subir (${e instanceof Error ? e.message : "error"}): súbelo desde la ficha del préstamo.`;
                           }
                         }
                         hecho(`Pago ${g.numero} de ${g.de} a ${g.inversionista_nombre} registrado.${r.liquidado ? " Con éste el préstamo quedó liquidado." : ""}${papel}`);

@@ -20,13 +20,12 @@ export const CAJA = "w-full bg-white border border-black/10 rounded-xl px-3 py-2
 export const LIGA = "text-marca hover:underline";
 
 /* ─────────────── lo que flota: diálogos y listas ───────────────
- * Las tarjetas de dash101 son vidrio (`bg-white` es traslúcido y difumina lo
- * de atrás). Lo que flota ENCIMA de una tarjeta necesita fondo sólido, o se
- * lee revuelto con lo de abajo. */
+ * Lo que flota ENCIMA de una tarjeta va en una superficie un tono más alta
+ * (en Material 3 la profundidad la da el tono), con su sombra. */
 export const SOLIDO: React.CSSProperties = { background: "rgb(var(--c-cream))" };
 
-/** Un diálogo sobre toda la pantalla. Va colgado de <body>: una tarjeta de
- *  vidrio encierra a sus hijos `fixed`, y el diálogo saldría recortado. */
+/** Un diálogo sobre toda la pantalla. Va colgado de <body>, para que
+ *  ninguna tarjeta lo recorte. */
 export function Dialogo({ alCerrar, ancho = "max-w-md", children, ...resto }: { alCerrar: () => void; ancho?: string; children: ReactNode } & React.HTMLAttributes<HTMLDivElement>) {
   const [montado, setMontado] = useState(false);
   useEffect(() => {
@@ -39,7 +38,7 @@ export function Dialogo({ alCerrar, ancho = "max-w-md", children, ...resto }: { 
   return createPortal(
     <div {...resto} className="fixed inset-0 z-[80] bg-black/30 flex items-center justify-center p-4 print:hidden" role="dialog" aria-modal="true"
       onMouseDown={(ev) => { if (ev.target === ev.currentTarget) alCerrar(); }}>
-      <div className={`border border-black/15 rounded-2xl p-5 w-full ${ancho} max-h-[88vh] flex flex-col shadow-2xl text-ink-dim`} style={SOLIDO}>{children}</div>
+      <div className={`rounded-[28px] p-6 w-full ${ancho} max-h-[88vh] flex flex-col shadow-2xl text-ink-dim`} style={SOLIDO}>{children}</div>
     </div>,
     document.body,
   );
@@ -66,9 +65,8 @@ export function Migas({ href, children }: { href: string; children: ReactNode })
 
 /* ─────────────── tarjeta ─────────────── */
 
-/** Una tarjeta de vidrio. `focus-within:z-20`: cada tarjeta es su propia capa
- *  (por el difuminado), y la lista de sugerencias de un campo tiene que
- *  quedar encima de la tarjeta que sigue. */
+/** Una tarjeta. `focus-within:z-20`: la lista de sugerencias de un campo
+ *  tiene que quedar encima de la tarjeta que sigue. */
 export function Tarjeta({ titulo, der, children, realce, ...resto }: { titulo?: ReactNode; der?: ReactNode; children: ReactNode; realce?: boolean } & React.HTMLAttributes<HTMLElement>) {
   return (
     <section {...resto} className={`relative focus-within:z-20 bg-white border rounded-2xl p-4 mb-4 ${realce ? "border-marca/50" : "border-black/5"} ${resto.className ?? ""}`}>
@@ -206,7 +204,7 @@ export function ConSigno({ children }: { children: ReactNode }) {
 /* ─────────────── tablas ─────────────── */
 
 export function Tabla({ children, ...resto }: { children: ReactNode } & React.TableHTMLAttributes<HTMLTableElement>) {
-  return <div className="overflow-x-auto"><table {...resto} className="w-full text-sm [&_th]:text-left [&_th]:text-[11px] [&_th]:font-medium [&_th]:text-ink-muted [&_th]:uppercase [&_th]:tracking-wide [&_th]:pb-2 [&_td]:py-1.5 [&_td]:pr-3 [&_th]:pr-3 [&_td]:align-top [&_.n]:text-right [&_.n]:tabular-nums [&_.n]:whitespace-nowrap [&_tbody_tr]:border-t [&_tbody_tr]:border-black/5 [&_tfoot_tr]:border-t [&_tfoot_tr]:border-black/10 [&_tfoot_td]:font-medium">{children}</table></div>;
+  return <div className="overflow-x-auto"><table {...resto} className="w-full text-sm [&_th]:text-left [&_th]:text-[11px] [&_th]:font-medium [&_th]:text-ink-muted [&_th]:pb-2 [&_td]:py-1.5 [&_td]:pr-3 [&_th]:pr-3 [&_td]:align-top [&_.n]:text-right [&_.n]:tabular-nums [&_.n]:whitespace-nowrap [&_tbody_tr]:border-t [&_tbody_tr]:border-black/5 [&_tfoot_tr]:border-t [&_tfoot_tr]:border-black/10 [&_tfoot_td]:font-medium">{children}</table></div>;
 }
 
 /* ─────────────── avisos que flotan ─────────────── */
@@ -228,7 +226,7 @@ export function Avisos({ children }: { children: ReactNode }) {
       {children}
       <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 items-center pointer-events-none px-3 w-full max-w-md" aria-live="polite" data-avisos>
         {lista.map((a) => (
-          <div key={a.id} className={`rounded-xl px-4 py-2 text-sm shadow-lg text-center ${a.mal ? "bg-mauve-900 text-bg" : "bg-ink text-cream"}`}>{a.texto}</div>
+          <div key={a.id} className={`rounded-[4px] px-4 py-2.5 text-sm shadow-lg text-center ${a.mal ? "bg-mauve-900 text-white" : "bg-[#2d3135] text-[#eef1f6]"}`}>{a.texto}</div>
         ))}
       </div>
     </AvisosCtx.Provider>
@@ -269,14 +267,14 @@ export function useCarga<T>(fn: () => Promise<T>, llave: string): { d: T | null;
 
 /** Lo que se ve mientras llega, o si no llegó. `data-lista` avisa a las
  *  pruebas que la vista ya terminó de pintarse. */
-export function Vista({ carga, children }: { carga: { d: unknown; error: string; cual?: string; cargando: boolean }; children: ReactNode }) {
+export function Vista({ carga, children, inicio = { href: "/fiscal", texto: "Ir a Fiscal" } }: { carga: { d: unknown; error: string; cual?: string; cargando: boolean }; children: ReactNode; inicio?: { href: string; texto: string } }) {
   if (carga.cargando && !carga.d) return <div className="text-sm text-ink-muted">Cargando…</div>;
   if (carga.error && !carga.d) {
     const noEsta = carga.cual === "no_encontrado" || carga.cual === "cfdi_desconocido";
     return (
       <Tarjeta titulo={noEsta ? "Eso no está aquí" : "No se pudo abrir"} data-lista="1">
         <p className="text-sm text-ink-dim mb-3">{noEsta ? "Puede que la liga sea de otra empresa, o que ya no exista." : carga.error}</p>
-        <Link href="/fiscal" className={B}>Ir a Fiscal</Link>
+        <Link href={inicio.href} className={B}>{inicio.texto}</Link>
       </Tarjeta>
     );
   }
