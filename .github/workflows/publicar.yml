@@ -271,6 +271,12 @@ jobs:
       # Con la API fingida, como las dos de arriba.
       - name: La cuenta del reembolso en supply101
         run: node supply101/pruebas/la-cuenta-del-reembolso.mjs
+      # De qué proyecto es (20-nov-2026, contrato 0.113.0): el campo va
+      # arriba —antes del proveedor y de la cuenta—, lo escogido viaja con el
+      # pedido, un pedido nuevo no hereda el del anterior, y la lista y el
+      # detalle lo dicen. Con la API fingida, como las de arriba.
+      - name: El proyecto de una compra o un reembolso en supply101
+        run: node supply101/pruebas/el-proyecto-se-ve.mjs
       - name: Con un navegador, contra staging
         id: navegador
         continue-on-error: true

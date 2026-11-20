@@ -112,6 +112,22 @@
       <label for="concepto" id="concepto-l">Qué se compra</label>
       <input id="concepto" placeholder="Triplay de 18 mm, 12 hojas" required>
 
+      <!-- 20-nov-2026 · Mike, pidiendo un reembolso: «no hay un lugar donde
+           diga de qué proyecto es». El campo existía desde el principio, pero
+           iba hasta abajo —después del proveedor y de toda la tarjeta de la
+           cuenta bancaria— y en el teléfono nadie llegaba a verlo antes de
+           dar por llenado lo importante. Va aquí, pegado a «qué compraste»:
+           qué fue y para qué obra son la misma pregunta. -->
+      <label for="proyecto"><span id="proyecto-l">Para qué proyecto es</span>
+        <span class="pista">Si no es de ninguno, déjalo en gasto general.</span>
+      </label>
+      <select id="proyecto"></select>
+
+      <div id="bloque-partida" class="oculto">
+        <label for="partida">A qué compromiso del proyecto va</label>
+        <select id="partida"></select>
+      </div>
+
       <label for="proveedor" id="proveedor-l">A quién se le compra</label>
       <select id="proveedor"></select>
       <input id="proveedor-nuevo" placeholder="Nombre del proveedor" style="margin-top:8px">
@@ -233,16 +249,6 @@
           <p class="sub" style="margin:6px 0 0">Queda en tu expediente de roster. Después sube ahí la carátula de tu cuenta.</p>
           <button type="button" class="liso oculto" id="b-dejar-cuenta" style="margin-top:6px">Dejar la que tenía</button>
         </div>
-      </div>
-
-      <label for="proyecto">Para qué proyecto
-        <span class="pista">Si no es de ninguno, déjalo en gasto general.</span>
-      </label>
-      <select id="proyecto"></select>
-
-      <div id="bloque-partida" class="oculto">
-        <label for="partida">A qué compromiso del proyecto va</label>
-        <select id="partida"></select>
       </div>
 
       <label for="fecha">Cuándo se tiene que pagar</label>

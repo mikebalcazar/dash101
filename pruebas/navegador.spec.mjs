@@ -1886,6 +1886,44 @@ test('8-oct: los préstamos de investor101 salen en el flujo y en «Préstamos»
   await ctx.close();
 });
 
+test('20-nov: en Compras cada orden dice de qué proyecto es, o que es gasto general (sólo lectura)', async () => {
+  /* Mike, 20-nov-2026, pidiendo un reembolso: «no hay un lugar donde diga de
+   * qué proyecto es». El proyecto se escogía al pedir y después ninguna
+   * pantalla lo enseñaba. Aquí se mide la de quien paga: cada renglón de
+   * Compras dice el proyecto que dice la API (`proyecto_nombre`, 0.113.0), y
+   * el que no es de ninguno dice «Gasto general» —no se queda callado—.
+   * SÓLO SE LEE. */
+  const { ctx, pag, errores } = await pestana(undefined, true);
+  await pag.goto(`${URL}/ordenes`, { waitUntil: 'load' });
+  await pag.locator('[data-orden]').first().waitFor({ timeout: 20000 });
+  const buzon = filas(await api(pag, `/orgs/${ORG}/ordenes/buzon`));
+  assert.ok(buzon.length > 0, 'la demo tiene órdenes en el buzón');
+  assert.ok(buzon.every((o) => 'proyecto_nombre' in o), 'la API manda `proyecto_nombre` en cada orden del buzón');
+  let conProyecto = 0, generales = 0;
+  for (const o of buzon.slice(0, 12)) {
+    const fila = pag.locator(`[data-orden="${o.id}"]`).first();
+    const dice = (await fila.locator('[data-proyecto]').first().innerText()).trim();
+    if (o.proyecto_nombre) { conProyecto++; assert.equal(dice, o.proyecto_nombre, `${o.folio} dice su proyecto`); }
+    else { generales++; assert.equal(dice, 'Gasto general', `${o.folio} no es de un proyecto y lo dice`); }
+    // El contrario: nunca las dos cosas, ni el nombre de otro proyecto.
+    assert.equal(await fila.locator('[data-proyecto]').count(), 1, `${o.folio} lo dice una sola vez`);
+  }
+  /* El detalle lo dice también, con liga al proyecto cuando lo tiene. */
+  const una = buzon.find((o) => o.proyecto_nombre) ?? buzon[0];
+  await pag.goto(`${URL}/ordenes/${una.id}`, { waitUntil: 'load' });
+  const linea = pag.locator('[data-proyecto-de-la-orden]');
+  await linea.waitFor({ timeout: 20000 });
+  if (una.proyecto_nombre) {
+    assert.match(await linea.innerText(), new RegExp(una.proyecto_nombre.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), 'el detalle dice el proyecto');
+    assert.equal(await linea.locator('a').getAttribute('href'), `/proyectos/${una.proyecto_id}`, 'y lleva a él');
+  } else {
+    assert.match(await linea.innerText(), /Gasto general, no es de un proyecto/, 'el detalle dice que es gasto general');
+  }
+  console.log(`    Compras: ${conProyecto} con proyecto y ${generales} de gasto general, de ${Math.min(12, buzon.length)} revisadas`);
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
 test('20-nov: patron101 vive en «Préstamos»: sus fichas abren, una ronda se simula con la cuenta de la API, y lo que se crea se borra', async () => {
   /* Mike, 20-nov-2026: «hay que meter patron101 a dash también. Igual que
    * bill101». Lo de quien dirige —rondas, ofertas, préstamos, directorio,

@@ -327,6 +327,7 @@ function renglon(o) {
     <span class="texto">
       <b>${escapar(o.concepto)}</b>
       <small>${escapar(o.folio)} · ${aQuien} · ${vence}</small>
+      ${o.proyecto_nombre ? `<small data-proyecto>${escapar(o.proyecto_nombre)}</small>` : o.proyecto_id ? '' : '<small data-proyecto>Gasto general</small>'}
       <small style="margin-top:4px"><span class="${e.clase}">${e.texto}</span>${
         o.estado === 'devuelta' && o.nota_contador ? ` «${escapar(o.nota_contador)}»` : ''}</small>
     </span>
@@ -367,6 +368,7 @@ function ponerTipo(tipo, fijo) {
   $('monto-l').textContent = re ? 'Cuánto pagaste' : 'Cuánto es';
   $('concepto-l').textContent = re ? 'Qué compraste' : 'Qué se compra';
   $('concepto').placeholder = re ? 'Gasolina de la camioneta' : 'Triplay de 18 mm, 12 hojas';
+  $('proyecto-l').textContent = re ? 'Para qué proyecto fue' : 'Para qué proyecto es';
   $('proveedor-l').textContent = re ? 'Dónde lo compraste (si quieres)' : 'A quién se le compra';
   $('archivo-l').textContent = re ? 'Foto o PDF del ticket o la factura' : 'Foto o PDF de la cotización';
   /* 0.92.0 · En un reembolso el proveedor es sólo dónde se compró: su ficha
@@ -568,6 +570,15 @@ async function verPedir(orden, tipo = 'compra') {
   $('monto').value = orden ? String((orden.monto / 100).toFixed(2)) : '';
   $('concepto').value = orden ? orden.concepto : '';
   $('proveedor-nuevo').value = orden && !orden.proveedor_id ? (orden.proveedor_nombre || '') : '';
+  /* 20-nov-2026 · Las dos listas empiezan en lo de ESTA orden, o vacías. No
+   * se vaciaban: quien pedía un reembolso para «Casa Uno» y enseguida otro,
+   * sin recargar, mandaba el segundo también a «Casa Uno» sin haberlo
+   * escogido (y lo mismo con el proveedor). Lo cachó la prueba
+   * `el-proyecto-se-ve.mjs` el día que el proyecto subió a donde se ve.
+   * Abajo, cuando llegan los catálogos, se respeta lo que alguien haya
+   * escogido MIENTRAS cargaban; lo de un pedido anterior, no. */
+  $('proveedor').value = orden?.proveedor_id || '';
+  $('proyecto').value = orden?.proyecto_id || '';
   $('fecha').value = orden?.fecha_maxima_pago || '';
   $('fecha').min = hoy();
   $('urgente').checked = !!orden?.urgente;
@@ -1035,6 +1046,8 @@ async function verDetalle(id) {
     <div class="tarjeta" style="margin-top:12px">
       <dl class="datos">
         <div><dt>${reembolso ? 'Cuánto se te regresa' : 'Cuánto'}</dt><dd><b>${pesos(o.monto, o.moneda)}</b></dd></div>
+        ${o.proyecto_nombre || !o.proyecto_id ? `<div data-proyecto><dt>${reembolso ? 'De qué proyecto fue' : 'Para qué proyecto'}</dt><dd>${
+          o.proyecto_nombre ? escapar(o.proyecto_nombre) : 'Gasto general, no es de un proyecto'}</dd></div>` : ''}
         ${reembolso && o.reembolso_clabe ? `<div><dt>A qué cuenta</dt><dd><span class="clabe">${escapar(fmtClabe(o.reembolso_clabe))}</span>${
           o.reembolso_banco ? ` · ${escapar(o.reembolso_banco)}` : ''}${o.reembolso_beneficiario ? `<br>${escapar(o.reembolso_beneficiario)}` : ''}</dd></div>` : ''}
         ${o.con_factura ? `<div><dt>Subtotal e IVA</dt><dd>${pesos(o.subtotal, o.moneda)} + ${pesos(o.iva, o.moneda)}</dd></div>` : ''}

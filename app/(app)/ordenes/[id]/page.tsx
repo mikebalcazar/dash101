@@ -184,6 +184,18 @@ export default function OrdenPage() {
           </span>
         </div>
 
+        {/* 20-nov-2026 · de qué proyecto es (Mike: «no hay un lugar donde diga
+            de qué proyecto es»). Con liga al proyecto, que es a donde uno va
+            cuando quiere saber si ese gasto le toca. */}
+        {(orden.proyecto_nombre || !orden.proyecto_id) && (
+          <p className="mt-2 text-xs text-ink-muted" data-proyecto-de-la-orden>
+            {orden.tipo === "reembolso" ? "De qué proyecto fue: " : "Para qué proyecto: "}
+            {orden.proyecto_nombre && orden.proyecto_id
+              ? <Link href={`/proyectos/${orden.proyecto_id}`} className="text-marca hover:underline font-medium">{orden.proyecto_nombre}</Link>
+              : <span className="text-ink-dim font-medium">Gasto general, no es de un proyecto</span>}
+          </p>
+        )}
+
         {orden.estado === "cancelada" && (
           <p className="mt-3 text-xs text-ink-muted border border-black/10 rounded-xl px-3 py-2" data-cancelada>
             {orden.tipo === "reembolso" ? "Lo canceló" : "La canceló"} quien {orden.tipo === "reembolso" ? "lo" : "la"} pidió

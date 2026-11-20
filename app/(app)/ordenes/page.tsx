@@ -28,7 +28,7 @@ import { getBuzon, listMisOrdenes, listOrdenesPagadas, type Buzon, type Orden } 
 import { useEmpresa } from "@/lib/empresa-context";
 import { ErrorApi } from "@/lib/api/cliente";
 import { formatMontoExact } from "@/lib/format";
-import { AQuien, Dinero, Estado, FilasBuzon, Tipo, Vence } from "@/components/ordenes-ui";
+import { AQuien, DeProyecto, Dinero, Estado, FilasBuzon, Tipo, Vence } from "@/components/ordenes-ui";
 import { IconPlus, IconReceiptRefund, IconShoppingCart } from "@tabler/icons-react";
 
 /** Las devueltas primero; dentro de cada grupo, la más nueva arriba. */
@@ -54,6 +54,7 @@ function FilasMias({ filas }: { filas: Orden[] }) {
             <p className="text-[11px] text-ink-muted truncate">
               {o.folio} · <AQuien orden={o} /> · <Vence orden={o} />
             </p>
+            <p className="text-[11px] text-ink-dim truncate"><DeProyecto orden={o} /></p>
             <div className="mt-1 flex items-center gap-2 flex-wrap">
               <Estado orden={o} />
               <Tipo orden={o} />
