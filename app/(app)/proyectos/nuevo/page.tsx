@@ -83,7 +83,9 @@ export default function NuevoProyectoPage() {
         setClientes(cs);
         setProveedores(ps);
         setObras(os);
-        setExistentes(prs.filter((p) => p.precio_por_cargar));
+        /* Los que la lista de proyectos no enseña y siguen vivos: sin conceptos
+         * todavía, o en planeando (20-nov-2026: sin ningún cobro). */
+        setExistentes(prs.filter((p) => p.estado !== "cerrado" && (p.precio_por_cargar || p.estado === "planeando")));
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Error cargando catálogo"))
       .finally(() => setLoadingCatalog(false));

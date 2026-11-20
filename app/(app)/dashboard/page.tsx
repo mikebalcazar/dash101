@@ -126,7 +126,9 @@ export default function DashboardPage() {
   const liquido = cuentas.reduce((s, c) => s + (c.saldo_actual ?? 0), 0);
   const reembolsosPendientes = pendientes?.reembolsos.total ?? 0;
   const cuantosReembolsos = pendientes?.reembolsos.cuantas ?? 0;
-  const proyectosActivos = proyectos.filter((p) => p.estado !== "cerrado");
+  /* Ni cerrados ni planeando (20-nov-2026): planeando son los que todavía no
+   * tienen ningún cobro; con el primero pasan a activo solos. */
+  const proyectosActivos = proyectos.filter((p) => p.estado !== "cerrado" && p.estado !== "planeando");
 
   /** Por proyecto, el mismo corte que el de arriba. Nunca en negativo: un
    *  proyecto cobrado de más no es dinero «por cobrar» en contra. */

@@ -482,7 +482,10 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
        * Un comprobante no depende de que haya factura: son dos cosas. */
       if (archivoFactura) await subirArchivo("movimientos", id, archivoFactura);
 
-      router.push("/movimientos");
+      /* Si se abrió desde un proyecto («Registrar cobro»), regresa a él.
+       * Sólo rutas propias de proyecto: nunca a otra página por la URL. */
+      const volver = searchParams?.get("volver") ?? "";
+      router.push(/^\/proyectos\/[A-Za-z0-9_-]+$/.test(volver) ? volver : "/movimientos");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al crear movimiento");
     } finally {

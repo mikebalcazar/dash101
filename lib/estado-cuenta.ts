@@ -136,7 +136,16 @@ export async function estadoDeCuenta(cliente_id: string): Promise<EstadoDeCuenta
  *  de proyectos ni en el estado de cuenta para mandar (Mike: «todas las obras
  *  cerradas (saldo 0 pendiente) hay que ocultarlas ya»). */
 export const abierta = (p: { precio_por_cargar: boolean; estado: string; saldo: number | null }) =>
-  !p.precio_por_cargar && p.estado !== "cerrado" && Math.abs(p.saldo ?? 0) >= 0.5;
+  p.estado === "planeando" || p.estado === "cerrado"
+    ? false
+    /* 20-nov-2026 · Un proyecto ACTIVO sale aunque todavía no tenga conceptos
+     * ni cobros (Mike: «necesito que sí aparezca cuando lo marque como
+     * activo», y «así puedo agregar ya los conceptos a cobrar»). Sólo se va
+     * cuando ya tiene precio y quedó cobrado. «Planeando» no sale: así quedan
+     * los que no tienen ningún cobro, y el primero los activa solo. */
+    : p.estado === "activo"
+      ? p.precio_por_cargar || Math.abs(p.saldo ?? 0) >= 0.5
+      : !p.precio_por_cargar && Math.abs(p.saldo ?? 0) >= 0.5;
 
 /** 19-nov-2026 · Lo que va en el estado de cuenta general para mandar: obras
  *  en proceso con saldo por cobrar (Mike: «solo debe incluir obras en proceso
