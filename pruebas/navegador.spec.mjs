@@ -776,30 +776,42 @@ test('se da de alta un cliente desde «nuevo proyecto», y avisa del parecido', 
  * proyecto, pregunta si es nuevo o es alguno de los que ya están en la base».
  * Un proyecto sin conceptos no sale en la lista y sí sale en «Ya existe», con
  * liga a su página. */
-test('19-nov: la lista esconde los proyectos sin conceptos y «Crear proyecto → Ya existe» los enseña', async () => {
+/* 20-nov-2026 · Mike: «Cuando creo un proyecto nuevo en dash ACTIVO, no
+ * aparece (…) necesito que sí aparezca cuando lo marque como activo», «así
+ * puedo agregar ya los conceptos a cobrar» y «hacer el primer movimiento de
+ * un proyecto nuevo desde la misma ventana de proyecto». Planeando no sale. */
+test('20-nov: un proyecto activo sale aunque no tenga conceptos, planeando no; y el cobro se registra desde el proyecto', async () => {
   const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
   await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
   let cliente = filas(await api(pag, `/orgs/${ORG}/clientes`)).find((c) => c.nombre === CLIENTE_PRUEBAS);
   if (!cliente) cliente = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS } });
-  const nombre = `Sin conceptos ${Date.now().toString(36).slice(-5)}`;
-  const proyecto = await api(pag, `/orgs/${ORG}/proyectos`, { method: 'POST', body: { nombre, cliente_id: cliente.id, estado: 'activo' } });
+  const sufijo = Date.now().toString(36).slice(-5);
+  const activo = await api(pag, `/orgs/${ORG}/proyectos`, { method: 'POST', body: { nombre: `Activo sin conceptos ${sufijo}`, cliente_id: cliente.id, estado: 'activo' } });
+  const planeando = await api(pag, `/orgs/${ORG}/proyectos`, { method: 'POST', body: { nombre: `Planeando ${sufijo}`, cliente_id: cliente.id, estado: 'planeando' } });
   try {
     await pag.goto(`${URL}/proyectos`, { waitUntil: 'load' });
     await pag.getByRole('heading', { name: 'Proyectos' }).waitFor({ timeout: 20000 });
-    await pag.waitForTimeout(1500);
-    assert.equal(await pag.getByText(nombre).count(), 0, 'el proyecto sin conceptos no sale en la lista');
+    await pag.locator(`[data-saldo-proyecto="${activo.id}"]`).waitFor({ timeout: 20000 });
+    assert.match(await pag.locator(`[data-saldo-proyecto="${activo.id}"]`).innerText(), /Por cargar/, 'el activo sale, con el saldo por cargar');
+    assert.equal(await pag.getByText(`Planeando ${sufijo}`).count(), 0, 'el planeando no sale en la lista');
     assert.ok(await pag.locator('[data-proyectos-ocultos]').count() > 0, 'y la lista dice cuántos no enseña');
 
     await pag.goto(`${URL}/proyectos/nuevo`, { waitUntil: 'load' });
     await pag.locator('[data-es-nuevo-o-existe]').waitFor({ timeout: 20000 });
     await pag.getByRole('button', { name: /Ya existe/ }).click();
-    await pag.getByLabel('Buscar proyecto').fill(nombre.toLowerCase());
-    const liga = pag.locator(`[data-proyecto-existente="${proyecto.id}"]`);
+    await pag.getByLabel('Buscar proyecto').fill(`planeando ${sufijo}`);
+    const liga = pag.locator(`[data-proyecto-existente="${planeando.id}"]`);
     await liga.waitFor({ timeout: 10000 });
-    assert.match(await liga.getAttribute('href'), new RegExp(`/proyectos/${proyecto.id}$`), 'la liga lleva a su página');
-    console.log(`    «${nombre}» escondido de la lista y encontrado en «Ya existe»`);
+    assert.match(await liga.getAttribute('href'), new RegExp(`/proyectos/${planeando.id}$`), 'el planeando se encuentra en «Ya existe»');
+
+    await pag.goto(`${URL}/proyectos/${activo.id}`, { waitUntil: 'load' });
+    const cobro = pag.locator('[data-registrar-cobro]');
+    await cobro.waitFor({ timeout: 20000 });
+    const href = await cobro.getAttribute('href');
+    assert.ok(href.includes(`proyecto=${activo.id}`) && href.includes('tipo=ingreso') && href.includes(encodeURIComponent(`/proyectos/${activo.id}`)), `«Registrar cobro» abre el movimiento con el proyecto puesto: ${href}`);
+    console.log(`    activo sin conceptos visible, planeando escondido, «Registrar cobro» → ${href}`);
   } finally {
-    try { await api(pag, `/orgs/${ORG}/proyectos/${proyecto.id}/borrar`, { method: 'POST', body: { modo: 'borrar' } }); } catch { /* se queda en la demo; no estorba */ }
+    for (const p of [activo, planeando]) { try { await api(pag, `/orgs/${ORG}/proyectos/${p.id}/borrar`, { method: 'POST', body: { modo: 'borrar' } }); } catch { /* se queda en la demo; no estorba */ } }
   }
   assert.deepEqual(errores, [], 'cero errores de JavaScript');
   await ctx.close();
@@ -1775,7 +1787,7 @@ test('1-oct: el líquido es el saldo que suma la API; la cuenta abre con su hist
   // ── 20-nov-2026 · el número grande es el saldo por cobrar de los proyectos abiertos, sin IVA ──
   const proys = filas(await api(pag, `/orgs/${ORG}/proyectos`));
   const saldoGeneral = proys
-    .filter((p) => p.estado !== 'cerrado' && !(p.n_conceptos !== undefined && Number(p.n_conceptos) === 0))
+    .filter((p) => p.estado !== 'cerrado' && p.estado !== 'planeando' && !(p.n_conceptos !== undefined && Number(p.n_conceptos) === 0))
     .reduce((t, p) => t + Math.max(0, (p.precio_venta ?? 0) - (p.cobrado_sin_iva ?? p.cobrado ?? 0)), 0);
   const grande = pag.locator('[data-saldo-general]');
   await grande.waitFor({ timeout: 30000 });

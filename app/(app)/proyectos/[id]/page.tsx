@@ -240,10 +240,22 @@ export default function ProyectoDetallePage() {
                 <p className="text-xs text-ink-muted mt-2">{p.descripcion}</p>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
               {/* El estado de cuenta es lo que se manda: va junto a editar y
                   no escondido en un menú, porque se pide seguido y es el
                   mismo documento que el cliente ve en su portal. */}
+              {/* El cobro se registra desde el proyecto (Mike, 20-nov-2026: «ya
+                  puedo hacer el primer movimiento de un proyecto nuevo desde
+                  la misma ventana de proyecto»). Abre el movimiento con el
+                  proyecto puesto y, al guardar, regresa aquí. */}
+              <Link
+                href={`/movimientos/nuevo?tipo=ingreso&proyecto=${p.id}&volver=${encodeURIComponent(`/proyectos/${p.id}`)}`}
+                data-registrar-cobro
+                className="text-xs bg-ink text-cream rounded-xl px-3 py-1.5 hover:bg-ink/90 transition flex items-center gap-1"
+              >
+                <IconPlus size={13} />
+                Registrar cobro
+              </Link>
               <Link
                 href={`/proyectos/${p.id}/estado-de-cuenta`}
                 className="text-xs bg-white border border-black/10 rounded-xl px-3 py-1.5 hover:border-black/20 transition flex items-center gap-1"

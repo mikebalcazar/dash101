@@ -77,7 +77,7 @@ export default function ProyectosPage() {
           </p>
           {ocultos > 0 && (
             <p className="text-[11px] text-ink-muted mt-0.5" data-proyectos-ocultos={ocultos}>
-              {ocultos} {ocultos === 1 ? "proyecto cerrado o sin conceptos de cobro no se muestra" : "proyectos cerrados o sin conceptos de cobro no se muestran"}: los que no tienen conceptos están en «Crear proyecto → Ya existe».
+              {ocultos} {ocultos === 1 ? "proyecto planeando, cerrado o sin conceptos de cobro no se muestra" : "proyectos planeando, cerrados o sin conceptos de cobro no se muestran"}: los que no tienen conceptos están en «Crear proyecto → Ya existe».
             </p>
           )}
         </div>
