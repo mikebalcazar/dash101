@@ -356,7 +356,7 @@ test('conciliar: la que cuadra no deja ajuste, la que no cuadra sí, y el saldo 
 
 test('a 390×844 no hay barrido horizontal ni errores de JavaScript', async () => {
   const { ctx, pag, errores } = await pestana({ width: 390, height: 844 }, true);
-  for (const ruta of ['/dashboard', '/movimientos', '/cuentas', '/conciliacion', '/ordenes', '/ordenes/nueva', '/ordenes/buzon', '/fiscal', '/fiscal/pendientes', '/fiscal/cfdi']) {
+  for (const ruta of ['/dashboard', '/movimientos', '/cuentas', '/conciliacion', '/ordenes', '/ordenes/nueva', '/ordenes/buzon', '/fiscal', '/fiscal/pendientes', '/fiscal/facturas', '/fiscal/ligar', '/fiscal/impuestos', '/fiscal/estado', '/fiscal/nueva', '/fiscal/sat', '/fiscal/ajustes']) {
     await pag.goto(`${URL}${ruta}`, { waitUntil: 'load' });
     await pag.waitForTimeout(1500);
     const m = await pag.evaluate(() => ({ ancho: document.documentElement.scrollWidth, ventana: window.innerWidth }));
@@ -1230,6 +1230,98 @@ test('el estado de cuenta del proyecto va sin IVA, y un pago se abre y se liga a
   await api(pag, `/orgs/${ORG}/fiscal/cfdi/${factura.id}/cancelar`, { method: 'POST' });
 
   console.log(`    precio ${pesos2(30_000_00)} sin IVA, pagado ${pesos2(20_000_00)}, IVA ${pesos2(1_600_00)} aparte; factura ligada desde el estado de cuenta`);
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
+/* ═══════════════ bill101 dentro de «Fiscal» (19-nov-2026) ═══════════════
+ *
+ * Mike: «vamos a fusionar bill101 con dash101. bill101 va a entrar en el menú
+ * "Fiscal" de dash101». Aquí se mide que sus secciones abren con datos de la
+ * API, que una factura se ve, se abre y se marca cancelada, y que la factura
+ * nueva encuentra la clave del SAT en su catálogo.
+ *
+ * NO se timbra, no se toca Facturama, la FIEL ni el SAT: de esas pantallas
+ * sólo se mide que abren. */
+test('19-nov: bill101 vive en «Fiscal»: sus secciones abren, una factura se ve y se marca cancelada, y la nueva encuentra la clave del SAT', async () => {
+  const { ctx, pag, errores } = await pestana(undefined, true);
+  pag.on('dialog', (d) => d.accept());
+  const lista = (ms = 30000) => pag.locator('[data-lista="1"]').first().waitFor({ timeout: ms });
+
+  // El inicio: las fichas de las secciones y lo que calcula la API.
+  await pag.goto(`${URL}/fiscal`, { waitUntil: 'load' });
+  await lista();
+  const fichas = await pag.locator('[data-fichas-fiscal] a').allInnerTexts();
+  assert.deepEqual(fichas.map((t) => t.trim()), ['Inicio', 'Facturas', 'Por ligar', 'Falta la factura', 'Impuestos', 'SAT', 'Ajustes'], 'las secciones de bill101, más «Falta la factura» de dash101');
+  await pag.locator('#anual').waitFor({ timeout: 20000 });
+  await pag.locator('#cuadre').waitFor({ timeout: 20000 });
+
+  // Una factura recibida, capturada a mano por la API: sale en su mes.
+  const uuid = `FISCAL-${Date.now().toString(36).toUpperCase()}`;
+  const mes = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City', year: 'numeric', month: '2-digit' }).format(new Date());
+  const factura = await api(pag, `/orgs/${ORG}/fiscal/cfdi`, {
+    method: 'POST',
+    body: { uuid, tipo: 'egreso', razon_social: `Proveedor ${uuid}`, subtotal: 1_000_00, iva: 160_00, total: 1_160_00, fecha: `${mes}-01` },
+  });
+  await pag.goto(`${URL}/fiscal/facturas?lado=recibidas&mes=${mes}`, { waitUntil: 'load' });
+  const renglon = pag.locator('#lista-facturas li', { hasText: `Proveedor ${uuid}` });
+  await renglon.waitFor({ timeout: 30000 });
+  assert.match(await renglon.innerText(), /\$1,160\.00/, 'con su total');
+  assert.match(await renglon.innerText(), /A mano/, 'y dice que se capturó a mano');
+  assert.match(await renglon.innerText(), /Sin ligar/, 'y que no está ligada');
+
+  // Se abre: sus cifras, y como no se timbró aquí se puede marcar cancelada.
+  await renglon.locator('a').click();
+  await pag.waitForURL(new RegExp(`/fiscal/facturas/${factura.id}`), { timeout: 30000 });
+  await pag.locator('#t-dinero').waitFor({ timeout: 30000 });
+  assert.match(await texto(pag), /\$1,000\.00/, 'el subtotal');
+  assert.equal(await pag.locator('#b-cancelar').count(), 0, 'una que no se timbró aquí no ofrece cancelar ante el SAT');
+  await pag.locator('#b-marcar-cancelada').click();
+  await pag.getByText('Esta factura está cancelada').waitFor({ timeout: 30000 });
+  const despues = await api(pag, `/orgs/${ORG}/fiscal/cfdi/${factura.id}`);
+  assert.equal(despues.estado, 'cancelada', 'quedó cancelada en la API');
+
+  // Impuestos y el estado de cuenta fiscal: lo que dice la API, mes por mes.
+  await pag.goto(`${URL}/fiscal/impuestos`, { waitUntil: 'load' });
+  await pag.locator('#meses details').first().waitFor({ timeout: 30000 });
+  assert.equal(await pag.locator('#meses details').count(), 12, 'los doce meses');
+  await pag.locator('#anual').waitFor({ timeout: 10000 });
+  await pag.getByRole('link', { name: 'Estado de cuenta fiscal' }).click();
+  await pag.waitForURL(/\/fiscal\/estado/, { timeout: 30000 });
+  await pag.getByText('Ingresos facturados').first().waitFor({ timeout: 30000 });
+
+  // La factura nueva: la clave del SAT sale de su catálogo, escrita o por categorías.
+  await pag.goto(`${URL}/fiscal/nueva`, { waitUntil: 'load' });
+  await pag.locator('#f-nueva').waitFor({ timeout: 30000 });
+  await pag.locator('[name=clave_prod_serv]').fill('mueble');
+  await pag.locator('[data-sugerencias] [data-i]').first().waitFor({ timeout: 30000 });
+  await pag.locator('[data-sugerencias] [data-i]').first().dispatchEvent('mousedown');
+  assert.match(await pag.locator('[name=clave_prod_serv]').inputValue(), /^\d{8}$/, 'se escogió una clave de ocho dígitos');
+  await pag.locator('[data-nombre-clave]').waitFor({ timeout: 20000 });
+  await pag.locator('[data-categorias]').click();
+  await pag.locator('[data-dialogo-categorias] [data-div]').first().waitFor({ timeout: 30000 });
+  await pag.keyboard.press('Escape');
+  await pag.locator('[data-dialogo-categorias]').waitFor({ state: 'detached', timeout: 10000 });
+  assert.equal(await pag.locator('#b-timbrar').count(), 1, 'el botón de timbrar está (aquí no se oprime)');
+
+  // Lo demás abre: prefacturas, lo intentado, el SAT y los ajustes.
+  for (const [ruta, senal] of [['/fiscal/prefacturas', 'Prefacturas'], ['/fiscal/emisiones', 'Lo intentado'], ['/fiscal/ligar', 'Por ligar']]) {
+    await pag.goto(`${URL}${ruta}`, { waitUntil: 'load' });
+    await lista();
+    await pag.getByRole('heading', { name: senal }).waitFor({ timeout: 20000 });
+  }
+  await pag.goto(`${URL}/fiscal/sat`, { waitUntil: 'load' });
+  await pag.locator('#t-fiel').waitFor({ timeout: 30000 });
+  await pag.goto(`${URL}/fiscal/ajustes`, { waitUntil: 'load' });
+  await pag.locator('#f-empresa').waitFor({ timeout: 30000 });
+  await pag.locator('#f-ejercicio').waitFor({ timeout: 10000 });
+  await pag.locator('#t-pac').waitFor({ timeout: 10000 });
+
+  // La dirección vieja de «Facturas» lleva a la nueva.
+  await pag.goto(`${URL}/fiscal/cfdi`, { waitUntil: 'load' });
+  await pag.waitForURL(/\/fiscal\/facturas/, { timeout: 30000 });
+
+  console.log(`    Fiscal: ${fichas.length} secciones; la factura ${uuid} se vio, se abrió y se marcó cancelada`);
   assert.deepEqual(errores, [], 'cero errores de JavaScript');
   await ctx.close();
 });

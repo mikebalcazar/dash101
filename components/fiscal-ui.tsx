@@ -1,44 +1,16 @@
 "use client";
 
-/* Lo que comparten las tres pantallas fiscales: la barra para moverse entre
- * ellas, el selector de mes y el aviso que Mike pidió ver en pantalla.
+/* Lo que comparten las pantallas fiscales que dash101 ya tenía: el selector
+ * de mes, bajar un CSV y el aviso que Mike pidió ver en pantalla. La barra
+ * para moverse entre secciones vive ahora en `app/(app)/fiscal/layout.tsx`
+ * (19-nov-2026, al entrar bill101 a «Fiscal»).
  *
  * El aviso no es decorado: dice que esto ordena la información fiscal y que
  * no presenta declaraciones ni sustituye al contador. Va en las tres, con el
  * mismo texto, porque a cualquiera de las tres se puede llegar directo. */
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { AVISO_FISCAL, nombreDelMes, ultimosMeses } from "@/lib/fiscal";
 import { IconInfoCircle } from "@tabler/icons-react";
-
-const TABS = [
-  { href: "/fiscal", label: "IVA del mes" },
-  { href: "/fiscal/pendientes", label: "Falta la factura" },
-  { href: "/fiscal/cfdi", label: "Facturas" },
-];
-
-export function TabsFiscal() {
-  const ruta = usePathname();
-  return (
-    <div className="flex gap-1 mb-4 overflow-x-auto">
-      {TABS.map((t) => {
-        const activa = ruta === t.href;
-        return (
-          <Link
-            key={t.href}
-            href={t.href}
-            className={`rounded-xl px-3 py-1.5 text-sm whitespace-nowrap transition ${
-              activa ? "bg-ink text-cream" : "bg-white border border-black/5 text-ink-muted hover:text-ink-dim"
-            }`}
-          >
-            {t.label}
-          </Link>
-        );
-      })}
-    </div>
-  );
-}
 
 export function AvisoFiscal() {
   return (
