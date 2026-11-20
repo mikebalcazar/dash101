@@ -261,14 +261,23 @@ export default function ProyectoDetallePage() {
             </div>
           </div>
 
-          {/* Hero disponible */}
-          <div className="bg-cream rounded-3xl p-6 mb-3">
-            <p className="text-xs text-ink-muted mb-1 font-medium">Capital disponible</p>
-            <p className="text-4xl font-medium tracking-tight text-ink-dim leading-none">
-              {formatMonto(p.disponible ?? 0, "MXN")}
+          {/* EL NÚMERO GRANDE ES EL SALDO POR COBRAR (Mike, 20-nov-2026: «En la
+              pantalla de cada proyecto. El Saldo por cobrar es la cifra
+              importante»). Sin IVA, igual que el estado de cuenta. El capital
+              disponible (lo del banco) queda abajo, chico. */}
+          <div className="bg-cream rounded-3xl p-6 mb-3" data-saldo-por-cobrar>
+            <p className="text-xs text-ink-muted mb-1 font-medium">Saldo por cobrar <span className="text-[10px]">sin IVA</span></p>
+            <p className="text-4xl font-medium tracking-tight text-ink-dim leading-none tabular-nums">
+              {porCargar ? "Por cargar" : formatMonto(Math.max(0, porCobrar), "MXN")}
             </p>
             <p className="text-xs text-ink-muted mt-2">
-              {formatMonto(p.cobrado, "MXN")} cobrado − {formatMonto(p.pagado, "MXN")} pagado
+              {porCargar
+                ? "Sin conceptos de cobro todavía no hay precio"
+                : `${formatMonto(p.precio_venta, "MXN")} precio − ${formatMonto(cobradoSinIva, "MXN")} cobrado`}
+            </p>
+            <p className="text-xs text-ink-muted mt-3 pt-3 border-t border-black/5" data-capital-disponible>
+              Capital disponible <span className="font-medium text-ink-dim tabular-nums">{formatMonto(p.disponible ?? 0, "MXN")}</span>
+              <span className="opacity-70"> · {formatMonto(p.cobrado, "MXN")} cobrado − {formatMonto(p.pagado, "MXN")} pagado</span>
             </p>
           </div>
 

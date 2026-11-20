@@ -62,6 +62,7 @@ export default function ProyectosPage() {
   const ocultos = todos.length - visibles.length;
   const totalDisp = visibles.reduce((s, p) => s + (p.disponible ?? 0), 0);
   const totalVenta = visibles.reduce((s, p) => s + (p.precio_venta ?? 0), 0);
+  const totalSaldo = visibles.reduce((s, p) => s + (p.precio_por_cargar ? 0 : Math.max(0, (p.precio_venta ?? 0) - (p.cobrado_sin_iva ?? p.cobrado ?? 0))), 0);
 
   return (
     <div>
@@ -72,7 +73,7 @@ export default function ProyectosPage() {
             {empresa.nombre} ·{" "}
             {visibles.length === 0
               ? "Sin proyectos abiertos"
-              : `${visibles.length} · Vendido ${formatMonto(totalVenta, empresa.moneda)} · Disponible ${formatMonto(totalDisp, empresa.moneda)}`}
+              : `${visibles.length} · Vendido ${formatMonto(totalVenta, empresa.moneda)} · Por cobrar ${formatMonto(totalSaldo, empresa.moneda)} · Disponible ${formatMonto(totalDisp, empresa.moneda)}`}
           </p>
           {ocultos > 0 && (
             <p className="text-[11px] text-ink-muted mt-0.5" data-proyectos-ocultos={ocultos}>
@@ -111,7 +112,7 @@ export default function ProyectosPage() {
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {visibles.map((p) => {
             // 0.107.0 · sin IVA, contra el precio que también va sin IVA.
             const cobradoSinIva = p.cobrado_sin_iva ?? p.cobrado;
@@ -124,16 +125,25 @@ export default function ProyectosPage() {
                 href={`/proyectos/${p.id}`}
                 className="bg-white border border-black/5 rounded-2xl p-4 hover:border-black/20 hover:-translate-y-px transition"
               >
+                {/* El saldo por cobrar, grande, arriba a la derecha (Mike,
+                    20-nov-2026, con la tarjeta de HOLCIM de ejemplo: «que se
+                    vea el saldo pendiente de cobrar en grande»). */}
                 <div className="flex items-start justify-between gap-2 mb-3">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-ink-dim truncate">{p.nombre}</p>
                     <p className="text-[11px] text-ink-muted truncate">{p.cliente_nombre}</p>
+                    <span
+                      className={`inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap ${ESTADO_STYLE[p.estado] ?? "bg-cream text-ink-muted"}`}
+                    >
+                      {ESTADO_PROYECTO_LABELS[p.estado]}
+                    </span>
                   </div>
-                  <span
-                    className={`text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap ${ESTADO_STYLE[p.estado] ?? "bg-cream text-ink-muted"}`}
-                  >
-                    {ESTADO_PROYECTO_LABELS[p.estado]}
-                  </span>
+                  <div className="text-right shrink-0" data-saldo-proyecto={p.id}>
+                    <p className="text-[10px] text-ink-muted uppercase tracking-wide">Saldo por cobrar</p>
+                    <p className="text-xl sm:text-2xl font-medium text-mint-900 tabular-nums leading-tight">
+                      {p.precio_por_cargar ? "Por cargar" : formatMonto(Math.max(0, (p.precio_venta ?? 0) - cobradoSinIva), "MXN")}
+                    </p>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 text-[11px] mb-3">
