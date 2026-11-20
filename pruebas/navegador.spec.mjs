@@ -1434,6 +1434,15 @@ test('un cobro se captura «falta facturar» y aparece en la lista de pendientes
   assert.equal(await todaviaNo.getAttribute('aria-pressed'), 'true',
     'y con la factura pendiente, no dada por hecha');
 
+  /* 0.112.0 · «Buscar factura» (Mike, 19-nov-2026: «que revise en los CFDIs
+     si alguno coincide o está cerca y los sugiera»): contesta con una lista
+     o con que ninguna se acerca, nunca con un error. Luego se regresa a
+     «Todavía no» para que el cobro siga esperando su factura. */
+  await pag.getByRole('button', { name: 'Ya se expidió' }).click();
+  await pag.getByRole('button', { name: 'Buscar factura' }).click();
+  await pag.locator('[data-sugeridas], [data-sin-sugeridas]').first().waitFor({ timeout: 20000 });
+  await todaviaNo.click();
+
   await pag.getByRole('button', { name: /^Registrar ingreso$/ }).click();
   await pag.waitForURL(/\/movimientos(\?|$)/, { timeout: 30000 });
 
