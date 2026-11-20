@@ -46,9 +46,14 @@ const ORG_STAGING = process.env.ORG_STAGING || 'demo';
 const ORG_PROD = process.env.ORG_PROD || 'forespot';
 
 /** El logotipo oficial, el mismo del escaparate, en su versión sobre fondo
- *  oscuro (8-oct-2026, el estilo de cost101): la palabra en blanco y el aro
- *  en el azul de la marca sobre oscuro. */
-const LOGOTIPO = '/marca/dash101-claro.svg';
+ *  claro (20-nov-2026, Material Design 3 en claro; del 8-oct al 20-nov fue la
+ *  versión sobre oscuro, `dash101-claro.svg`).
+ *
+ *  SI EL TEMA CAMBIA DE FONDO, ESTO CAMBIA CON ÉL: el 20-nov el rediseño
+ *  pasó sus pruebas y se detuvo aquí, en staging, porque la pantalla de
+ *  entrada ya apuntaba al logotipo nuevo y esto seguía buscando el viejo.
+ *  Producción no se tocó, que es para lo que sirve medir staging primero. */
+const LOGOTIPO = '/marca/dash101.svg';
 
 const FUENTES = [
   '/fonts/fira-cifras-400.woff2',
