@@ -26,7 +26,7 @@ import { SelectorDeMes, bajarCsv } from "@/components/fiscal-ui";
 import { B, B_PRI, CHICO, Cab, Cifra, Dato, Datos, LIGA, Lista, Nota, Tarjeta, Vista, useCarga, type Tono } from "@/components/fiscal/ui";
 import { IconDownload } from "@tabler/icons-react";
 
-const PUNTO: Record<Tono, string> = { mal: "bg-mauve-900", ojo: "bg-amber-400", azul: "bg-sky-900", bien: "bg-mint-900", "": "bg-ink-muted" };
+const PUNTO: Record<Tono, string> = { mal: "bg-mauve-900", ojo: "bg-amber-600", azul: "bg-sky-900", bien: "bg-mint-900", "": "bg-ink-muted" };
 
 /** Lo que puede estar torciendo la cuenta, cada cosa con a dónde ir a arreglarla. */
 function Pendientes({ d, rfc, porLigar }: { d: Fila; rfc: string | null; porLigar: number }) {

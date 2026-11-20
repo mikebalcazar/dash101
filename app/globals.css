@@ -20,29 +20,67 @@
 @font-face{font-family:"Sansation";src:url("/fonts/sansation-700.woff2") format("woff2");font-weight:700;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 @font-face{font-family:"Sansation";src:url("/fonts/sansation-700-ext.woff2") format("woff2");font-weight:700;font-display:swap;unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
 
-/* Los tonos de la suite, como canales RGB para que Tailwind les ponga
- * opacidad (`bg-ink/10`). 8-oct-2026: el look de cost101 —azul oscuro, vidrio,
- * botones redondos— con la tipografía y el logo de siempre. Los NOMBRES no
- * cambiaron; cambia lo que valen. Al imprimir vuelven los claros (abajo). */
+/* ─────────────── Material Design 3 (20-nov-2026) ───────────────
+ *
+ * Mike, 20-nov-2026: «Rediseña el look and feel de la interfaz de dash101» con
+ * dos artículos de Material Design 3 (botones redondeados y tema por color
+ * semilla); con botones escogió el fondo: «Claro». Lo que piden los
+ * artículos: `useMaterial3`, un esquema de color salido de una semilla, y
+ * botones redondeados (radio 30, relleno 20 × 12) en tres clases: relleno,
+ * de contorno y de texto.
+ *
+ * LA SEMILLA es el azul de la marca, #0080C1. De ella sale todo (calculado
+ * con material-color-utilities, la librería de Material):
+ *   · primario #006194 (el azul de la marca a tono 40, para que el blanco se
+ *     lea encima) y su contenedor #cce5ff;
+ *   · las superficies: fondo #f7f9ff, tarjetas en blanco, bloques apagados
+ *     #ebeef3; sin degradado y sin vidrio: en Material 3 la profundidad la
+ *     da el tono de la superficie, no una sombra ni un difuminado;
+ *   · el contorno #72787e y su variante suave #c2c7ce;
+ *   · «entra» (verde) y «sale» (rojo teja), armonizados con el primario.
+ *
+ * LOS NOMBRES de los tonos no cambiaron (`cream`, `ink`, `mint`, `mauve`,
+ * `sky`): cambia lo que valen, y por eso esto se lee aquí y no en cuarenta
+ * pantallas. Qué papel de Material 3 hace cada uno:
+ *   bg            surface                 el fondo de la app
+ *   white         surface container lowest   las tarjetas
+ *   cream         surface container       bloques apagados, el menú
+ *   ink-dim       on surface              el texto
+ *   ink-muted     on surface variant      el texto secundario
+ *   bg-ink        primary                 el botón relleno y lo activo
+ *   text-cream    on primary              el texto sobre lo anterior
+ *   sky           primary container       lo informativo y lo escogido
+ *   mint / mauve  «entra» / «sale»        contenedor (50) y texto (900)
+ *   marca         primary                 ligas
+ *   black/N       on surface al N %       capas de estado y sombras
+ * (`bg-ink`, `border-ink` y `text-cream` se apartan de `ink` y `cream` en
+ * tailwind.config.ts: la tinta del texto no es el color del botón.) */
 :root {
-  color-scheme: dark;
-  --c-bg: 15 27 36;          /* #0f1b24 */
-  --c-cream: 22 36 46;       /* #16242e, superficie apagada */
-  --c-ink: 232 238 242;      /* #e8eef2: la tinta, y el claro de los botones */
-  --c-ink-dim: 232 238 242;
-  --c-ink-muted: 169 192 206;/* #a9c0ce */
-  --c-mint-50: 22 53 39;     /* #163527 */
-  --c-mint-900: 92 194 142;  /* #5CC28E */
-  --c-mint-label: 127 211 166;
-  --c-mauve-50: 58 35 32;    /* #3a2320 */
-  --c-mauve-900: 240 160 138;/* #F0A08A */
-  --c-mauve-label: 233 179 163;
-  --c-sky-50: 23 50 63;      /* #17323F */
-  --c-sky-900: 134 201 236;  /* #86c9ec */
-  --c-sky-label: 95 182 228;
-  --c-marca: 58 163 220;     /* #3AA3DC: el azul de la marca sobre oscuro */
-  --c-marca-claro: 134 201 236;
-  --c-negro: 255 255 255;    /* lo que era sombra (black/5) es luz */
+  color-scheme: light;
+  --c-bg: 247 249 255;        /* #f7f9ff  surface */
+  --c-cream: 235 238 243;     /* #ebeef3  surface container */
+  --c-ink: 24 28 32;          /* #181c20  on surface */
+  --c-ink-dim: 24 28 32;
+  --c-ink-muted: 66 71 78;    /* #42474e  on surface variant */
+  --c-primario: 0 97 148;     /* #006194  primary */
+  --c-sobre-primario: 255 255 255;
+  --c-mint-50: 196 245 226;   /* «entra», contenedor */
+  --c-mint-900: 0 107 84;     /* #006b54 */
+  --c-mint-label: 0 81 63;
+  --c-mauve-50: 255 218 216;  /* #ffdad8  «sale», contenedor */
+  --c-mauve-900: 157 65 66;   /* #9d4142 */
+  --c-mauve-label: 126 42 44;
+  --c-sky-50: 204 229 255;    /* #cce5ff  primary container */
+  --c-sky-900: 7 75 114;      /* #074b72  on primary container */
+  --c-sky-label: 0 97 148;
+  --c-marca: 0 97 148;        /* #006194 */
+  --c-marca-claro: 0 128 193; /* #0080C1, la semilla */
+  --c-negro: 24 28 32;        /* on surface: las capas de estado (black/5) */
+  --md-contorno: #72787e;         /* outline */
+  --md-contorno-suave: #c2c7ce;   /* outline variant */
+  --md-division: #dfe2e8;
+  --md-superficie-baja: #f1f4f9;  /* surface container low */
+  --md-superficie-alta: #e6e8ee;  /* surface container high */
   /* Para lo que no pasa por Tailwind. */
   --color-bg: rgb(var(--c-bg));
   --color-cream: rgb(var(--c-cream));
@@ -65,48 +103,71 @@ html, body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
-/* El fondo de cost101: un degradado azul que baja de la luz a la noche. */
-body {
-  min-height: 100vh;
-  background: #060d13 radial-gradient(130% 70% at 50% -12%, #2a9be0 0%, #0a6aa6 22%, #0b3655 48%, #07141e 72%, #05090d 100%) fixed;
-}
+body { min-height: 100vh; background: var(--color-bg); }
 
-* {
-  border-color: rgba(255, 255, 255, 0.1);
-}
+/* Los contornos. Las pantallas dicen `border-black/5` o `/10`; en Material 3
+ * el contorno de una tarjeta o de un botón es «outline variant», y la raya
+ * entre renglones es más tenue todavía. */
+* { border-color: var(--md-contorno-suave); }
+.border-black\/5, .border-black\/10, .border-black\/15 { border-color: var(--md-contorno-suave); }
+.divide-black\/5 > :not([hidden]) ~ :not([hidden]),
+.divide-black\/10 > :not([hidden]) ~ :not([hidden]),
+.border-t.border-black\/5, .border-b.border-black\/5 { border-color: var(--md-division); }
 
-/* ─────────────── el vidrio de cost101 ───────────────
- * Las tarjetas (`bg-white`) son vidrio sobre el degradado; lo traslúcido
- * (`bg-white/50`) es un velo apenas visible. Las superficies apagadas
- * (`bg-cream`, `bg-bg`) se vuelven vidrio más tenue. Sin tocar cuarenta
- * pantallas: las clases son las mismas. */
-.bg-white {
-  background: linear-gradient(180deg, rgba(255,255,255,.085), rgba(255,255,255,.035)) !important;
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
-}
-.bg-white\/50, .bg-white\/60, .bg-white\/70 { background-color: rgba(255,255,255,.05) !important; }
-.bg-cream, .bg-bg { background-color: rgba(255,255,255,.045) !important; }
-/* El velo detrás de un diálogo sigue siendo oscuro. */
-.bg-black\/30 { background-color: rgba(3,10,16,.6) !important; }
-/* Los campos: vidrio claro, esquinas de 12, como cost101. */
-input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea {
-  color: inherit;
-}
-input.bg-white, select.bg-white, textarea.bg-white,
-input.bg-bg, select.bg-bg, textarea.bg-bg,
-input.bg-cream, select.bg-cream, textarea.bg-cream {
-  background: rgba(255,255,255,.06) !important;
-  -webkit-backdrop-filter: none; backdrop-filter: none;
-}
-select option { background: #0f1b24; color: #e8eef2; }
-::placeholder { color: rgba(232,238,242,.45); }
-/* Los botones de acción: redondos, el principal en blanco con tinta oscura
- * (`bg-ink text-cream` ya da eso con los tonos nuevos). */
-button.bg-ink, a.bg-ink, button.bg-marca, a.bg-marca { border-radius: 999px; }
-button.bg-ink:hover, a.bg-ink:hover { background-color: #e3f2fb; }
-/* Los títulos, en Raleway con peso, como cost101. */
-h1 { font-weight: 600; letter-spacing: -.01em; }
+/* El cajón de navegación: «surface container low». */
+.md-cajon { background: var(--md-superficie-baja); scrollbar-width: none; }
+.md-cajon::-webkit-scrollbar { display: none; }
+
+/* ── botones ──
+ * Redondeados como píldora (el artículo: radio 30). Tres clases:
+ *   relleno      `bg-ink text-cream`           primario y blanco
+ *   de contorno  `bg-white border …`           contorno y letra primaria
+ *   de texto     sin fondo ni contorno         letra y capa de estado
+ * El relleno de 20 × 12 del artículo se pone sólo a los de tamaño normal
+ * (`py-2`): los chicos de un renglón de lista se quedan chicos. */
+:is(button, a, label).rounded-xl, :is(button, a, label).rounded-lg { border-radius: 30px; }
+:is(button, a).bg-ink:is(.py-2, .py-2\.5) { min-height: 2.5rem; }
+/* En el teléfono el relleno ancho le quita lugar a lo que va al lado. */
+@media (min-width: 640px) { :is(button, a).bg-ink:is(.py-2, .py-2\.5) { padding-left: 1.25rem; padding-right: 1.25rem; } }
+:is(button, a).bg-ink { box-shadow: none; }
+:is(button, a).bg-ink:hover:not(:disabled) { box-shadow: 0 1px 2px rgb(var(--c-negro) / .3), 0 1px 3px 1px rgb(var(--c-negro) / .15); }
+:is(button, a, label).rounded-xl.border.bg-white,
+:is(button, a, label).rounded-lg.border.bg-white { background: transparent; border-color: var(--md-contorno); color: rgb(var(--c-primario)); }
+:is(button, a, label).rounded-xl.border.bg-white:hover:not(:disabled),
+:is(button, a, label).rounded-lg.border.bg-white:hover:not(:disabled) { background: rgb(var(--c-primario) / .08); }
+button:disabled { cursor: not-allowed; }
+:is(button, a, [role="tab"]):focus-visible { outline: 2px solid rgb(var(--c-primario)); outline-offset: 2px; }
+
+/* ── campos ──
+ * El campo de contorno de Material 3: raya «outline», y al enfocarlo la raya
+ * se vuelve primaria y engorda. */
+input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]), select, textarea { color: inherit; }
+:is(input, select, textarea).border { border-color: var(--md-contorno); background-color: #fff; }
+:is(input, select, textarea).border:hover:not(:disabled):not(:focus) { border-color: rgb(var(--c-ink)); }
+:is(input, select, textarea).border:focus { border-color: rgb(var(--c-primario)); box-shadow: inset 0 0 0 1px rgb(var(--c-primario)); outline: none; }
+:is(input, select, textarea):disabled { background-color: rgb(var(--c-negro) / .04); }
+/* Las flechitas de un campo de número: en una cifra de dinero sólo estorban
+ * (y un clic de más mueve el monto un peso). */
+input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type=checkbox], input[type=radio] { accent-color: rgb(var(--c-primario)); }
+::placeholder { color: rgb(var(--c-ink-muted) / .7); }
+
+/* ── letra ──
+ * La escala de Material 3 con la letra de la casa (Raleway; las cifras en
+ * Fira). Los títulos van en peso normal y más grandes; las cejas ya no van
+ * en mayúsculas: son «title small» y «label small». */
+h1 { font-weight: 400; letter-spacing: 0; }
+main h2.text-lg { font-size: 1.375rem; line-height: 1.75rem; font-weight: 400; }
+.uppercase { text-transform: none; letter-spacing: .01em; }
+h3.uppercase { font-size: .875rem; line-height: 1.25rem; font-weight: 600; color: var(--color-ink-muted); }
+
+/* ── elevación ──
+ * Lo que flota (menús, diálogos, avisos) lleva la sombra de nivel 2 o 3. */
+.shadow-xl, .shadow-2xl { box-shadow: 0 1px 3px rgb(var(--c-negro) / .3), 0 4px 8px 3px rgb(var(--c-negro) / .15); }
+.shadow-lg { box-shadow: 0 1px 2px rgb(var(--c-negro) / .3), 0 2px 6px 2px rgb(var(--c-negro) / .15); }
+/* El velo detrás de un diálogo («scrim»). */
+.bg-black\/30 { background-color: rgb(0 0 0 / .32); }
 
 /* La marca y los titulos de pagina, en Sansation. Sus cifras se quedan en
    Sansation: cuando el lienzo escribe la marca, la marca no se toca. */
@@ -144,17 +205,9 @@ h1 { font-weight: 600; letter-spacing: -.01em; }
  * sin que una tabla se parta a la mitad entre dos hojas.
  */
 @media print {
-  /* En papel vuelven los tonos claros de siempre. */
-  :root {
-    color-scheme: light;
-    --c-bg: 243 246 248; --c-cream: 233 238 242; --c-ink: 18 39 51; --c-ink-dim: 21 32 40; --c-ink-muted: 75 90 102;
-    --c-mint-50: 221 241 230; --c-mint-900: 30 122 76; --c-mint-label: 46 107 75;
-    --c-mauve-50: 247 228 222; --c-mauve-900: 160 71 44; --c-mauve-label: 138 83 64;
-    --c-sky-50: 217 238 248; --c-sky-900: 5 80 111; --c-sky-label: 11 108 147;
-    --c-marca: 0 128 193; --c-marca-claro: 58 163 220; --c-negro: 0 0 0;
-  }
+  /* En papel, contornos sobrios y todo sobre blanco. */
   * { border-color: rgba(42, 46, 58, 0.12) !important; }
-  .bg-white, .bg-cream, .bg-bg { background: #fff !important; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .bg-white, .bg-cream, .bg-bg { background: #fff !important; }
   /* Lo que sólo sirve para navegar no va en el papel. */
   .print\:hidden,
   aside,

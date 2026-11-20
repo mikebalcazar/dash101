@@ -558,11 +558,10 @@ export default function FlujoPage() {
                 tickLine={false}
               />
               {/* Los tonos salen de las variables de globals.css, no de un hex:
-                * en pantalla dan el tema oscuro (la línea en el azul de la
-                * marca, la etiqueta sobre el fondo de la app) y al imprimir
-                * vuelven solos los claros. Con hex fijos del oscuro, el globo
-                * salía oscuro sobre el papel. Con el #1E2A3A de antes la línea
-                * casi no se veía sobre el vidrio. */}
+                * la línea en el azul de la marca y la etiqueta sobre el fondo
+                * de la app, en pantalla y en papel. Con un hex fijo, cuando el
+                * tema cambia (oscuro el 8-oct, claro de Material 3 el 20-nov)
+                * el globo o la línea se quedan con los colores del anterior. */}
               <Tooltip
                 cursor={{ stroke: "rgb(var(--c-negro) / 0.25)" }}
                 contentStyle={{
@@ -699,7 +698,7 @@ function FilaBloque({
             <input
               type="checkbox" data-marcar-bloque={s.index} checked={marcado} title="Cubrir este bloque con una ronda de inversión"
               aria-label={`Cubrir ${etiquetaDeLapso(bloque, s)} con una ronda`}
-              onClick={(e) => e.stopPropagation()} onChange={marcar} className="accent-[#5C485E] w-4 h-4 align-middle"
+              onClick={(e) => e.stopPropagation()} onChange={marcar} className="accent-ink w-4 h-4 align-middle"
             />
           ) : s.index + 1}
         </td>

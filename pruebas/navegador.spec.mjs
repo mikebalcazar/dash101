@@ -1403,7 +1403,7 @@ test('6-oct: el flujo proyectado se presenta por bloques —semana, quincena, me
   await ctx.close();
 });
 
-test('16-oct: en la gráfica del flujo cada semana trae su propio globo, y la línea se ve sobre el tema oscuro', async () => {
+test('16-oct: en la gráfica del flujo cada semana trae su propio globo, y la línea se ve sobre el fondo', async () => {
   /* Se vio en staging el 16-oct a 1920×1200: por semana, el eje usaba de
    * llave la etiqueta escrita abajo, que sólo existe una de cada cuatro
    * semanas. Las demás iban en "" y Recharts las juntaba en UNA categoría:
@@ -1446,8 +1446,9 @@ test('16-oct: en la gráfica del flujo cada semana trae su propio globo, y la l�
     assert.ok(xs.every((x, i) => i === 0 || x > xs[i - 1]), `por ${bloque}, el punto activo avanza con el ratón: ${xs.map((x) => x.toFixed(0)).join(', ')}`);
   }
 
-  /* El tema oscuro: la línea, el punto y el texto del globo se leen sobre su
-   * fondo. Se mide el contraste con los colores ya pintados, no con el código. */
+  /* La línea, el punto y el texto del globo se leen sobre su fondo, sea el
+   * tema que sea (oscuro el 8-oct, claro de Material 3 desde el 20-nov). Se
+   * mide el contraste con los colores ya pintados, no con el código. */
   const colores = await pag.evaluate(() => {
     const rgb = (c) => (c.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
     const luz = ([r, g, b]) => {
@@ -1455,7 +1456,7 @@ test('16-oct: en la gráfica del flujo cada semana trae su propio globo, y la l�
       return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
     };
     const contraste = (x, y) => { const [l1, l2] = [luz(rgb(x)), luz(rgb(y))].sort((p, q) => q - p); return (l1 + 0.05) / (l2 + 0.05); };
-    const fondo = getComputedStyle(document.documentElement).getPropertyValue('--color-bg').trim() || 'rgb(15,27,36)';
+    const fondo = getComputedStyle(document.documentElement).getPropertyValue('--color-bg').trim() || 'rgb(247,249,255)';
     const linea = getComputedStyle(document.querySelector('[data-grafica-flujo] .recharts-line-curve')).stroke;
     const caja = document.querySelector('[data-grafica-flujo] .recharts-default-tooltip');
     const etiqueta = getComputedStyle(document.querySelector('[data-grafica-flujo] .recharts-tooltip-label')).color;
@@ -1464,7 +1465,7 @@ test('16-oct: en la gráfica del flujo cada semana trae su propio globo, y la l�
       etiqueta: contraste(etiqueta, getComputedStyle(caja).backgroundColor),
     };
   });
-  assert.ok(colores.linea >= 3, `la línea se distingue del fondo oscuro (contraste ${colores.linea.toFixed(2)}, mínimo 3)`);
+  assert.ok(colores.linea >= 3, `la línea se distingue del fondo (contraste ${colores.linea.toFixed(2)}, mínimo 3)`);
   assert.ok(colores.etiqueta >= 4.5, `el texto del globo se lee sobre el globo (contraste ${colores.etiqueta.toFixed(2)}, mínimo 4.5)`);
 
   assert.deepEqual(errores, [], 'cero errores de JavaScript');
@@ -1880,6 +1881,68 @@ test('8-oct: los préstamos de investor101 salen en el flujo y en «Préstamos»
   await pag.setViewportSize({ width: 390, height: 844 });
   const barrido = await pag.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   assert.ok(barrido <= 1, `a 390 puntos «Préstamos» no barre a lo ancho (${barrido} px)`);
+
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
+test('20-nov: el tema es Material Design 3 en claro: fondo, botón en píldora del color primario, y el menú marca dónde estás', async () => {
+  /* Mike, 20-nov-2026: «Rediseña el look and feel de la interfaz de dash101»
+   * con dos artículos de Material Design 3 (tema por color semilla y botones
+   * redondeados); con botones escogió el fondo claro. Aquí se mide lo
+   * PINTADO, no el código: que el fondo sea claro y la letra oscura, que el
+   * botón relleno sea una píldora del color primario con letra que se lea,
+   * que el de contorno no tenga relleno, y que el cajón de navegación marque
+   * la pantalla en la que estás —y sólo ésa— con el contenedor primario.
+   * SÓLO SE LEE. */
+  const { ctx, pag, errores } = await pestana({ width: 1440, height: 900 }, true);
+  await pag.goto(`${URL}/movimientos`, { waitUntil: 'load' });
+  await pag.getByRole('link', { name: 'Registrar' }).waitFor({ timeout: 20000 });
+  const m = await pag.evaluate(() => {
+    const rgb = (c) => (c.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+    const luz = (c) => {
+      const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+      const [r, g, b] = rgb(c); return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+    };
+    const contraste = (x, y) => { const [l1, l2] = [luz(x), luz(y)].sort((p, q) => q - p); return (l1 + 0.05) / (l2 + 0.05); };
+    const de = (el) => getComputedStyle(el);
+    const botones = [...document.querySelectorAll('main button, main a')];
+    const relleno = botones.find((b) => b.textContent.trim() === 'Registrar');
+    const contorno = botones.find((b) => b.textContent.trim() === 'Ingreso');
+    const menu = [...document.querySelectorAll('aside button')];
+    return {
+      fondo: luz(de(document.body).backgroundColor),
+      letra: contraste(de(document.body).color, de(document.body).backgroundColor),
+      relleno: { fondo: de(relleno).backgroundColor, radio: parseFloat(de(relleno).borderTopLeftRadius), alto: relleno.getBoundingClientRect().height, lee: contraste(de(relleno).color, de(relleno).backgroundColor) },
+      contorno: { fondo: de(contorno).backgroundColor, raya: parseFloat(de(contorno).borderTopWidth), radio: parseFloat(de(contorno).borderTopLeftRadius), alto: contorno.getBoundingClientRect().height },
+      primario: `rgb(${getComputedStyle(document.documentElement).getPropertyValue('--c-primario').trim().split(/\s+/).join(', ')})`,
+      activos: menu.filter((b) => b.getAttribute('aria-current') === 'page').map((b) => b.textContent.trim()),
+      activo: (() => { const b = menu.find((x) => x.getAttribute('aria-current') === 'page'); return b ? { fondo: de(b).backgroundColor, radio: parseFloat(de(b).borderTopLeftRadius), alto: b.getBoundingClientRect().height, lee: contraste(de(b).color, de(b).backgroundColor) } : null; })(),
+      otro: de(menu.find((b) => b.textContent.trim() === 'Proyectos')).backgroundColor,
+      vidrio: de(document.querySelector('main .bg-white')).backdropFilter,
+    };
+  });
+  assert.ok(m.fondo > 0.85, `el fondo es claro (luminancia ${m.fondo.toFixed(2)})`);
+  assert.ok(m.letra >= 7, `la letra se lee sobre el fondo (contraste ${m.letra.toFixed(1)}, mínimo 7)`);
+  assert.equal(m.relleno.fondo, m.primario, 'el botón relleno va en el color primario');
+  assert.ok(m.relleno.radio >= m.relleno.alto / 2, `el botón relleno es una píldora (radio ${m.relleno.radio}, alto ${m.relleno.alto})`);
+  assert.ok(m.relleno.alto >= 40, `el botón relleno mide al menos 40 de alto (${m.relleno.alto})`);
+  assert.ok(m.relleno.lee >= 4.5, `la letra del botón relleno se lee (contraste ${m.relleno.lee.toFixed(1)})`);
+  assert.match(m.contorno.fondo, /rgba\(0, 0, 0, 0\)|transparent/, 'el botón de contorno no lleva relleno');
+  assert.ok(m.contorno.raya >= 1, 'el botón de contorno lleva su raya');
+  assert.ok(m.contorno.radio >= m.contorno.alto / 2, 'el botón de contorno también es una píldora');
+  assert.deepEqual(m.activos, ['Movimientos'], 'el menú marca la pantalla en la que estás, y sólo ésa');
+  assert.ok(m.activo.radio >= m.activo.alto / 2, 'lo escogido en el menú es una píldora');
+  assert.notEqual(m.activo.fondo, m.otro, 'lo escogido se distingue de lo demás');
+  assert.ok(m.activo.lee >= 4.5, `lo escogido en el menú se lee (contraste ${m.activo.lee.toFixed(1)})`);
+  assert.equal(m.vidrio, 'none', 'las tarjetas ya no son de vidrio: superficie lisa');
+
+  /* El contrario, medido: en otra pantalla, «Movimientos» deja de estar
+   * marcado y el marcado es el de esa pantalla. */
+  await pag.goto(`${URL}/cuentas`, { waitUntil: 'load' });
+  await pag.waitForTimeout(1500);
+  const activos = await pag.evaluate(() => [...document.querySelectorAll('aside button[aria-current="page"]')].map((b) => b.textContent.trim()));
+  assert.deepEqual(activos, ['Cuentas'], 'al cambiar de pantalla cambia lo marcado');
 
   assert.deepEqual(errores, [], 'cero errores de JavaScript');
   await ctx.close();

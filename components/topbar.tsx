@@ -30,20 +30,20 @@ export function Topbar() {
   /* La empresa es una (Mike, 1-oct-2026): aquí sólo se dice cuál es. No hay
    * desplegable ni nada que escoger. */
   return (
-    <div className="flex justify-between items-center mb-4 sm:mb-6 gap-3">
-      <div>
-        <h1 className="text-lg sm:text-xl font-medium tracking-tight text-ink-dim">
+    <div className="flex flex-wrap justify-between items-center mb-4 sm:mb-6 gap-x-3 gap-y-2">
+      <div className="min-w-0">
+        <h1 className="text-lg leading-6 sm:text-[1.75rem] sm:leading-9 text-ink-dim">
           {getGreeting()}{firstName ? `, ${firstName}` : ""}.
         </h1>
-        <p className="text-xs text-ink-muted mt-0.5 capitalize">{formatDate()}</p>
+        <p className="text-sm text-ink-muted mt-0.5 first-letter:uppercase">{formatDate()}</p>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         <span
           data-empresa={empresa?.id ?? ""}
-          className="flex items-center gap-2 bg-white border border-black/10 rounded-xl px-3 py-1.5 text-sm font-medium"
+          className="flex items-center gap-2 border border-black/10 rounded-lg h-8 px-3 text-sm font-medium text-ink-muted"
         >
           <IconBuildingSkyscraper size={13} className="text-ink-muted" />
-          <span className="max-w-[110px] sm:max-w-[180px] truncate">
+          <span className="max-w-[84px] sm:max-w-[180px] truncate">
             {loading ? "Cargando…" : empresa?.nombre ?? "…"}
           </span>
         </span>

@@ -87,17 +87,21 @@ export function Sidebar() {
     .join("");
 
   return (
-    <aside className="w-14 sm:w-52 bg-cream flex flex-col items-center sm:items-stretch py-4 px-0 sm:px-3 gap-1">
+    /* 20-nov-2026 · el cajón de navegación de Material 3: superficie un tono
+     * abajo del fondo, sin raya; lo escogido es una píldora en el contenedor
+     * primario, no un bloque de tinta. Se queda fijo y, si no cabe, corre
+     * por dentro. */
+    <aside className="md-cajon sticky top-0 h-screen overflow-y-auto w-14 sm:w-56 flex flex-col items-center sm:items-stretch py-4 px-0 sm:px-3 gap-0.5">
       {/* El logotipo oficial, el mismo del escaparate
         * (`descargas/sitio/marca/dash101.svg`). En el teléfono no cabe la
         * palabra, así que va el aro con el «101», recortado del mismo
         * archivo. Antes decía «CM», de cuando la app se llamaba Conta
         * Master. */}
-      <div className="flex items-center mb-4 sm:px-1 h-9">
+      <div className="flex items-center mb-4 sm:px-4 h-9 shrink-0">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/marca/dash101-claro.svg" alt="dash101" className="hidden sm:block h-5" />
+        <img src="/marca/dash101.svg" alt="dash101" className="hidden sm:block h-6" />
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/marca/dash101-aro-claro.svg" alt="dash101" className="sm:hidden h-7 mx-auto" />
+        <img src="/marca/dash101-aro.svg" alt="dash101" className="sm:hidden h-7 mx-auto" />
       </div>
 
       {items.map((item) => {
@@ -108,9 +112,10 @@ export function Sidebar() {
             key={item.href}
             onClick={() => router.push(item.href)}
             title={item.label}
-            className={`h-10 w-10 sm:w-full rounded-xl flex items-center justify-center sm:justify-start gap-2.5 sm:px-3 transition ${
+            aria-current={active ? "page" : undefined}
+            className={`h-10 w-10 sm:w-full shrink-0 rounded-full flex items-center justify-center sm:justify-start gap-3 sm:px-4 transition ${
               active
-                ? "bg-ink text-cream"
+                ? "bg-sky-50 text-sky-900 font-semibold"
                 : "text-ink-muted hover:bg-black/5 hover:text-ink-dim"
             }`}
           >
@@ -131,12 +136,17 @@ export function Sidebar() {
         );
       })}
 
-      <div className="flex-1" />
+      <div className="flex-1 min-h-3" />
 
       <button
         onClick={() => router.push("/settings")}
         title="Configuración"
-        className="h-10 w-10 sm:w-full rounded-xl flex items-center justify-center sm:justify-start gap-2.5 sm:px-3 text-ink-muted hover:bg-black/5 hover:text-ink-dim transition"
+        aria-current={pathname.startsWith("/settings") ? "page" : undefined}
+        className={`h-10 w-10 sm:w-full shrink-0 rounded-full flex items-center justify-center sm:justify-start gap-3 sm:px-4 transition ${
+          pathname.startsWith("/settings")
+            ? "bg-sky-50 text-sky-900 font-semibold"
+            : "text-ink-muted hover:bg-black/5 hover:text-ink-dim"
+        }`}
       >
         <IconSettings size={19} className="shrink-0" />
         <span className="hidden sm:block text-sm">Configuración</span>
@@ -145,16 +155,16 @@ export function Sidebar() {
       <button
         onClick={signOut}
         title="Cerrar sesión"
-        className="h-10 w-10 sm:w-full rounded-xl flex items-center justify-center sm:justify-start gap-2.5 sm:px-3 text-ink-muted hover:bg-black/5 hover:text-ink-dim transition"
+        className="h-10 w-10 sm:w-full shrink-0 rounded-full flex items-center justify-center sm:justify-start gap-3 sm:px-4 text-ink-muted hover:bg-black/5 hover:text-ink-dim transition"
       >
         <IconLogout size={19} className="shrink-0" />
         <span className="hidden sm:block text-sm">Cerrar sesión</span>
       </button>
 
-      <div className="flex items-center gap-2 mt-1 sm:px-1 min-w-0">
+      <div className="flex items-center gap-2 mt-2 sm:px-2 min-w-0 shrink-0">
         <div
           title={user?.email || ""}
-          className="w-9 h-9 rounded-full bg-mint-50 text-mint-900 flex items-center justify-center text-xs font-medium shrink-0"
+          className="w-9 h-9 rounded-full bg-ink text-cream flex items-center justify-center text-xs font-medium shrink-0"
         >
           {initials}
         </div>
