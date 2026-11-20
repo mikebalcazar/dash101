@@ -41,6 +41,8 @@ export interface Orden {
   proveedor_id: string | null;
   proveedor_nombre: string | null;
   proyecto_id: string | null;
+  /** El nombre del proyecto (API 0.113.0); null si es gasto general. */
+  proyecto_nombre?: string | null;
   partida_id: string | null;
   concepto: string;
   /** En PESOS. */

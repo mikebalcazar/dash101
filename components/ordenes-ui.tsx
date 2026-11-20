@@ -60,6 +60,18 @@ export function Vence({ orden }: { orden: Orden }) {
   );
 }
 
+/** De qué proyecto es una orden, en una palabra. Mike, 20-nov-2026, pidiendo
+ *  un reembolso: «no hay un lugar donde diga de qué proyecto es». El proyecto
+ *  se escogía al pedir y luego ninguna pantalla lo enseñaba; el nombre ya
+ *  viaja con la orden (API 0.113.0). Sin proyecto, «Gasto general»: que no
+ *  diga nada se leería como «se les olvidó ponerlo». */
+export function DeProyecto({ orden }: { orden: Orden }) {
+  if (orden.proyecto_nombre) return <span data-proyecto={orden.proyecto_id ?? ""}>{orden.proyecto_nombre}</span>;
+  // Con proyecto pero sin nombre (una API anterior): mejor nada que un «gasto general» falso.
+  if (orden.proyecto_id) return null;
+  return <span data-proyecto="">Gasto general</span>;
+}
+
 /** El renglón de dinero de una orden: el total grande y, si trae factura, el
  *  desglose debajo en chico. Siempre en PESOS: `lib/ordenes.ts` ya los
  *  convirtió. */
@@ -106,6 +118,7 @@ export function FilasBuzon({ filas }: { filas: Orden[] }) {
               {o.folio} · <AQuien orden={o} />
               {o.tipo !== "reembolso" && <> · {o.solicitante_nombre || o.solicitante_correo || "alguien"}</>}
             </p>
+            <p className="text-xs text-ink-dim truncate"><DeProyecto orden={o} /></p>
             <p className="text-xs mt-0.5 flex items-center gap-2 flex-wrap">
               <Vence orden={o} />
               {o.tipo === "reembolso" && <Tipo orden={o} />}
