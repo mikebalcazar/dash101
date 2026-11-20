@@ -23,7 +23,7 @@ import { useEmpresa } from "@/lib/empresa-context";
 import { crearCfdi, ligarCfdi, listPendientes, type PendienteDeFactura } from "@/lib/fiscal";
 import { desglosar } from "@/lib/ordenes";
 import { formatMontoExact } from "@/lib/format";
-import { AvisoFiscal, TabsFiscal, bajarCsv } from "@/components/fiscal-ui";
+import { AvisoFiscal, bajarCsv } from "@/components/fiscal-ui";
 import { CAJA, CAJA_NUM, BOTON, ETIQUETA } from "@/components/ordenes-ui";
 import { IconDownload, IconCheck } from "@tabler/icons-react";
 
@@ -79,8 +79,6 @@ export default function PendientesPage() {
           <IconDownload size={16} />
         </button>
       </div>
-
-      <TabsFiscal />
 
       {error && <div className="bg-mauve-50 text-mauve-900 text-xs px-3 py-2 rounded-xl mb-4">{error}</div>}
       {aviso && <div className="bg-mint-50 text-mint-900 text-xs px-3 py-2 rounded-xl mb-4">{aviso}</div>}
