@@ -11,8 +11,9 @@
  *   2. registra un pago (deja los egresos) y le cuelga su comprobante;
  *   3. confirma un depósito recibido (deja el ingreso y arranca el préstamo);
  *   4. deja una ronda en borrador desde un hueco del flujo.
- * Las rondas, las ofertas, las tablas y el directorio se llevan en
- * investor101.
+ * Las rondas, las ofertas, las tablas y el directorio se llevaban en
+ * investor101; desde el 20-nov-2026 también viven aquí (`lib/patron.ts`,
+ * `app/(app)/inversion/*`). Este archivo sigue siendo el de mover dinero.
  *
  * Todo lo abre SÓLO quien dirige la empresa (dueño o administración): a los
  * demás la API contesta 403, y la pantalla lo dice en vez de adivinar. Si la

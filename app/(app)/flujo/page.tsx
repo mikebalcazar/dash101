@@ -476,14 +476,16 @@ export default function FlujoPage() {
         <div data-ronda-hecha className="bg-mint-50 rounded-2xl p-4 mb-4 text-sm">
           <p className="font-medium text-mint-900">Quedó en borrador la ronda {rondaHecha.folio}: {rondaHecha.nombre}</p>
           <p className="text-xs text-mint-label mt-0.5">
-            Todavía no se le avisa a nadie. En patron101 le pones la tasa, ajustas el monto y la abres.
+            Todavía no se le avisa a nadie. En Préstamos le pones la tasa, ajustas el monto y la abres.
           </p>
-          <a
-            href={rondaHecha.url || "#"} target="_blank" rel="noopener" data-abrir-ronda
+          {/* 20-nov-2026: las rondas ya viven aquí (Préstamos → Rondas); antes
+            * esta liga llevaba a patron101. */}
+          <Link
+            href={`/inversion/rondas/${rondaHecha.id}`} data-abrir-ronda
             className="mt-2 inline-flex items-center gap-1.5 bg-ink text-cream rounded-xl px-3 py-1.5 text-xs font-medium"
           >
-            Terminarla en patron101
-          </a>
+            Terminarla en Préstamos
+          </Link>
         </div>
       )}
 
@@ -527,7 +529,7 @@ export default function FlujoPage() {
               </button>
             </div>
           </div>
-          <p className="text-[11px] text-ink-muted mt-2">Nace en borrador en patron101: ahí se detalla, se ajusta y se abre.</p>
+          <p className="text-[11px] text-ink-muted mt-2">Nace en borrador en Préstamos → Rondas: ahí se detalla, se ajusta y se abre.</p>
           {errorRonda && <p data-error-ronda className="text-xs text-mauve-900 mt-2">{errorRonda}</p>}
         </div>
       )}

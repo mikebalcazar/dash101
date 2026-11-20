@@ -51,7 +51,10 @@ const items: NavItem[] = [
   // los accionistas como retiro de utilidades».
   { href: "/accionistas", icon: IconCoins, label: "Accionistas" },
   // Mike, 8-oct-2026: lo que se le debe a quienes le prestaron (investor101).
-  // Aquí se confirman los depósitos y se registran los pagos.
+  // Aquí se confirman los depósitos y se registran los pagos. Desde el
+  // 20-nov-2026 también las rondas, las ofertas, los préstamos y el
+  // directorio: lo que quien dirige hacía en patron101 (Mike: «hay que meter
+  // patron101 a dash también. Igual que bill101»).
   { href: "/inversion", icon: IconBuildingBank, label: "Préstamos" },
   { href: "/fiscal", icon: IconReceiptTax, label: "Fiscal" },
   { href: "/conciliacion", icon: IconScale, label: "Conciliación" },
