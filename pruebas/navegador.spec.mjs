@@ -1772,6 +1772,17 @@ test('1-oct: el líquido es el saldo que suma la API; la cuenta abre con su hist
   await pag.waitForFunction((e) => document.querySelector('[data-capital="liquido"]')?.innerText.includes(e), pesos0(liquido), { timeout: 30000 })
     .catch(async () => assert.fail(`el líquido debía ser ${pesos0(liquido)} y la pantalla dice: ${(await hero.innerText()).replace(/\s+/g, ' ').slice(0, 200)}`));
 
+  // ── 20-nov-2026 · el número grande es el saldo por cobrar de los proyectos abiertos, sin IVA ──
+  const proys = filas(await api(pag, `/orgs/${ORG}/proyectos`));
+  const saldoGeneral = proys
+    .filter((p) => p.estado !== 'cerrado' && !(p.n_conceptos !== undefined && Number(p.n_conceptos) === 0))
+    .reduce((t, p) => t + Math.max(0, (p.precio_venta ?? 0) - (p.cobrado_sin_iva ?? p.cobrado ?? 0)), 0);
+  const grande = pag.locator('[data-saldo-general]');
+  await grande.waitFor({ timeout: 30000 });
+  await pag.waitForFunction((e) => document.querySelector('[data-saldo-general]')?.innerText.includes(e), pesos0(saldoGeneral), { timeout: 30000 })
+    .catch(async () => assert.fail(`el saldo general debía ser ${pesos0(saldoGeneral)} y la pantalla dice: ${(await grande.innerText()).replace(/\s+/g, ' ').slice(0, 200)}`));
+  assert.ok(/text-4xl/.test(await grande.locator('p').nth(1).getAttribute('class')), 'y es la cifra grande');
+
   // ── la cuenta abre con su historial, y el de hoy está hasta arriba ──
   await pag.goto(`${URL}/cuentas/${cuenta.id}`, { waitUntil: 'load' });
   const historial = pag.locator('[data-movimientos-cuenta]');

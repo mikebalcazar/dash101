@@ -131,13 +131,20 @@ export default function DashboardPage() {
   /** Por proyecto, el mismo corte que el de arriba. Nunca en negativo: un
    *  proyecto cobrado de más no es dinero «por cobrar» en contra. */
   const balance = (p: Proyecto) => {
-    const porCobrar = Math.max(0, (p.precio_venta ?? 0) - (p.cobrado ?? 0));
+    /* Sin IVA, contra el precio que también va sin IVA (20-nov-2026): el
+     * mismo saldo que el estado de cuenta y el recuadro del proyecto. */
+    const porCobrar = p.precio_por_cargar ? 0 : Math.max(0, (p.precio_venta ?? 0) - (p.cobrado_sin_iva ?? p.cobrado ?? 0));
     const porPagar = Math.max(0, (p.compromiso_total ?? 0) - (p.pagado ?? 0));
     const liq = (p.cobrado ?? 0) - (p.pagado ?? 0);
     return { porCobrar, porPagar, liquido: liq, total: liq + porCobrar - porPagar };
   };
   const balances = proyectosActivos.map((p) => ({ proyecto: p, ...balance(p) }));
   const porCobrar = balances.reduce((s, b) => s + b.porCobrar, 0);
+  /* EL NÚMERO GRANDE ES EL SALDO GENERAL POR COBRAR (Mike, 20-nov-2026: «En
+   * la pantalla inicial necesito que el número grande sea el SALDO GENERAL
+   * por cobrar de todos los proyectos»). Es la misma suma de «por cobrar» de
+   * los proyectos abiertos; cuántos son se dice abajo. */
+  const conSaldo = balances.filter((b) => b.porCobrar >= 0.5).length;
   const porPagar = balances.reduce((s, b) => s + b.porPagar, 0);
   const capitalTotal = liquido + porCobrar - porPagar - reembolsosPendientes;
   const sumaProyectos = balances.reduce(
@@ -157,22 +164,24 @@ export default function DashboardPage() {
           balance por proyecto en tarjetas apiladas en vez de tabla (Mike,
           30-sep-2026).
 
-          EL NÚMERO GRANDE ES EL LÍQUIDO (Mike, 1-oct-2026): «el capital
-          líquido (real) que hay en la empresa como el principal número, y
-          el capital total que toma en cuenta cuentas por cobrar y pagar en
-          donde ahorita está el capital líquido». Lo que hay hoy en las
-          cuentas es lo que se puede gastar; el total es una proyección. */}
-      <section className="bg-cream rounded-3xl p-4 sm:p-6" data-capital="liquido">
+          Desde el 20-nov-2026 el número grande es el SALDO POR COBRAR de
+          todos los proyectos (Mike: «el número grande sea el SALDO GENERAL
+          por cobrar de todos los proyectos»). Antes era el capital líquido
+          (1-oct-2026), que pasa a la tarjeta donde estaba «Cuentas por
+          cobrar»: esa cifra ya es la grande. */}
+      <section className="bg-cream rounded-3xl p-4 sm:p-6" data-saldo-general>
         <div className="flex justify-between items-start gap-4">
-          <div>
+          <div className="min-w-0">
             <p className="text-xs text-ink-muted mb-2 font-medium">
-              Capital líquido
+              Saldo por cobrar
             </p>
-            <p className="text-3xl sm:text-4xl font-medium tracking-tight text-ink-dim leading-none">
-              {formatMonto(liquido, empresa.moneda)}
+            <p className="text-3xl sm:text-4xl font-medium tracking-tight text-ink-dim leading-none tabular-nums">
+              {formatMonto(porCobrar, empresa.moneda)}
             </p>
             <p className="text-xs text-ink-muted mt-2">
-              Lo que hay hoy en {cuentas.length} {cuentas.length === 1 ? "cuenta" : "cuentas"}
+              {conSaldo === 0
+                ? "Ningún proyecto abierto tiene saldo por cobrar"
+                : `De ${conSaldo} ${conSaldo === 1 ? "proyecto" : "proyectos"}, sin IVA: precio − lo cobrado`}
             </p>
           </div>
           <div className="w-20 h-20 rounded-full bg-sky-50 flex items-center justify-center shrink-0">
@@ -194,13 +203,13 @@ export default function DashboardPage() {
             Líquido + por cobrar − por pagar − reembolsos pendientes
           </p>
         </div>
-        <div className="bg-mint-50 rounded-2xl p-3 sm:p-4">
-          <p className="text-xs text-mint-label font-medium">Cuentas por cobrar</p>
-          <p className="text-lg sm:text-xl font-medium text-mint-900 mt-1 tabular-nums">
-            {formatMonto(porCobrar, empresa.moneda)}
+        <div className="bg-white border border-black/5 rounded-2xl p-3 sm:p-4" data-capital="liquido">
+          <p className="text-xs text-ink-muted font-medium">Capital líquido</p>
+          <p className="text-lg sm:text-xl font-medium text-ink-dim mt-1 tabular-nums">
+            {formatMonto(liquido, empresa.moneda)}
           </p>
-          <p className="hidden sm:block text-[11px] text-mint-label mt-1 opacity-75">
-            Vendido que el cliente no ha pagado
+          <p className="text-[11px] text-ink-muted mt-1">
+            Lo que hay hoy en {cuentas.length} {cuentas.length === 1 ? "cuenta" : "cuentas"}
           </p>
         </div>
         <div className="bg-mauve-50 rounded-2xl p-3 sm:p-4">
