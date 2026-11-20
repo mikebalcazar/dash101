@@ -1992,7 +1992,15 @@ test('20-nov: patron101 vive en «Préstamos»: sus fichas abren, una ronda se s
     fecha_vencimiento: await forma.locator('[name=fecha_vencimiento]').inputValue(),
   };
   const simulada = await api(pag, `/orgs/${ORG}/inversion/simular`, { method: 'POST', body: condiciones });
-  const pintado = Number((await pag.locator('[data-total-simulado]').innerText()).split('\n')[0].replace(/[^0-9.]/g, ''));
+  /* La tabla se vuelve a simular 350 ms después de la última tecla: se espera
+   * a que la pantalla traiga la cuenta con la tasa escrita, no la de antes
+   * (el 20-nov en staging se leyó la de 0 % un instante antes). */
+  const leer = () => pag.locator('[data-total-simulado]').innerText().then((t) => Number(t.split('\n')[0].replace(/[^0-9.]/g, '')));
+  await pag.waitForFunction((e) => {
+    const t = document.querySelector('[data-total-simulado]')?.textContent ?? '';
+    return Number((t.match(/[\d,]+\.\d{2}/) || ['0'])[0].replace(/,/g, '')) === e;
+  }, simulada.totales.total / 100, { timeout: 15000 }).catch(() => {});
+  const pintado = await leer();
   assert.equal(pintado, simulada.totales.total / 100, `por cada $10,000, la pantalla dice lo que dice la API: ${pintado} contra ${simulada.totales.total} centavos`);
   assert.ok(simulada.totales.interes > 0, 'y con tasa hay interés: la tabla no es un eco del monto');
   /* El contrario: sin tasa escrita no hay con qué simular… con 0 % el total es el monto. */
