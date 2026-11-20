@@ -19,7 +19,7 @@ import type {
   TipoMovimiento,
 } from "@/types/schema";
 import { formatMonto } from "@/lib/format";
-import { crearCfdi, ligarCfdi } from "@/lib/fiscal";
+import { crearCfdi, facturasSugeridas, ligarCfdi, type FacturaSugerida } from "@/lib/fiscal";
 import { archivosDe, subirArchivo, urlArchivo, type ArchivoOrden } from "@/lib/ordenes";
 import { aDia, delDia } from "@/lib/api/adaptar";
 import { ACEPTA_COMPROBANTE, SoltarArchivo } from "@/components/soltar-archivo";
@@ -120,6 +120,14 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
   const [rfcFactura, setRfcFactura] = useState("");
   const [fechaFactura, setFechaFactura] = useState("");
   const [ivaFactura, setIvaFactura] = useState("");
+  /* 0.112.0 · Buscar la factura entre los CFDI que ya están (Mike, 19-nov-2026:
+   * «agregar la opción de buscar factura y que revise en los CFDIs si alguno
+   * coincide o está cerca y los sugiera»). Si se escoge una, al guardar se
+   * LIGA esa factura; no se crea otra con el mismo folio. */
+  const [sugeridas, setSugeridas] = useState<FacturaSugerida[] | null>(null);
+  const [buscandoFactura, setBuscandoFactura] = useState(false);
+  const [errorBusqueda, setErrorBusqueda] = useState("");
+  const [facturaElegida, setFacturaElegida] = useState<FacturaSugerida | null>(null);
   const [archivoFactura, setArchivoFactura] = useState<File | null>(null);
   /** Lo que ya está colgado, en modo corrección. */
   const [colgados, setColgados] = useState<ArchivoOrden[]>([]);
@@ -328,6 +336,34 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
 
   if (!empresa) return <div className="text-sm text-ink-muted">Cargando…</div>;
 
+  async function buscarFactura() {
+    setBuscandoFactura(true); setErrorBusqueda("");
+    try {
+      setSugeridas(await facturasSugeridas({
+        tipo, monto: parseFloat(monto) || 0, fecha,
+        cliente_id: tipo === "ingreso" && contraparteId ? contraparteId : undefined,
+        proyecto_id: !gastoGeneral && proyectoId ? proyectoId : undefined,
+        movimiento_id: movimientoId,
+      }));
+    } catch (e) {
+      setErrorBusqueda(e instanceof Error ? e.message : "No se pudo buscar.");
+    } finally { setBuscandoFactura(false); }
+  }
+
+  function elegirFactura(f: FacturaSugerida) {
+    if (facturaElegida?.id === f.id) { setFacturaElegida(null); return; }
+    setFacturaElegida(f);
+    setUuid(f.uuid);
+    setRfcFactura((f.rfc ?? "").toUpperCase());
+    fechaFacturaTocada.current = true; setFechaFactura(f.fecha.slice(0, 10));
+    /* Lo que le toca de IVA a este pago si cubre lo que le falta: la
+     * proporción de la factura. La API lo reparte igual al ligar. */
+    const total = parseFloat(monto) || 0;
+    const aplica = Math.min(total, f.restante);
+    ivaTocado.current = true;
+    setIvaFactura(f.total > 0 ? (Math.round(aplica * (f.iva / f.total) * 100) / 100).toFixed(2) : "0.00");
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !empresa) return;
@@ -418,7 +454,11 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
        * El total de la factura es el del movimiento, siempre. Así no puede
        * quedar una factura por una cifra y su movimiento por otra, que es
        * de donde sale el IVA que se entera. */
-      if (factura === "ya" && uuid.trim()) {
+      if (factura === "ya" && facturaElegida && facturaElegida.uuid === uuid.trim()) {
+        /* Una factura que ya está: se liga por lo que quepa y la API le
+         * reparte al pago su parte del IVA. */
+        await ligarCfdi(facturaElegida.id, id);
+      } else if (factura === "ya" && uuid.trim()) {
         const ivaNum = Number(ivaFactura) || 0;
         const c = await crearCfdi({
           uuid: uuid.trim(), tipo,
@@ -884,10 +924,67 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
                         id="uuid-factura"
                         type="text"
                         value={uuid}
-                        onChange={(e) => setUuid(e.target.value)}
+                        onChange={(e) => { setUuid(e.target.value); if (facturaElegida && e.target.value.trim() !== facturaElegida.uuid) setFacturaElegida(null); }}
                         placeholder="A1B2C3D4-…"
                         className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-ink/40 transition"
                       />
+                    </div>
+
+                    <div data-buscar-factura>
+                      <button
+                        type="button"
+                        onClick={buscarFactura}
+                        disabled={buscandoFactura || !(parseFloat(monto) > 0)}
+                        className="w-full rounded-xl border border-ink/20 bg-white px-3 py-2 text-xs font-medium text-ink hover:border-ink/40 disabled:opacity-50 transition"
+                      >
+                        {buscandoFactura ? "Buscando en las facturas…" : "Buscar factura"}
+                      </button>
+                      {!(parseFloat(monto) > 0) && <p className="text-[11px] text-ink-muted mt-1">Pon el monto para buscar.</p>}
+                      {errorBusqueda && <p className="text-[11px] text-red-700 mt-1">{errorBusqueda}</p>}
+                      {sugeridas && (
+                        sugeridas.length === 0 ? (
+                          <p className="text-[11px] text-ink-muted mt-1.5" data-sin-sugeridas>
+                            Ninguna factura coincide ni se acerca a {formatMonto(parseFloat(monto) || 0, empresa?.moneda ?? "MXN")}. Captura el folio a mano o deja «Todavía no».
+                          </p>
+                        ) : (
+                          <ul className="mt-2 space-y-1.5" data-sugeridas>
+                            {sugeridas.map((f) => {
+                              const elegida = facturaElegida?.id === f.id;
+                              const nombre = [f.serie, f.folio].filter(Boolean).join("-") || `${f.uuid.slice(0, 8)}…`;
+                              const marca = f.coincide === "exacto" ? "Coincide" : f.coincide === "sin_iva" ? "Coincide sin IVA" : f.coincide === "cerca" ? "Cerca" : "Del cliente";
+                              return (
+                                <li key={f.id}>
+                                  <button
+                                    type="button"
+                                    onClick={() => elegirFactura(f)}
+                                    aria-pressed={elegida}
+                                    data-sugerida={nombre}
+                                    className={`w-full text-left rounded-xl border px-3 py-2 text-xs transition ${elegida ? "border-ink bg-ink text-white" : "border-black/10 bg-white hover:border-ink/30"}`}
+                                  >
+                                    <div className="flex items-baseline justify-between gap-2">
+                                      <strong>Factura {nombre}</strong>
+                                      <span className={`rounded-full px-2 py-0.5 text-[10px] ${elegida ? "bg-white/20" : f.coincide === "exacto" || f.coincide === "sin_iva" ? "bg-emerald-100 text-emerald-800" : "bg-black/5 text-ink-dim"}`}>{marca}</span>
+                                    </div>
+                                    <div className={`mt-0.5 ${elegida ? "text-white/80" : "text-ink-muted"}`}>
+                                      {f.razon_social ?? f.rfc ?? "—"} · {f.fecha.slice(0, 10)}{f.dias ? ` (${f.dias} d)` : ""}
+                                    </div>
+                                    <div className="mt-0.5 tabular-nums">
+                                      Total {formatMonto(f.total, "MXN")} · sin IVA {formatMonto(f.subtotal, "MXN")}
+                                      {f.restante < f.total - 0.5 ? ` · le faltan ${formatMonto(f.restante, "MXN")}` : ""}
+                                      {f.coincide !== "exacto" && f.coincide !== "sin_iva" && f.diferencia ? ` · diferencia ${formatMonto(f.diferencia, "MXN")}` : ""}
+                                    </div>
+                                  </button>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )
+                      )}
+                      {facturaElegida && (
+                        <p className="text-[11px] text-ink-muted mt-1.5" data-factura-elegida>
+                          Al guardar se liga la factura que ya está; no se crea otra. El pago toma su parte del IVA de la factura.
+                        </p>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-3 gap-2">

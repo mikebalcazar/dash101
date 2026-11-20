@@ -246,6 +246,40 @@ export async function facturasDelPago(movimiento_id: string): Promise<FacturasDe
   };
 }
 
+/* ─────────────── buscar la factura de un pago que se captura (0.112.0) ───────────────
+ *
+ * Mike, 19-nov-2026, en el formulario del movimiento: «agregar la opción de
+ * buscar factura y que revise en los CFDIs si alguno coincide o está cerca y
+ * los sugiera». */
+
+export interface FacturaSugerida extends Cfdi {
+  serie: string | null;
+  folio: string | null;
+  /** En PESOS: lo que le falta por ligar a la factura. */
+  restante: number;
+  /** En PESOS: cuánto se aleja del monto capturado (contra lo que le falta). */
+  diferencia: number;
+  /** `exacto`: el monto es lo que le falta o su total. `sin_iva`: el monto es
+   *  su subtotal (se capturó sin IVA). `cerca`: a 10 % o menos. */
+  coincide: 'exacto' | 'sin_iva' | 'cerca' | null;
+  mismo_rfc: boolean;
+  dias: number;
+}
+
+export async function facturasSugeridas(q: { tipo: TipoCfdi; monto: number; fecha?: string; cliente_id?: string; proyecto_id?: string; movimiento_id?: string }): Promise<FacturaSugerida[]> {
+  const p = new URLSearchParams({ tipo: q.tipo, monto: String(aCentavos(q.monto)) });
+  if (q.fecha) p.set('fecha', q.fecha);
+  if (q.cliente_id) p.set('cliente_id', q.cliente_id);
+  if (q.proyecto_id) p.set('proyecto_id', q.proyecto_id);
+  if (q.movimiento_id) p.set('movimiento_id', q.movimiento_id);
+  const r = await pedir<{ facturas: Array<Record<string, any>> }>(`${base()}/facturas-sugeridas?${p}`);
+  return r.facturas.map((f) => ({
+    ...cfdiDePesos(f as FilaCfdi), serie: f.serie ?? null, folio: f.folio ?? null,
+    restante: aPesos(f.restante), diferencia: aPesos(f.diferencia), coincide: f.coincide ?? null,
+    mismo_rfc: Boolean(f.mismo_rfc), dias: Number(f.dias ?? 0),
+  }));
+}
+
 /** Quitar una liga equivocada: el pago vuelve a estar sin esa factura y la
  *  API le reparte otra vez su IVA. */
 export const desligarCfdi = (cfdi_id: string, movimiento_id: string) =>
