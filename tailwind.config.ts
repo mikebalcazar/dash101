@@ -29,6 +29,10 @@ const config: Config = {
        * de dash y quell». Los tonos ahora salen de variables (globals.css):
        * en pantalla, el azul oscuro de cost101; al imprimir, los claros de
        * siempre. `black` también: en oscuro, lo que era sombra negra es luz. */
+      /* 20-nov-2026 · Mike: «Rediseña el look and feel de la interfaz de
+       * dash101» con Material Design 3, en claro. Los tonos siguen saliendo
+       * de las mismas variables; lo que valen y qué papel de Material 3 hace
+       * cada uno está en globals.css. `black` vuelve a ser tinta. */
       colors: {
         bg: "rgb(var(--c-bg) / <alpha-value>)",
         cream: "rgb(var(--c-cream) / <alpha-value>)",
@@ -58,15 +62,30 @@ const config: Config = {
         },
         black: "rgb(var(--c-negro) / <alpha-value>)",
       },
+      /* 20-nov-2026 · Material Design 3. `ink` es la tinta del texto (on
+       * surface) y `cream` una superficie; pero `bg-ink text-cream` es, en
+       * todas las pantallas, EL BOTÓN RELLENO y lo activo. En Material 3 ése
+       * es el color primario con su «on primary». Se apartan aquí, por
+       * utilidad, para no tocar las pantallas: el fondo y el contorno `ink`
+       * son el primario, y el texto `cream` es lo que va encima. */
+      backgroundColor: { ink: "rgb(var(--c-primario) / <alpha-value>)" },
+      borderColor: { ink: "rgb(var(--c-primario) / <alpha-value>)" },
+      ringColor: { ink: "rgb(var(--c-primario) / <alpha-value>)" },
+      accentColor: { ink: "rgb(var(--c-primario) / <alpha-value>)" },
+      textColor: { cream: "rgb(var(--c-sobre-primario) / <alpha-value>)" },
       fontFamily: {
         // "Cifras" delante y limitada por unicode-range: solo se lleva los
         // digitos y los signos de medida, que caen en Fira Sans. El resto, Raleway.
         sans: ["Cifras", "Raleway", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
         marca: ["Sansation", "Raleway", "sans-serif"],
       },
+      /* La escala de formas de Material 3: «medium» 12 (tarjetas, campos),
+       * «large» 16, «extra large» 28 (diálogos). Los botones van en píldora
+       * (globals.css). */
       borderRadius: {
-        "2xl": "18px",
-        "3xl": "20px",
+        "2xl": "12px",
+        "3xl": "16px",
+        "4xl": "28px",
       },
     },
   },

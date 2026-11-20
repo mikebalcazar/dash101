@@ -42,13 +42,13 @@ export function VersionNueva({ app = "dash101" }: { app?: string }) {
       id="aviso-version"
       data-version-nueva=""
       role="status"
-      className="fixed left-1/2 bottom-4 -translate-x-1/2 z-[5000] flex items-center gap-3 px-3.5 py-2.5 rounded-lg bg-[#1d1f20] text-white text-[13px] leading-snug shadow-2xl max-w-[calc(100vw-32px)]"
+      className="fixed left-1/2 bottom-4 -translate-x-1/2 z-[5000] flex items-center gap-3 px-3.5 py-2.5 rounded-[4px] bg-[#2d3135] text-[#eef1f6] text-[13px] leading-snug shadow-lg max-w-[calc(100vw-32px)]"
     >
       <span>Hay una versión nueva de {app}. Termina lo que estés haciendo, guarda, y recarga.</span>
       <button
         type="button"
         onClick={() => location.reload()}
-        className="border-0 rounded px-3 py-1.5 bg-[#C6FF3D] text-[#1d1f20] font-bold whitespace-nowrap"
+        className="border-0 rounded-full px-3 py-1.5 bg-transparent hover:bg-white/10 text-[#92cdff] font-semibold whitespace-nowrap"
       >
         Recargar
       </button>

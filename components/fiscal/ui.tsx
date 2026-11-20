@@ -89,7 +89,7 @@ export type Tono = "bien" | "ojo" | "mal" | "azul" | "";
 const TONO: Record<Tono, string> = {
   bien: "bg-mint-50 text-mint-900",
   mal: "bg-mauve-50 text-mauve-900",
-  ojo: "bg-amber-400/15 text-amber-300 print:text-amber-900",
+  ojo: "bg-amber-100 text-amber-900",
   azul: "bg-sky-50 text-sky-900",
   "": "bg-cream text-ink-muted border border-black/10",
 };

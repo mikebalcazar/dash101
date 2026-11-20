@@ -32,17 +32,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           390 de ancho, y todo salía apretado y en letra chica (Mike, 30-sep:
           «Dashboard es inutilizable por el tamaño de la letra y los
           renglones»). Sin margen exterior, menú de 56 y main de 12. */}
-      <div className="min-h-screen p-0 sm:p-4">
-        <div className="max-w-6xl mx-auto bg-bg border-0 sm:border border-black/5 rounded-none sm:rounded-2xl overflow-hidden grid grid-cols-[56px_1fr] sm:grid-cols-[13rem_1fr] min-h-screen sm:min-h-[calc(100vh-2rem)]">
-          <Sidebar />
-          <main className="p-3 sm:p-6 min-w-0">
+      {/* 20-nov-2026 · Material Design 3: ya no hay un marco flotando sobre
+          un fondo. La app ocupa la ventana: a la izquierda el cajón de
+          navegación (un riel de íconos en el teléfono), que se queda en su
+          lugar mientras el contenido corre, y el contenido a un ancho que
+          se pueda leer. */}
+      <div className="min-h-screen grid grid-cols-[56px_1fr] sm:grid-cols-[14rem_1fr]">
+        <Sidebar />
+        <main className="p-3 sm:px-8 sm:py-6 min-w-0">
+          <div className="max-w-6xl mx-auto">
             <Topbar />
             {children}
-          </main>
-          <VersionNueva />
-          {/* El panel del ítem (lo que se ve en quell), desde cualquier lista. */}
-          <PanelItemHost />
-        </div>
+          </div>
+        </main>
+        <VersionNueva />
+        {/* El panel del ítem (lo que se ve en quell), desde cualquier lista. */}
+        <PanelItemHost />
       </div>
     </EmpresaProvider>
   );
