@@ -5,7 +5,8 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { getProveedor, updateProveedor, deleteProveedor } from "@/lib/proveedores";
 import type { Proveedor, TipoProveedor } from "@/types/schema";
-import { IconArrowLeft, IconTrash } from "@tabler/icons-react";
+import { IconArrowLeft, IconTrash, IconPencil } from "@tabler/icons-react";
+import { EstadoDelProveedor } from "@/components/proveedor-estado";
 
 export default function ProveedorDetallePage() {
   const router = useRouter();
@@ -27,6 +28,9 @@ export default function ProveedorDetallePage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  /* Como el cliente: la pantalla abre con su estado de cuenta, y los datos
+   * se editan sólo al picar «Editar datos» (Mike, 21-nov-2026). */
+  const [editar, setEditar] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -98,7 +102,7 @@ export default function ProveedorDetallePage() {
     );
 
   return (
-    <div className="max-w-lg">
+    <div className="max-w-3xl">
       <Link
         href="/proveedores"
         className="text-xs text-ink-muted inline-flex items-center gap-1 mb-4 hover:text-ink-dim transition"
@@ -107,9 +111,31 @@ export default function ProveedorDetallePage() {
         Volver a proveedores
       </Link>
 
-      <h2 className="text-lg font-medium text-ink-dim">Editar proveedor</h2>
+      <div className="flex justify-between items-start gap-3 mb-4 flex-wrap">
+        <div className="min-w-0">
+          <h2 className="text-xl font-medium text-ink-dim">{proveedor?.nombre ?? nombre}</h2>
+          <p className="text-xs text-ink-muted mt-1">
+            {tipo === "servicios" ? "Servicios" : "Materiales"}{rfc ? ` · ${rfc}` : ""}{categoria ? ` · ${categoria}` : ""}{terminosPago ? ` · ${terminosPago}` : ""}
+          </p>
+        </div>
+        <button
+          onClick={() => setEditar(!editar)}
+          aria-expanded={editar}
+          data-editar-proveedor
+          className="text-xs bg-white border border-black/10 rounded-xl px-3 py-1.5 hover:border-black/20 transition flex items-center gap-1"
+        >
+          <IconPencil size={13} />
+          {editar ? "Cerrar edición" : "Editar datos"}
+        </button>
+      </div>
 
-      <form onSubmit={handleSave} className="space-y-4 mt-6">
+      <EstadoDelProveedor proveedorId={id} proveedorNombre={proveedor?.nombre ?? nombre} />
+
+      {editar && (
+      <div className="max-w-lg mt-8 pt-6 border-t border-black/5" data-seccion="editar-proveedor">
+      <h3 className="text-sm font-medium text-ink-dim">Datos del proveedor</h3>
+
+      <form onSubmit={handleSave} className="space-y-4 mt-4">
         <div>
           <label className="text-xs font-medium text-ink-dim block mb-1.5">
             Nombre <span className="text-mauve-900">*</span>
@@ -263,6 +289,8 @@ export default function ProveedorDetallePage() {
           </div>
         )}
       </div>
+      </div>
+      )}
     </div>
   );
 }
