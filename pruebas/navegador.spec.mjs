@@ -817,6 +817,73 @@ test('20-nov: un proyecto activo sale aunque no tenga conceptos, planeando no; y
   await ctx.close();
 });
 
+/* Mike, 21-nov-2026: «en la sección de proveedores, necesito que sea similar
+ * a la de proyectos, donde cada proveedor tiene un proyecto y conceptos que se
+ * le van a pagar y los pagos que se le van haciendo (…) los conceptos son
+ * cuentas por pagar en vez de conceptos por cobrar». Un proveedor y una obra
+ * propios: la cuenta por pagar se agrega desde la ficha, el pago a su nombre
+ * la descuenta, y todo se borra al final. */
+test('21-nov: el proveedor como el proyecto: saldo por pagar en su tarjeta, sus cuentas por pagar y sus pagos por obra', async () => {
+  const { ctx, pag, errores } = await pestana({ width: 1280, height: 900 }, true);
+  await pag.goto(`${URL}/dashboard`, { waitUntil: 'load' });
+  let cliente = filas(await api(pag, `/orgs/${ORG}/clientes`)).find((c) => c.nombre === CLIENTE_PRUEBAS);
+  if (!cliente) cliente = await api(pag, `/orgs/${ORG}/clientes`, { method: 'POST', body: { nombre: CLIENTE_PRUEBAS } });
+  const sufijo = Date.now().toString(36).slice(-5);
+  const obra = await api(pag, `/orgs/${ORG}/proyectos`, { method: 'POST', body: { nombre: `Obra proveedor ${sufijo}`, cliente_id: cliente.id, estado: 'activo' } });
+  const prov = await api(pag, `/orgs/${ORG}/proveedores`, { method: 'POST', body: { nombre: `Proveedor navegador ${sufijo}`, tipo: 'materiales' } });
+  const { cuenta } = await cuentaDePruebas(pag);
+  let pago = null;
+  try {
+    await pag.goto(`${URL}/proveedores/${prov.id}`, { waitUntil: 'load' });
+    await pag.locator('[data-saldo-por-pagar]').waitFor({ timeout: 20000 });
+    assert.equal(await pag.locator('[data-seccion="editar-proveedor"]').count(), 0, 'los datos del proveedor se editan sólo al pedirlo');
+
+    // La cuenta por pagar se agrega desde la ficha, escogiendo la obra.
+    await pag.locator('[data-agregar-cuenta]').click();
+    const forma = pag.locator('[data-forma-cuenta]').first();
+    await forma.locator('[aria-label=Proyecto]').selectOption(obra.id);
+    await forma.locator('[aria-label=Concepto]').fill('Tableros de prueba');
+    await forma.locator('[aria-label=Monto]').fill('10,000');
+    await forma.getByRole('button', { name: 'Agregar cuenta por pagar' }).click();
+    const bloque = pag.locator(`[data-proyecto-del-proveedor="${obra.id}"]`);
+    await bloque.waitFor({ timeout: 20000 });
+    assert.match(await bloque.innerText(), /Tableros de prueba[\s\S]*\$10,000/, 'la cuenta por pagar sale dentro de su obra');
+    assert.match(await pag.locator('[data-saldo-por-pagar]').innerText(), /\$10,000/, 'y el saldo por pagar del proveedor es lo acordado');
+
+    // «Registrar pago» abre el movimiento con proveedor, obra y regreso.
+    const href = await bloque.locator('[data-registrar-pago-proyecto]').getAttribute('href');
+    assert.ok(href.includes('tipo=egreso') && href.includes(`contraparte=${prov.id}`) && href.includes(`proyecto=${obra.id}`) && href.includes(encodeURIComponent(`/proveedores/${prov.id}`)), `«Registrar pago» lleva proveedor, obra y regreso: ${href}`);
+
+    // Un pago a su nombre en esa obra descuenta el saldo y sale en «Pagos».
+    pago = await api(pag, `/orgs/${ORG}/movimientos`, { method: 'POST', body: { tipo: 'egreso', monto: 400000, fecha: new Date().toISOString().slice(0, 10), cuenta_id: cuenta.id, proyecto_id: obra.id, contraparte_tipo: 'proveedor', contraparte_id: prov.id, contraparte_nombre: prov.nombre, descripcion: `Anticipo ${sufijo}` } });
+    await pag.reload({ waitUntil: 'load' });
+    await bloque.waitFor({ timeout: 20000 });
+    assert.match(await pag.locator('[data-saldo-por-pagar]').innerText(), /\$6,000/, 'el saldo por pagar baja con el pago');
+    assert.match(await bloque.innerText(), new RegExp(`Anticipo ${sufijo}[\\s\\S]*\\$4,000`), 'el pago sale en la obra');
+
+    // En la lista, su tarjeta enseña el saldo por pagar en grande.
+    await pag.goto(`${URL}/proveedores`, { waitUntil: 'load' });
+    const saldo = pag.locator(`[data-saldo-proveedor="${prov.id}"]`);
+    await saldo.waitFor({ timeout: 20000 });
+    assert.match(await saldo.innerText(), /Saldo por pagar[\s\S]*\$6,000/, 'la tarjeta trae el saldo por pagar');
+
+    // Quitar la cuenta: el primer clic pregunta, el segundo borra.
+    await pag.goto(`${URL}/proveedores/${prov.id}`, { waitUntil: 'load' });
+    const renglon = bloque.locator('[data-cuenta-por-pagar]', { hasText: 'Tableros de prueba' });
+    await renglon.waitFor({ timeout: 20000 });
+    await renglon.getByTitle('Quitar esta cuenta por pagar').click();
+    await renglon.locator('[data-confirmar-quitar]').click();
+    await renglon.waitFor({ state: 'detached', timeout: 15000 });
+    console.log(`    cuenta por pagar $10,000 − pago $4,000 = $6,000 por pagar; «Registrar pago» → ${href}`);
+  } finally {
+    if (pago) { try { await api(pag, `/orgs/${ORG}/movimientos/${pago.id}`, { method: 'DELETE' }); } catch { /* se queda en la demo */ } }
+    try { await api(pag, `/orgs/${ORG}/proyectos/${obra.id}/borrar`, { method: 'POST', body: { modo: 'borrar' } }); } catch { /* se queda en la demo */ }
+    try { await api(pag, `/orgs/${ORG}/proveedores/${prov.id}`, { method: 'DELETE' }); } catch { /* se queda en la demo */ }
+  }
+  assert.deepEqual(errores, [], 'cero errores de JavaScript');
+  await ctx.close();
+});
+
 /* Mike, 19-nov-2026: «todas las obras cerradas (saldo 0 pendiente) hay que
  * ocultarlas ya, y necesito poder imprimir en PDF el estado de cuenta del
  * cliente (…) en la portada el saldo de cada proyecto y el total y después el

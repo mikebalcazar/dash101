@@ -84,7 +84,8 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
   const [fecha, setFecha] = useState(aDia(new Date()));
   const [proyectoId, setProyectoId] = useState(searchParams?.get("proyecto") ?? "");
   const [cuentaId, setCuentaId] = useState("");
-  const [contraparteId, setContraparteId] = useState("");
+  /* ?contraparte= la deja puesta: «Registrar pago» desde el proveedor (21-nov-2026). */
+  const [contraparteId, setContraparteId] = useState(searchParams?.get("contraparte") ?? "");
   const [productoId, setProductoId] = useState("");
   /* El anticipo por ítem (contrato 0.70.0). Mike, 6-oct-2026: «a la hora de
    * registrar un pago, se debe poder alocar cantidades a cada ítem. Puede
@@ -482,10 +483,11 @@ export function FormMovimiento({ movimientoId }: { movimientoId?: string }) {
        * Un comprobante no depende de que haya factura: son dos cosas. */
       if (archivoFactura) await subirArchivo("movimientos", id, archivoFactura);
 
-      /* Si se abrió desde un proyecto («Registrar cobro»), regresa a él.
-       * Sólo rutas propias de proyecto: nunca a otra página por la URL. */
+      /* Si se abrió desde un proyecto («Registrar cobro») o un proveedor
+       * («Registrar pago»), regresa ahí. Sólo esas rutas: nunca a otra página
+       * por la URL. */
       const volver = searchParams?.get("volver") ?? "";
-      router.push(/^\/proyectos\/[A-Za-z0-9_-]+$/.test(volver) ? volver : "/movimientos");
+      router.push(/^\/(proyectos|proveedores)\/[A-Za-z0-9_-]+$/.test(volver) ? volver : "/movimientos");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al crear movimiento");
     } finally {
